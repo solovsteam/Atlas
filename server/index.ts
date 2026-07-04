@@ -1,38 +1,72 @@
-import { boolean, capsule, endpoint, mutation, query, string, table, text } from "lakebed/server";
-import { cleanTodoText } from "../shared/todo";
+import { boolean, capsule, mutation, query, string, table } from "lakebed/server";
+import { getInbox } from "./inbox";
+import { createItem, deleteItem, listOwnedItems, updateItem } from "./items";
+import { linkItems, listOwnedLinks, unlinkItems } from "./links";
+import type { LinkKind } from "../shared/links";
 
 export default capsule({
   name: "AtlasRefactored1",
 
   schema: {
-    todos: table({
-      text: string(),
-      done: boolean().default(false),
-      ownerId: string()
+    items: table({
+      ownerId: string(),
+      title: string(),
+      body: string(),
+      isTask: boolean().default(false),
+      isDocumentation: boolean().default(false),
+      taskStatus: string().default(""),
+      manualRelevance: string().default("0"),
+      tags: string().default("[]"),
+      location: string().default(""),
+      startableWindow: string().default(""),
+      completionRule: string().default(""),
+      documentationSchema: string().default(""),
+      documentationData: string().default(""),
+      recurrenceRule: string().default(""),
+      generatedFromId: string().default(""),
+      occurrenceKey: string().default(""),
+      overriddenFields: string().default("[]"),
+      revision: string().default("0")
+    }),
+    itemLinks: table({
+      ownerId: string(),
+      fromId: string(),
+      toId: string(),
+      kind: string().default("context")
     })
   },
 
   queries: {
-    todos: query((ctx) =>
-      ctx.db.todos
-        .where("ownerId", ctx.auth.userId)
-        .orderBy("createdAt", "desc")
-        .all()
-    )
+    items: query((ctx) => listOwnedItems(ctx.db, ctx.auth.userId)),
+    itemLinks: query((ctx) => listOwnedLinks(ctx.db, ctx.auth.userId)),
+    inbox: query((ctx) => getInbox(ctx))
   },
 
   mutations: {
-    addTodo: mutation((ctx, text: string) => {
-      const cleanText = cleanTodoText(text);
-      if (!cleanText) {
-        return;
-      }
+    createItem: mutation((ctx, title: string) => createItem(ctx.db, ctx.auth.userId, title)),
 
-      ctx.db.todos.insert({ text: cleanText, ownerId: ctx.auth.userId });
-    })
-  },
+    updateItem: mutation((ctx, id: string, patchJson: string, expectedRevision: number) =>
+      updateItem(ctx.db, ctx.auth.userId, id, patchJson, expectedRevision)
+    ),
 
-  endpoints: {
-    status: endpoint({ method: "GET", path: "/api/status" }, () => text("ok"))
+    deleteItem: mutation((ctx, id: string) => {
+      deleteItem(ctx.db, ctx.auth.userId, id);
+    }),
+
+    linkItems: mutation((ctx, fromId: string, toId: string, kind: string = "context") =>
+      linkItems(ctx.db, ctx.auth.userId, fromId, toId, (kind || "context") as LinkKind)
+    ),
+
+    unlinkItems: mutation((ctx, fromId: string, toId: string, kind: string = "context") => {
+      unlinkItems(ctx.db, ctx.auth.userId, fromId, toId, (kind || "context") as LinkKind);
+    }),
+
+    setTags: mutation((ctx, id: string, tagsJson: string, expectedRevision: number) =>
+      updateItem(ctx.db, ctx.auth.userId, id, JSON.stringify({ tags: JSON.parse(tagsJson) }), expectedRevision)
+    ),
+
+    setManualRelevance: mutation((ctx, id: string, value: number, expectedRevision: number) =>
+      updateItem(ctx.db, ctx.auth.userId, id, JSON.stringify({ manualRelevance: value }), expectedRevision)
+    )
   }
 });

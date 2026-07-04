@@ -1,6 +1,9 @@
-import { Link, Route, Router, Routes, SignInWithGoogle, signOut, useAuth, useMutation, useQuery } from "lakebed/client";
-import { useState } from "preact/hooks";
-import { cleanTodoText, type Todo } from "../shared/todo";
+import { Link, Route, Router, Routes, SignInWithGoogle, signOut, useAuth, useQuery } from "lakebed/client";
+import type { Item } from "../shared/item";
+import { RelevanceProvider } from "./context/RelevanceContext";
+import { BrowsePage } from "./pages/BrowsePage";
+import { ItemPage } from "./pages/ItemPage";
+import { NowPage } from "./pages/NowPage";
 
 function AuthAvatar({ label, picture }: { label: string; picture?: string }) {
   const initial = label.trim().slice(0, 1).toUpperCase() || "?";
@@ -26,68 +29,16 @@ function AuthAvatar({ label, picture }: { label: string; picture?: string }) {
   );
 }
 
-function TodoPage() {
-  const todos = useQuery<Todo[]>("todos");
-  const addTodo = useMutation<[text: string], void>("addTodo");
-
-  async function onSubmit(event: SubmitEvent) {
-    event.preventDefault();
-    const form = event.currentTarget as HTMLFormElement;
-    const data = new FormData(form);
-    const text = cleanTodoText(String(data.get("text") ?? ""));
-    if (!text) {
-      return;
-    }
-
-    await addTodo(text);
-    form.reset();
-  }
-
-  return (
-    <section>
-      <h1 className="mb-8 text-5xl font-bold tracking-tight">AtlasRefactored1</h1>
-      <form className="mb-8 flex gap-3" onSubmit={(event) => void onSubmit(event)}>
-        <input className="min-w-0 flex-1 border border-neutral-700 bg-black px-3 py-2 text-white outline-none focus:border-white" name="text" placeholder="Add a todo" />
-        <button className="border border-white px-4 py-2 font-medium" type="submit">Add</button>
-      </form>
-      <ul className="divide-y divide-neutral-800 border-y border-neutral-800">
-        {todos.map((todo) => (
-          <li className="py-3" key={todo.id}>{todo.text}</li>
-        ))}
-      </ul>
-    </section>
-  );
-}
-
-function StatusPage() {
-  const [status, setStatus] = useState("not checked");
-
-  async function checkStatus() {
-    const response = await fetch("api/status");
-    setStatus(response.ok ? await response.text() : "error " + response.status);
-  }
-
-  return (
-    <section>
-      <h1 className="mb-4 text-4xl font-bold tracking-tight">Status</h1>
-      <p className="mb-6 text-neutral-400">This route calls the server endpoint at /api/status.</p>
-      <button className="border border-white px-4 py-2 font-medium" type="button" onClick={() => void checkStatus()}>
-        Check endpoint
-      </button>
-      <p className="mt-4 font-mono text-sm text-neutral-400">endpoint: {status}</p>
-    </section>
-  );
-}
-
-export function App() {
+function AppShell() {
   const auth = useAuth();
+  const items = useQuery<Item[]>("items");
   const authLabel = auth.displayName;
   const authStatus = auth.isLoading && auth.isGuest ? "checking session" : "signed in as " + authLabel;
 
   return (
-    <Router>
+    <RelevanceProvider items={items}>
       <main className="min-h-screen bg-black px-6 py-10 text-white">
-        <section className="mx-auto max-w-2xl">
+        <section className="mx-auto max-w-3xl">
           <div className="mb-3 flex items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-2">
               {!auth.isLoading ? <AuthAvatar label={authLabel} picture={auth.picture} /> : null}
@@ -102,16 +53,39 @@ export function App() {
             ) : null}
           </div>
           <nav className="mb-8 flex gap-4 text-sm text-neutral-400">
-            <Link className="hover:text-white" to="/">Todos</Link>
-            <Link className="hover:text-white" to="/status">Status</Link>
+            <Link className="hover:text-white" to="/">
+              Now
+            </Link>
+            <Link className="hover:text-white" to="/browse">
+              Browse
+            </Link>
           </nav>
           <Routes>
-            <Route path="/" element={<TodoPage />} />
-            <Route path="/status" element={<StatusPage />} />
-            <Route path="*" element={<section><h1 className="mb-4 text-4xl font-bold">Not found</h1><Link className="text-neutral-300 hover:text-white" to="/">Back to todos</Link></section>} />
+            <Route path="/" element={<NowPage />} />
+            <Route path="/browse" element={<BrowsePage />} />
+            <Route path="/item/:id" element={<ItemPage />} />
+            <Route
+              path="*"
+              element={
+                <section>
+                  <h1 className="mb-4 text-4xl font-bold">Not found</h1>
+                  <Link className="text-neutral-300 hover:text-white" to="/">
+                    Back to Now
+                  </Link>
+                </section>
+              }
+            />
           </Routes>
         </section>
       </main>
+    </RelevanceProvider>
+  );
+}
+
+export function App() {
+  return (
+    <Router>
+      <AppShell />
     </Router>
   );
 }

@@ -1,7 +1,7 @@
-import type { Item, ItemPatch, TaskStatus, UpdateItemResult } from "../../shared/item";
-import { TASK_STATUSES } from "../../shared/item";
+import type { Item, ItemPatch, UpdateItemResult } from "../../shared/item";
 import { useAutosaveItem } from "../hooks/useAutosaveItem";
 import { GeneratorBadge } from "./GeneratorBadge";
+import { TaskStatusButtons } from "./TaskStatusButtons";
 
 export function ItemEditor({
   item,
@@ -54,22 +54,10 @@ export function ItemEditor({
         {item.isTask ? (
           <div className="mb-4">
             <p className="mb-2 text-xs text-neutral-500">Task status</p>
-            <div className="flex flex-wrap gap-2">
-              {TASK_STATUSES.map((status) => (
-                <button
-                  className={
-                    item.taskStatus === status
-                      ? "rounded border border-white px-3 py-1 text-xs font-medium"
-                      : "rounded border border-neutral-700 px-3 py-1 text-xs text-neutral-400 hover:border-neutral-500"
-                  }
-                  key={status}
-                  type="button"
-                  onClick={() => void patchItem({ taskStatus: status as TaskStatus })}
-                >
-                  {status}
-                </button>
-              ))}
-            </div>
+            <TaskStatusButtons
+              status={item.taskStatus ?? "active"}
+              onChange={(status) => void patchItem({ taskStatus: status })}
+            />
           </div>
         ) : (
           <p className="text-sm text-neutral-500">Plain note — no task status until you enable Task.</p>

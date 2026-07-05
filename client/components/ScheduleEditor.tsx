@@ -85,7 +85,6 @@ export function ScheduleEditor({ item, slots }: { item: Item; slots: ScheduleSlo
 
   return (
     <section>
-      <h2 className="mb-2 text-xl font-semibold">{item.title}</h2>
       <p className="mb-6 text-sm text-neutral-400">
         Enter dates as {DATE_TIME_PLACEHOLDER} or {DATE_PLACEHOLDER}. Archived slots stay visible but grayed out.
       </p>

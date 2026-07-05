@@ -12,6 +12,9 @@ function styleForItem(item: Item): string {
     return KIND_STYLES.documentation;
   }
   if (item.isTask) {
+    if (item.taskStatus === "done") {
+      return "border-green-900 text-green-400";
+    }
     return KIND_STYLES.task;
   }
   return KIND_STYLES.note;

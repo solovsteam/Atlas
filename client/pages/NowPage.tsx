@@ -1,12 +1,13 @@
 import { Link, useMutation, useNavigate } from "lakebed/client";
 import { useMemo, useState } from "preact/hooks";
-import type { CreateItemResult } from "../../shared/item";
+import type { CreateItemResult, Item, TaskStatus, UpdateItemResult } from "../../shared/item";
 import { searchItems } from "../../shared/relevance";
 import { useRelevance } from "../context/RelevanceContext";
 import { useStableInboxOrder } from "../hooks/useStableInboxOrder";
 import { ItemKindBadge } from "../components/ItemKindBadge";
 import { StatusBoostBar } from "../components/StatusBoostBar";
 import { TagToggleBar } from "../components/TagToggleBar";
+import { TaskStatusButtonsForItem } from "../components/TaskStatusButtons";
 
 export function NowPage() {
   const navigate = useNavigate();
@@ -16,10 +17,15 @@ export function NowPage() {
   const resortKey = `${activeTags.join("\0")}\0${activeStatusBoosts.join("\0")}`;
   const { visible, pendingResort, refreshOrder } = useStableInboxOrder(inbox, selectedId, resortKey);
   const createItem = useMutation<[title: string], CreateItemResult>("createItem");
+  const updateItem = useMutation<[id: string, patchJson: string, expectedRevision: number], UpdateItemResult>("updateItem");
 
   const searchResults = useMemo(() => searchItems(items, searchQuery), [items, searchQuery]);
   const showingSearch = searchQuery.trim().length > 0;
   const list = showingSearch ? searchResults : visible;
+
+  function setTaskStatus(item: Item, status: TaskStatus) {
+    void updateItem(item.id, JSON.stringify({ taskStatus: status }), item.revision);
+  }
 
   async function onSubmit(event: SubmitEvent) {
     event.preventDefault();
@@ -81,17 +87,20 @@ export function NowPage() {
         <ul className="divide-y divide-neutral-800 border-y border-neutral-800">
           {list.map((entry) => (
             <li key={entry.id}>
-              <Link
-                className="block py-3 hover:bg-neutral-950"
-                to={`/item/${entry.id}`}
-                onClick={() => setSelectedId(entry.id)}
-              >
-                <div className="flex min-w-0 items-center gap-2">
-                  <span className="truncate font-medium">{entry.title}</span>
-                  <ItemKindBadge item={entry} />
-                </div>
-                {entry.body ? <p className="mt-1 line-clamp-2 text-sm text-neutral-400">{entry.body}</p> : null}
-              </Link>
+              <div className="flex items-start gap-3 py-3 hover:bg-neutral-950">
+                <TaskStatusButtonsForItem item={entry} onStatusChange={setTaskStatus} />
+                <Link
+                  className="min-w-0 flex-1"
+                  to={`/item/${entry.id}`}
+                  onClick={() => setSelectedId(entry.id)}
+                >
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="truncate font-medium">{entry.title}</span>
+                    <ItemKindBadge item={entry} />
+                  </div>
+                  {entry.body ? <p className="mt-1 line-clamp-2 text-sm text-neutral-400">{entry.body}</p> : null}
+                </Link>
+              </div>
             </li>
           ))}
         </ul>

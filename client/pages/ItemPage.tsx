@@ -7,14 +7,38 @@ import { ItemEditor } from "../components/ItemEditor";
 import { ScheduleEditor } from "../components/ScheduleEditor";
 import type { ScheduleSlot } from "../../shared/schedule";
 
-type Tab = "content" | "schedule" | "associations";
+type PanelId = "content" | "schedule" | "associations";
+
+const PANELS: { id: PanelId; label: string }[] = [
+  { id: "content", label: "Content" },
+  { id: "schedule", label: "Schedule" },
+  { id: "associations", label: "Associations" }
+];
+
+function panelFlexClass(focused: PanelId | null, panel: PanelId): string {
+  if (focused === null) {
+    return "flex-1";
+  }
+  return focused === panel ? "flex-[3]" : "flex-[0.65]";
+}
+
+function panelBarClass(focused: PanelId | null, panel: PanelId): string {
+  const base = "w-full border-b px-3 py-2 text-left text-sm font-medium uppercase tracking-wide transition-colors";
+  if (focused === panel) {
+    return `${base} border-white bg-neutral-900 text-white`;
+  }
+  if (focused === null) {
+    return `${base} border-neutral-800 bg-neutral-950 text-neutral-400 hover:border-neutral-600 hover:text-white`;
+  }
+  return `${base} border-neutral-800 bg-black text-neutral-500 hover:border-neutral-600 hover:text-neutral-300`;
+}
 
 export function ItemPage() {
   const { id = "" } = useParams<{ id: string }>();
   const items = useQuery<Item[]>("items");
   const links = useQuery<ItemLink[]>("itemLinks");
   const scheduleSlots = useQuery<ScheduleSlot[]>("scheduleSlots");
-  const [tab, setTab] = useState<Tab>("content");
+  const [focusedPanel, setFocusedPanel] = useState<PanelId | null>(null);
 
   const updateItem = useMutation<[id: string, patchJson: string, expectedRevision: number], UpdateItemResult>("updateItem");
   const linkItemsMutation = useMutation<[fromId: string, toId: string, kind?: string], { ok: true } | { error: string }>(
@@ -54,66 +78,55 @@ export function ItemPage() {
     }
   }
 
+  function togglePanel(panel: PanelId) {
+    setFocusedPanel((current) => (current === panel ? null : panel));
+  }
+
   return (
     <section>
-      <div className="mb-6 flex items-center justify-between gap-3">
-        <div className="flex gap-3">
-          <Link className="text-sm text-neutral-400 hover:text-white" to="/">
-            ← Now
-          </Link>
-          <Link className="text-sm text-neutral-500 hover:text-white" to="/browse">
-            Browse
-          </Link>
-          <Link className="text-sm text-neutral-500 hover:text-white" to="/calendar">
-            Calendar
-          </Link>
-        </div>
-        <div className="flex gap-2">
-          <button
-            className={tab === "content" ? "border-b border-white px-2 py-1 text-sm" : "px-2 py-1 text-sm text-neutral-500 hover:text-white"}
-            type="button"
-            onClick={() => setTab("content")}
-          >
-            Content
-          </button>
-          <button
-            className={
-              tab === "schedule" ? "border-b border-white px-2 py-1 text-sm" : "px-2 py-1 text-sm text-neutral-500 hover:text-white"
-            }
-            type="button"
-            onClick={() => setTab("schedule")}
-          >
-            Schedule
-          </button>
-          <button
-            className={
-              tab === "associations" ? "border-b border-white px-2 py-1 text-sm" : "px-2 py-1 text-sm text-neutral-500 hover:text-white"
-            }
-            type="button"
-            onClick={() => setTab("associations")}
-          >
-            Associations
-          </button>
-        </div>
+      <div className="mb-6 flex items-center gap-3">
+        <Link className="text-sm text-neutral-400 hover:text-white" to="/">
+          ← Now
+        </Link>
+        <Link className="text-sm text-neutral-500 hover:text-white" to="/browse">
+          Browse
+        </Link>
+        <Link className="text-sm text-neutral-500 hover:text-white" to="/calendar">
+          Calendar
+        </Link>
       </div>
 
-      {tab === "content" ? (
-        <ItemEditor
-          generator={generator}
-          item={item}
-          updateItem={(itemId, patchJson, expectedRevision) => updateItem(itemId, patchJson, expectedRevision)}
-        />
-      ) : tab === "schedule" ? (
-        <ScheduleEditor item={item} slots={scheduleSlots} />
-      ) : (
-        <AssociationsPanel
-          createLinkedItem={handleCreateLinked}
-          item={item}
-          items={items}
-          linkItems={handleLinkItems}
-          links={links}
-        />
-      )}
+      <div className="flex min-h-[70vh] gap-3">
+        {PANELS.map((panel) => (
+          <div
+            className={`flex min-w-0 flex-col rounded border border-neutral-800 bg-black ${panelFlexClass(focusedPanel, panel.id)}`}
+            key={panel.id}
+          >
+            <button className={panelBarClass(focusedPanel, panel.id)} type="button" onClick={() => togglePanel(panel.id)}>
+              {panel.label}
+            </button>
+            <div className="min-h-0 flex-1 overflow-y-auto p-4">
+              {panel.id === "content" ? (
+                <ItemEditor
+                  generator={generator}
+                  item={item}
+                  updateItem={(itemId, patchJson, expectedRevision) => updateItem(itemId, patchJson, expectedRevision)}
+                />
+              ) : null}
+              {panel.id === "schedule" ? <ScheduleEditor item={item} slots={scheduleSlots} /> : null}
+              {panel.id === "associations" ? (
+                <AssociationsPanel
+                  createLinkedItem={handleCreateLinked}
+                  item={item}
+                  items={items}
+                  linkItems={handleLinkItems}
+                  links={links}
+                />
+              ) : null}
+            </div>
+          </div>
+        ))}
+      </div>
     </section>
   );
 }

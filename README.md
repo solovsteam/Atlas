@@ -36,6 +36,7 @@ Local state resets when dev restarts. Use deploy for persistent data.
 ```sh
 npx lakebed deploy
 ```
+By default, use deploy over dev unless specifically told otherwise.
 
 ## Inspect deployed state
 

@@ -13,7 +13,7 @@ import {
 import type { LinkKind } from "../shared/links";
 
 export default capsule({
-  name: "AtlasRefactored1",
+  name: "Atlas",
 
   schema: {
     items: table({

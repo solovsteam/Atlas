@@ -1,4 +1,4 @@
-# AtlasRefactored1
+# Atlas
 
 Atlas is a unified notes, tasks, and calendar app built on [Lakebed](https://lakebed.dev).
 

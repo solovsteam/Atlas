@@ -10,10 +10,18 @@ https://open-signal-da4407053d.lakebed.app
 
 - Unified **Item** model (tasks subsume notes)
 - Directed **itemLinks** graph (parents/children, no folders)
-- **Now** inbox with relevance scoring and tag boosts
-- Stable list ordering (re-ranks only on selection change)
+- **Now** inbox with relevance ranking and tag/status boosts
+- Stable list ordering (re-ranks on selection change or filter toggle)
 - Item detail with **Content** and **Associations** tabs
 - Autosave with revision-based conflict detection
+- **Browse** page for all items
+
+## Phase 2 features
+
+- **scheduleSlots** table — fixed, due, window, and all-day bindings
+- **Calendar** week view (`/calendar`) with archived slots grayed out
+- Item detail **Schedule** tab — create, edit, archive, restore, delete slots
+- Marking a task done/cancelled auto-archives its schedule slots
 
 ## Develop locally
 

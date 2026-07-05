@@ -2,6 +2,14 @@ import { boolean, capsule, mutation, query, string, table } from "lakebed/server
 import { getInbox } from "./inbox";
 import { createItem, deleteItem, listOwnedItems, updateItem } from "./items";
 import { linkItems, listOwnedLinks, unlinkItems } from "./links";
+import {
+  archiveScheduleSlot,
+  archiveSlotsForItem,
+  createScheduleSlot,
+  deleteScheduleSlot,
+  listOwnedScheduleSlots,
+  updateScheduleSlot
+} from "./schedule";
 import type { LinkKind } from "../shared/links";
 
 export default capsule({
@@ -33,12 +41,22 @@ export default capsule({
       fromId: string(),
       toId: string(),
       kind: string().default("context")
+    }),
+    scheduleSlots: table({
+      ownerId: string(),
+      itemId: string(),
+      kind: string().default("fixed"),
+      startsAt: string().default(""),
+      endsAt: string().default(""),
+      slotStatus: string().default("scheduled"),
+      recurrenceRule: string().default("")
     })
   },
 
   queries: {
     items: query((ctx) => listOwnedItems(ctx.db, ctx.auth.userId)),
     itemLinks: query((ctx) => listOwnedLinks(ctx.db, ctx.auth.userId)),
+    scheduleSlots: query((ctx) => listOwnedScheduleSlots(ctx.db, ctx.auth.userId)),
     inbox: query((ctx) => getInbox(ctx))
   },
 
@@ -67,6 +85,22 @@ export default capsule({
 
     setManualRelevance: mutation((ctx, id: string, value: number, expectedRevision: number) =>
       updateItem(ctx.db, ctx.auth.userId, id, JSON.stringify({ manualRelevance: value }), expectedRevision)
-    )
+    ),
+
+    createScheduleSlot: mutation((ctx, itemId: string, kind: string, startsAt: string = "", endsAt: string = "") =>
+      createScheduleSlot(ctx.db, ctx.auth.userId, itemId, kind, startsAt, endsAt)
+    ),
+
+    updateScheduleSlot: mutation((ctx, id: string, patchJson: string) =>
+      updateScheduleSlot(ctx.db, ctx.auth.userId, id, patchJson)
+    ),
+
+    archiveScheduleSlot: mutation((ctx, id: string) => {
+      archiveScheduleSlot(ctx.db, ctx.auth.userId, id);
+    }),
+
+    deleteScheduleSlot: mutation((ctx, id: string) => {
+      deleteScheduleSlot(ctx.db, ctx.auth.userId, id);
+    })
   }
 });

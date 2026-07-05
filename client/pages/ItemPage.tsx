@@ -4,13 +4,16 @@ import type { ItemLink } from "../../shared/links";
 import type { Item, UpdateItemResult, CreateItemResult } from "../../shared/item";
 import { AssociationsPanel } from "../components/AssociationsPanel";
 import { ItemEditor } from "../components/ItemEditor";
+import { ScheduleEditor } from "../components/ScheduleEditor";
+import type { ScheduleSlot } from "../../shared/schedule";
 
-type Tab = "content" | "associations";
+type Tab = "content" | "schedule" | "associations";
 
 export function ItemPage() {
   const { id = "" } = useParams<{ id: string }>();
   const items = useQuery<Item[]>("items");
   const links = useQuery<ItemLink[]>("itemLinks");
+  const scheduleSlots = useQuery<ScheduleSlot[]>("scheduleSlots");
   const [tab, setTab] = useState<Tab>("content");
 
   const updateItem = useMutation<[id: string, patchJson: string, expectedRevision: number], UpdateItemResult>("updateItem");
@@ -61,6 +64,9 @@ export function ItemPage() {
           <Link className="text-sm text-neutral-500 hover:text-white" to="/browse">
             Browse
           </Link>
+          <Link className="text-sm text-neutral-500 hover:text-white" to="/calendar">
+            Calendar
+          </Link>
         </div>
         <div className="flex gap-2">
           <button
@@ -69,6 +75,15 @@ export function ItemPage() {
             onClick={() => setTab("content")}
           >
             Content
+          </button>
+          <button
+            className={
+              tab === "schedule" ? "border-b border-white px-2 py-1 text-sm" : "px-2 py-1 text-sm text-neutral-500 hover:text-white"
+            }
+            type="button"
+            onClick={() => setTab("schedule")}
+          >
+            Schedule
           </button>
           <button
             className={
@@ -88,6 +103,8 @@ export function ItemPage() {
           item={item}
           updateItem={(itemId, patchJson, expectedRevision) => updateItem(itemId, patchJson, expectedRevision)}
         />
+      ) : tab === "schedule" ? (
+        <ScheduleEditor item={item} slots={scheduleSlots} />
       ) : (
         <AssociationsPanel
           createLinkedItem={handleCreateLinked}

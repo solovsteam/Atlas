@@ -1,6 +1,7 @@
 import { Link } from "lakebed/client";
 import { useMemo, useState } from "preact/hooks";
 import { searchItems, sortItemsByUpdated } from "../../shared/relevance";
+import { formatDate } from "../../shared/locale";
 import { ItemKindBadge } from "../components/ItemKindBadge";
 import { useRelevance } from "../context/RelevanceContext";
 
@@ -43,7 +44,7 @@ export function BrowsePage() {
                     <ItemKindBadge item={item} />
                   </div>
                   <span className="shrink-0 font-mono text-xs text-neutral-600">
-                    {new Date(item.updatedAt).toLocaleDateString()}
+                    {formatDate(new Date(item.updatedAt))}
                   </span>
                 </div>
                 {item.body ? <p className="mt-1 line-clamp-2 text-sm text-neutral-400">{item.body}</p> : null}

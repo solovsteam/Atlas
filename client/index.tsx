@@ -2,6 +2,7 @@ import { Link, Route, Router, Routes, SignInWithGoogle, signOut, useAuth, useQue
 import type { Item } from "../shared/item";
 import { RelevanceProvider } from "./context/RelevanceContext";
 import { BrowsePage } from "./pages/BrowsePage";
+import { CalendarPage } from "./pages/CalendarPage";
 import { ItemPage } from "./pages/ItemPage";
 import { NowPage } from "./pages/NowPage";
 
@@ -37,8 +38,8 @@ function AppShell() {
 
   return (
     <RelevanceProvider items={items}>
-      <main className="min-h-screen bg-black px-6 py-10 text-white">
-        <section className="mx-auto max-w-3xl">
+      <main className="min-h-screen bg-black px-6 py-10 text-white" lang="de">
+        <section className="mx-auto max-w-6xl">
           <div className="mb-3 flex items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-2">
               {!auth.isLoading ? <AuthAvatar label={authLabel} picture={auth.picture} /> : null}
@@ -59,10 +60,14 @@ function AppShell() {
             <Link className="hover:text-white" to="/browse">
               Browse
             </Link>
+            <Link className="hover:text-white" to="/calendar">
+              Calendar
+            </Link>
           </nav>
           <Routes>
             <Route path="/" element={<NowPage />} />
             <Route path="/browse" element={<BrowsePage />} />
+            <Route path="/calendar" element={<CalendarPage />} />
             <Route path="/item/:id" element={<ItemPage />} />
             <Route
               path="*"

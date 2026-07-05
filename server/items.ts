@@ -10,6 +10,7 @@ import {
   type ItemRow,
   type UpdateItemResult
 } from "../shared/item";
+import { archiveSlotsForItem, deleteSlotsForItem } from "./schedule";
 
 type Db = ServerContext["db"];
 
@@ -63,6 +64,11 @@ export function updateItem(
 
   const nextRevision = current.revision + 1;
   db.items.update(id, { ...updates, revision: String(nextRevision) });
+
+  if (patch.taskStatus === "done" || patch.taskStatus === "cancelled") {
+    archiveSlotsForItem(db, userId, id);
+  }
+
   return { ok: true, revision: nextRevision };
 }
 
@@ -79,6 +85,7 @@ export function deleteItem(db: Db, userId: string, id: string): boolean {
     }
   }
 
+  deleteSlotsForItem(db, userId, id);
   db.items.delete(id);
   return true;
 }

@@ -81,7 +81,9 @@ export function ItemEditor({
           </div>
         ) : null}
 
-        {autosave.saving ? <p className="mt-3 text-xs text-neutral-500">Saving…</p> : null}
+        <p className="mt-3 h-4 text-xs leading-4 text-neutral-500" aria-live="polite">
+          {autosave.saving ? "Saving…" : ""}
+        </p>
       </div>
 
       <input

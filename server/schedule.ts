@@ -11,6 +11,8 @@ import {
   type SlotKind
 } from "../shared/schedule";
 import { getOwnedItem } from "./items";
+import { trackGeneratedScheduleOverrides } from "./generation";
+import { toJson } from "../shared/item";
 
 type Db = ServerContext["db"];
 
@@ -66,6 +68,12 @@ export function updateScheduleSlot(
   }
 
   const patch = parseJson<ScheduleSlotPatch>(patchJson, {});
+  const item = getOwnedItem(db, userId, row.itemId);
+  const overrideFields = item ? trackGeneratedScheduleOverrides(item, patch) : null;
+  if (overrideFields) {
+    db.items.update(item!.id, { overriddenFields: toJson(overrideFields) });
+  }
+
   const updates = applySlotPatch(row, patch);
   if (Object.keys(updates).length === 0) {
     return { ok: true };

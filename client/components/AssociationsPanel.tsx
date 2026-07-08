@@ -1,6 +1,6 @@
 import { Link } from "lakebed/client";
 import { useMemo, useState } from "preact/hooks";
-import { buildItemGraph } from "../../shared/links";
+import { buildDocumentationLinks, buildItemGraph } from "../../shared/links";
 import type { Item } from "../../shared/item";
 import type { ItemLink } from "../../shared/links";
 import { AssociationBreadcrumb } from "./AssociationBreadcrumb";
@@ -15,12 +15,14 @@ export function AssociationsPanel({
   item: Item;
   items: Item[];
   links: ItemLink[];
-  linkItems: (fromId: string, toId: string) => Promise<unknown>;
+  linkItems: (fromId: string, toId: string, kind?: string) => Promise<unknown>;
   createLinkedItem: (title: string, asParent: boolean) => Promise<void>;
 }) {
   const [query, setQuery] = useState("");
+  const [docQuery, setDocQuery] = useState("");
   const [newTitle, setNewTitle] = useState("");
   const graph = useMemo(() => buildItemGraph(item, items, links), [item, items, links]);
+  const documentationLinks = useMemo(() => buildDocumentationLinks(item, items, links), [item, items, links]);
 
   const candidates = items.filter(
     (entry) =>
@@ -30,14 +32,26 @@ export function AssociationsPanel({
       entry.title.toLowerCase().includes(query.toLowerCase())
   );
 
+  const docCandidates = items.filter(
+    (entry) =>
+      entry.id !== item.id &&
+      !documentationLinks.some((linked) => linked.id === entry.id) &&
+      entry.title.toLowerCase().includes(docQuery.toLowerCase())
+  );
+
   async function addParent(parentId: string) {
-    await linkItems(parentId, item.id);
+    await linkItems(parentId, item.id, "context");
     setQuery("");
   }
 
   async function addChild(childId: string) {
-    await linkItems(item.id, childId);
+    await linkItems(item.id, childId, "context");
     setQuery("");
+  }
+
+  async function addDocumentationLink(otherId: string) {
+    await linkItems(item.id, otherId, "documentation");
+    setDocQuery("");
   }
 
   async function onCreateLinked(asParent: boolean) {
@@ -83,6 +97,39 @@ export function AssociationsPanel({
             ))}
           </ul>
         )}
+      </div>
+
+      <div>
+        <h2 className="mb-2 text-sm font-medium uppercase tracking-wide text-neutral-400">Documentation links</h2>
+        {documentationLinks.length === 0 ? (
+          <p className="text-sm text-neutral-500">No documentation links yet.</p>
+        ) : (
+          <ul className="mb-3 space-y-2">
+            {documentationLinks.map((linked) => (
+              <li key={linked.id}>
+                <Link className="text-violet-300 hover:text-violet-100" to={`/item/${linked.id}`}>
+                  {linked.title}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+        <input
+          className="mb-2 w-full border border-neutral-700 bg-black px-3 py-2 text-sm outline-none focus:border-white"
+          placeholder="Search items to link"
+          value={docQuery}
+          onInput={(event) => setDocQuery((event.currentTarget as HTMLInputElement).value)}
+        />
+        <ul className="max-h-32 space-y-2 overflow-y-auto">
+          {docCandidates.slice(0, 6).map((candidate) => (
+            <li className="flex items-center justify-between gap-2 text-sm" key={candidate.id}>
+              <span className="truncate text-neutral-300">{candidate.title}</span>
+              <button className="text-xs text-neutral-400 hover:text-white" type="button" onClick={() => void addDocumentationLink(candidate.id)}>
+                Link
+              </button>
+            </li>
+          ))}
+        </ul>
       </div>
 
       <div>

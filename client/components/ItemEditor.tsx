@@ -1,15 +1,22 @@
 import type { Item, ItemPatch, UpdateItemResult } from "../../shared/item";
 import { useAutosaveItem } from "../hooks/useAutosaveItem";
+import { CompletionRuleEditor } from "./CompletionRuleEditor";
+import { DocumentationEditor } from "./DocumentationEditor";
 import { GeneratorBadge } from "./GeneratorBadge";
+import { GenerationEditor } from "./GenerationEditor";
+import { TrackedDataForm } from "./TrackedDataForm";
+import { RelevanceMetadataEditor } from "./RelevanceMetadataEditor";
 import { TaskStatusButtons } from "./TaskStatusButtons";
 
 export function ItemEditor({
   item,
   generator,
+  occurrences,
   updateItem
 }: {
   item: Item;
   generator: Item | null;
+  occurrences: Item[];
   updateItem: (id: string, patchJson: string, expectedRevision: number) => Promise<UpdateItemResult>;
 }) {
   const autosave = useAutosaveItem(item, updateItem);
@@ -39,11 +46,7 @@ export function ItemEditor({
       <div className="mb-6 rounded border border-neutral-800 p-4">
         <p className="mb-3 text-xs uppercase tracking-wide text-neutral-500">Capabilities</p>
         <div className="mb-4 flex flex-wrap gap-2">
-          <CapabilityToggle
-            active={item.isTask}
-            label="Task"
-            onToggle={() => void patchItem({ isTask: !item.isTask })}
-          />
+          <CapabilityToggle active={item.isTask} label="Task" onToggle={() => void patchItem({ isTask: !item.isTask })} />
           <CapabilityToggle
             active={item.isDocumentation}
             label="Documentation"
@@ -54,25 +57,23 @@ export function ItemEditor({
         {item.isTask ? (
           <div className="mb-4">
             <p className="mb-2 text-xs text-neutral-500">Task status</p>
-            <TaskStatusButtons
-              status={item.taskStatus ?? "active"}
-              onChange={(status) => void patchItem({ taskStatus: status })}
-            />
+            <TaskStatusButtons status={item.taskStatus ?? "active"} onChange={(status) => void patchItem({ taskStatus: status })} />
           </div>
         ) : (
-          <p className="text-sm text-neutral-500">Plain note — no task status until you enable Task.</p>
+          <p className="mb-4 text-sm text-neutral-500">Plain note — no task status until you enable Task.</p>
         )}
 
-        {item.isDocumentation ? (
-          <div className="rounded border border-neutral-800 bg-neutral-950 px-3 py-2 text-sm text-neutral-400">
-            Documentation is enabled. Schema editing and state tracking will be expanded in a later phase.
-          </div>
-        ) : null}
+        <CompletionRuleEditor item={item} updateItem={updateItem} />
 
         <p className="mt-3 h-4 text-xs leading-4 text-neutral-500" aria-live="polite">
           {autosave.saving ? "Saving…" : ""}
         </p>
       </div>
+
+      <RelevanceMetadataEditor item={item} updateItem={updateItem} />
+      <DocumentationEditor item={item} updateItem={updateItem} />
+      {!item.isDocumentation ? <TrackedDataForm item={item} readOnlySchema={Boolean(item.generatedFromId)} updateItem={updateItem} /> : null}
+      <GenerationEditor item={item} occurrences={occurrences} updateItem={updateItem} />
 
       <input
         className="mb-4 w-full border border-neutral-700 bg-black px-3 py-2 text-2xl font-semibold outline-none focus:border-white"
@@ -85,22 +86,6 @@ export function ItemEditor({
         value={autosave.draft.body}
         onInput={(event) => autosave.updateBody((event.currentTarget as HTMLTextAreaElement).value)}
       />
-
-      {item.tags.length > 0 ? (
-        <div className="mt-4 flex flex-wrap gap-2">
-          {item.tags.map((tag) => (
-            <span className="rounded-full border border-neutral-700 px-2 py-0.5 text-xs text-neutral-400" key={tag}>
-              {tag}
-            </span>
-          ))}
-        </div>
-      ) : null}
-
-      {item.generatedFromId && generator ? (
-        <p className="mt-4 text-sm text-neutral-500">
-          Generated from: {generator.title}
-        </p>
-      ) : null}
     </section>
   );
 }

@@ -10,6 +10,8 @@ import {
   type ItemRow,
   type UpdateItemResult
 } from "../shared/item";
+import { applyCompletionCascade } from "./completion";
+import { deleteOccurrencesForTemplate, syncOccurrences, trackGeneratedItemOverrides } from "./generation";
 import { archiveSlotsForItem, deleteSlotsForItem } from "./schedule";
 
 type Db = ServerContext["db"];
@@ -57,7 +59,10 @@ export function updateItem(
   }
 
   const patch = parseJson<ItemPatch>(patchJson, {});
-  const updates = applyPatch(row, patch);
+  const overrideFields = trackGeneratedItemOverrides(current, Object.keys(patch));
+  const mergedPatch =
+    overrideFields && !patch.overriddenFields ? { ...patch, overriddenFields: overrideFields } : patch;
+  const updates = applyPatch(row, mergedPatch);
   if (Object.keys(updates).length === 0) {
     return { ok: true, revision: current.revision };
   }
@@ -69,6 +74,16 @@ export function updateItem(
     archiveSlotsForItem(db, userId, id);
   }
 
+  if (mergedPatch.recurrenceRule !== undefined) {
+    if (mergedPatch.recurrenceRule === null) {
+      deleteOccurrencesForTemplate(db, userId, id);
+    } else {
+      syncOccurrences(db, userId, id);
+    }
+  }
+
+  applyCompletionCascade(db, userId, id, patch.taskStatus !== undefined);
+
   return { ok: true, revision: nextRevision };
 }
 
@@ -77,6 +92,8 @@ export function deleteItem(db: Db, userId: string, id: string): boolean {
   if (!row || row.ownerId !== userId) {
     return false;
   }
+
+  deleteOccurrencesForTemplate(db, userId, id);
 
   const links = db.itemLinks.where("ownerId", userId).all() as Array<{ id: string; fromId: string; toId: string }>;
   for (const link of links) {

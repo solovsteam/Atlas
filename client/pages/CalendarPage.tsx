@@ -229,6 +229,9 @@ export function CalendarPage() {
                         >
                           <span className="font-medium">{item?.title ?? "Untitled"}</span>
                           <span className="mt-0.5 block text-neutral-500">{formatTimeRange(slot)}</span>
+                          {item?.occurrenceKey ? (
+                            <span className="mt-0.5 block text-neutral-600">occurrence · {item.occurrenceKey}</span>
+                          ) : null}
                           {archived ? <span className="mt-0.5 block text-neutral-600">archived</span> : null}
                         </Link>
                       </li>

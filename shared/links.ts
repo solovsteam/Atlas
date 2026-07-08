@@ -1,6 +1,6 @@
 import type { Item } from "./item";
 
-export type LinkKind = "context" | "documentation";
+export type LinkKind = "context" | "documentation" | "generates";
 
 export type ItemLinkRow = {
   id: string;
@@ -34,7 +34,7 @@ export type ItemGraphNode = {
   ancestorPaths: BreadcrumbSegment[][];
 };
 
-const LINK_KINDS: LinkKind[] = ["context", "documentation"];
+const LINK_KINDS: LinkKind[] = ["context", "documentation", "generates"];
 
 export function linkFromRow(row: ItemLinkRow): ItemLink {
   const kind = LINK_KINDS.includes(row.kind as LinkKind) ? (row.kind as LinkKind) : "context";
@@ -101,4 +101,27 @@ export function buildItemGraph(item: Item, items: Item[], links: ItemLink[]): It
       }))
     )
   };
+}
+
+export function getDocumentationLinkedIds(itemId: string, links: ItemLink[]): string[] {
+  const ids = new Set<string>();
+  for (const link of links) {
+    if (link.kind !== "documentation") {
+      continue;
+    }
+    if (link.fromId === itemId) {
+      ids.add(link.toId);
+    }
+    if (link.toId === itemId) {
+      ids.add(link.fromId);
+    }
+  }
+  return [...ids];
+}
+
+export function buildDocumentationLinks(item: Item, items: Item[], links: ItemLink[]): Item[] {
+  const byId = new Map(items.map((entry) => [entry.id, entry]));
+  return getDocumentationLinkedIds(item.id, links)
+    .map((id) => byId.get(id))
+    .filter((entry): entry is Item => Boolean(entry));
 }

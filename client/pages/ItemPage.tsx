@@ -5,6 +5,7 @@ import type { Item, UpdateItemResult, CreateItemResult } from "../../shared/item
 import { AssociationsPanel } from "../components/AssociationsPanel";
 import { ItemEditor } from "../components/ItemEditor";
 import { ScheduleEditor } from "../components/ScheduleEditor";
+import { trackLinkUndo, useUndo } from "../context/UndoContext";
 import type { ScheduleSlot } from "../../shared/schedule";
 
 type PanelId = "content" | "schedule" | "associations";
@@ -39,6 +40,7 @@ export function ItemPage() {
   const links = useQuery<ItemLink[]>("itemLinks");
   const scheduleSlots = useQuery<ScheduleSlot[]>("scheduleSlots");
   const [focusedPanel, setFocusedPanel] = useState<PanelId | null>(null);
+  const { push } = useUndo();
 
   const updateItem = useMutation<[id: string, patchJson: string, expectedRevision: number], UpdateItemResult>("updateItem");
   const linkItemsMutation = useMutation<[fromId: string, toId: string, kind?: string], { ok: true } | { error: string }>(
@@ -53,6 +55,10 @@ export function ItemPage() {
     }
     return items.find((entry) => entry.id === item.generatedFromId) ?? null;
   }, [item, items]);
+  const occurrences = useMemo(
+    () => (item ? items.filter((entry) => entry.generatedFromId === item.id).sort((a, b) => a.occurrenceKey.localeCompare(b.occurrenceKey)) : []),
+    [item, items]
+  );
 
   if (!item) {
     return (
@@ -65,16 +71,17 @@ export function ItemPage() {
     );
   }
 
-  async function handleLinkItems(fromId: string, toId: string) {
-    await linkItemsMutation(fromId, toId, "context");
+  async function handleLinkItems(fromId: string, toId: string, kind = "context") {
+    await linkItemsMutation(fromId, toId, kind);
+    trackLinkUndo(push, fromId, toId, kind);
   }
 
   async function handleCreateLinked(title: string, asParent: boolean) {
     const created = await createItem(title);
     if (asParent) {
-      await linkItemsMutation(created.id, item.id, "context");
+      await handleLinkItems(created.id, item.id, "context");
     } else {
-      await linkItemsMutation(item.id, created.id, "context");
+      await handleLinkItems(item.id, created.id, "context");
     }
   }
 
@@ -87,9 +94,6 @@ export function ItemPage() {
       <div className="mb-6 flex items-center gap-3">
         <Link className="text-sm text-neutral-400 hover:text-white" to="/">
           ← Now
-        </Link>
-        <Link className="text-sm text-neutral-500 hover:text-white" to="/browse">
-          Browse
         </Link>
         <Link className="text-sm text-neutral-500 hover:text-white" to="/calendar">
           Calendar
@@ -110,6 +114,7 @@ export function ItemPage() {
                 <ItemEditor
                   generator={generator}
                   item={item}
+                  occurrences={occurrences}
                   updateItem={(itemId, patchJson, expectedRevision) => updateItem(itemId, patchJson, expectedRevision)}
                 />
               ) : null}

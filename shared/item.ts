@@ -70,6 +70,11 @@ export type ItemPatch = Partial<{
   tags: string[];
   location: string;
   startableWindow: StartableWindow | null;
+  completionRule: CompletionRule | null;
+  documentationSchema: unknown | null;
+  documentationData: unknown | null;
+  recurrenceRule: unknown | null;
+  overriddenFields: string[];
 }>;
 
 export type UpdateItemResult =
@@ -198,6 +203,21 @@ export function applyPatch(row: ItemRow, patch: ItemPatch): Partial<ItemRow> {
   }
   if (patch.startableWindow !== undefined) {
     next.startableWindow = patch.startableWindow ? toJson(patch.startableWindow) : "";
+  }
+  if (patch.completionRule !== undefined) {
+    next.completionRule = patch.completionRule ? toJson(patch.completionRule) : "";
+  }
+  if (patch.documentationSchema !== undefined) {
+    next.documentationSchema = patch.documentationSchema ? toJson(patch.documentationSchema) : "";
+  }
+  if (patch.documentationData !== undefined) {
+    next.documentationData = patch.documentationData ? toJson(patch.documentationData) : "";
+  }
+  if (patch.recurrenceRule !== undefined) {
+    next.recurrenceRule = patch.recurrenceRule ? toJson(patch.recurrenceRule) : "";
+  }
+  if (patch.overriddenFields !== undefined) {
+    next.overriddenFields = toJson(patch.overriddenFields);
   }
   return next;
 }

@@ -4,10 +4,14 @@ import {
   DATE_TIME_PLACEHOLDER,
   europeanDateFromIso,
   europeanDateTimeFromIso,
+  formatEuropeanDate,
+  formatEuropeanDateTime,
   isoFromEuropeanDate,
   isoFromEuropeanDateTime,
-  parseEuropeanDate,
-  parseEuropeanDateTime,
+  normalizeEuropeanDate,
+  normalizeEuropeanDateTime,
+  parseFlexibleDate,
+  parseFlexibleDateTime,
   validateEuropeanDate,
   validateEuropeanDateTime
 } from "../../shared/locale";
@@ -34,36 +38,39 @@ export function DateTimeTextInput({
   const [error, setError] = useState("");
 
   function commit(nextValue: string) {
-    onChange(nextValue);
-    if (!onValidIso) {
-      setError("");
-      return;
-    }
-
     if (!nextValue.trim()) {
+      onChange("");
       setError("");
-      onValidIso("");
+      onValidIso?.("");
       return;
     }
 
     if (mode === "date") {
       const validationError = validateEuropeanDate(nextValue);
       if (validationError) {
+        onChange(nextValue);
         setError(validationError);
         return;
       }
+      const parsed = parseFlexibleDate(nextValue);
+      const normalized = parsed ? formatEuropeanDate(parsed) : normalizeEuropeanDate(nextValue) ?? nextValue;
+      onChange(normalized);
       setError("");
-      onValidIso(isoFromEuropeanDate(nextValue, endOfDay));
+      onValidIso?.(isoFromEuropeanDate(normalized, endOfDay));
       return;
     }
 
     const validationError = validateEuropeanDateTime(nextValue);
     if (validationError) {
+      onChange(nextValue);
       setError(validationError);
       return;
     }
+    const parsed = parseFlexibleDateTime(nextValue);
+    const normalized = parsed ? formatEuropeanDateTime(parsed) : normalizeEuropeanDateTime(nextValue) ?? nextValue;
+    onChange(normalized);
     setError("");
-    onValidIso(isoFromEuropeanDateTime(nextValue));
+    onValidIso?.(isoFromEuropeanDateTime(normalized));
   }
 
   return (
@@ -103,19 +110,22 @@ export function EditableSlotTime({ iso, label, mode, onSave }: EditableSlotTimeP
   const [error, setError] = useState("");
 
   function commit(nextValue: string) {
-    setText(nextValue);
     if (!nextValue.trim()) {
+      setText("");
       setError("");
       onSave("");
       return;
     }
 
-    const parsed = mode === "date" ? parseEuropeanDate(nextValue) : parseEuropeanDateTime(nextValue);
+    const parsed = mode === "date" ? parseFlexibleDate(nextValue) : parseFlexibleDateTime(nextValue);
     if (!parsed) {
+      setText(nextValue);
       setError(mode === "date" ? `Use ${DATE_PLACEHOLDER}` : `Use ${DATE_TIME_PLACEHOLDER}`);
       return;
     }
 
+    const normalized = mode === "date" ? formatEuropeanDate(parsed) : formatEuropeanDateTime(parsed);
+    setText(normalized);
     setError("");
     onSave(parsed.toISOString());
   }

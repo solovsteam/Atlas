@@ -10,6 +10,7 @@ import {
   listOwnedScheduleSlots,
   updateScheduleSlot
 } from "./schedule";
+import { syncAllGenerations } from "./generation";
 import type { LinkKind } from "../shared/links";
 
 export default capsule({
@@ -101,6 +102,10 @@ export default capsule({
 
     deleteScheduleSlot: mutation((ctx, id: string) => {
       deleteScheduleSlot(ctx.db, ctx.auth.userId, id);
+    }),
+
+    syncRecurrences: mutation((ctx) => {
+      syncAllGenerations(ctx.db, ctx.auth.userId);
     })
   }
 });

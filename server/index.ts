@@ -4,10 +4,13 @@ import { createItem, deleteItem, listOwnedItems, updateItem } from "./items";
 import { linkItems, listOwnedLinks, unlinkItems } from "./links";
 import {
   archiveScheduleSlot,
-  archiveSlotsForItem,
+  assignItemToSlot,
   createScheduleSlot,
+  createTimeBox,
   deleteScheduleSlot,
   listOwnedScheduleSlots,
+  listOwnedSlotAssignments,
+  unassignItemFromSlot,
   updateScheduleSlot
 } from "./schedule";
 import { syncAllGenerations } from "./generation";
@@ -45,12 +48,18 @@ export default capsule({
     }),
     scheduleSlots: table({
       ownerId: string(),
-      itemId: string(),
       kind: string().default("fixed"),
       startsAt: string().default(""),
       endsAt: string().default(""),
       slotStatus: string().default("scheduled"),
-      recurrenceRule: string().default("")
+      label: string().default(""),
+      recurrenceRule: string().default(""),
+      itemId: string().default("")
+    }),
+    slotAssignments: table({
+      ownerId: string(),
+      slotId: string(),
+      itemId: string()
     })
   },
 
@@ -58,6 +67,7 @@ export default capsule({
     items: query((ctx) => listOwnedItems(ctx.db, ctx.auth.userId)),
     itemLinks: query((ctx) => listOwnedLinks(ctx.db, ctx.auth.userId)),
     scheduleSlots: query((ctx) => listOwnedScheduleSlots(ctx.db, ctx.auth.userId)),
+    slotAssignments: query((ctx) => listOwnedSlotAssignments(ctx.db, ctx.auth.userId)),
     inbox: query((ctx) => getInbox(ctx))
   },
 
@@ -88,9 +98,21 @@ export default capsule({
       updateItem(ctx.db, ctx.auth.userId, id, JSON.stringify({ manualRelevance: value }), expectedRevision)
     ),
 
+    createTimeBox: mutation((ctx, kind: string, startsAt: string = "", endsAt: string = "", label: string = "") =>
+      createTimeBox(ctx.db, ctx.auth.userId, kind, startsAt, endsAt, label)
+    ),
+
     createScheduleSlot: mutation((ctx, itemId: string, kind: string, startsAt: string = "", endsAt: string = "") =>
       createScheduleSlot(ctx.db, ctx.auth.userId, itemId, kind, startsAt, endsAt)
     ),
+
+    assignItemToSlot: mutation((ctx, slotId: string, itemId: string) =>
+      assignItemToSlot(ctx.db, ctx.auth.userId, slotId, itemId)
+    ),
+
+    unassignItemFromSlot: mutation((ctx, slotId: string, itemId: string) => {
+      unassignItemFromSlot(ctx.db, ctx.auth.userId, slotId, itemId);
+    }),
 
     updateScheduleSlot: mutation((ctx, id: string, patchJson: string) =>
       updateScheduleSlot(ctx.db, ctx.auth.userId, id, patchJson)

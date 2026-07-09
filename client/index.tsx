@@ -5,6 +5,7 @@ import { UndoProvider, useUndo } from "./context/UndoContext";
 import { CalendarPage } from "./pages/CalendarPage";
 import { ItemPage } from "./pages/ItemPage";
 import { NowPage } from "./pages/NowPage";
+import { TimeBoxPage } from "./pages/TimeBoxPage";
 
 function AuthAvatar({ label, picture }: { label: string; picture?: string }) {
   const initial = label.trim().slice(0, 1).toUpperCase() || "?";
@@ -80,6 +81,7 @@ function AppShell() {
             <Routes>
               <Route path="/" element={<NowPage />} />
               <Route path="/calendar" element={<CalendarPage />} />
+              <Route path="/calendar/box/:slotId" element={<TimeBoxPage />} />
               <Route path="/item/:id" element={<ItemPage />} />
               <Route
                 path="*"

@@ -31,6 +31,17 @@ https://open-signal-da4407053d.lakebed.app
 - **Recurrence** — daily/weekly/monthly templates materialize generated occurrences
 - **Undo** — Cmd/Ctrl+Z and Undo button for task status, item patches, and links
 
+## Phase 4 features
+
+- **Time boxes** decoupled from tasks — `scheduleSlots` are calendar intervals; `slotAssignments` links 0..N tasks to each box
+- **Calendar views** — day (time grid), week, and month with view toggle
+- **Time box detail** — `/calendar/box/:slotId` lists assigned tasks, assign/unassign, edit times
+- **Empty boxes** — create free-time blocks from Calendar without tasks; overlap between active boxes is rejected
+- **Item Schedule tab** — scheduling constraints (location, startable window) separate from calendar placements
+- **Generators** — still create a time box + assignment per occurrence
+
+Auto-scheduling from constraints is planned for a later phase.
+
 ## Develop locally
 
 ```sh

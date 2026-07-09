@@ -6,7 +6,7 @@ import { AssociationsPanel } from "../components/AssociationsPanel";
 import { ItemEditor } from "../components/ItemEditor";
 import { ScheduleEditor } from "../components/ScheduleEditor";
 import { trackLinkUndo, useUndo } from "../context/UndoContext";
-import type { ScheduleSlot } from "../../shared/schedule";
+import type { ScheduleSlot, SlotAssignment } from "../../shared/schedule";
 
 type PanelId = "content" | "schedule" | "associations";
 
@@ -39,6 +39,7 @@ export function ItemPage() {
   const items = useQuery<Item[]>("items");
   const links = useQuery<ItemLink[]>("itemLinks");
   const scheduleSlots = useQuery<ScheduleSlot[]>("scheduleSlots");
+  const slotAssignments = useQuery<SlotAssignment[]>("slotAssignments");
   const [focusedPanel, setFocusedPanel] = useState<PanelId | null>(null);
   const { push } = useUndo();
 
@@ -118,7 +119,14 @@ export function ItemPage() {
                   updateItem={(itemId, patchJson, expectedRevision) => updateItem(itemId, patchJson, expectedRevision)}
                 />
               ) : null}
-              {panel.id === "schedule" ? <ScheduleEditor item={item} slots={scheduleSlots} /> : null}
+              {panel.id === "schedule" ? (
+                <ScheduleEditor
+                  assignments={slotAssignments}
+                  item={item}
+                  slots={scheduleSlots}
+                  updateItem={(itemId, patchJson, expectedRevision) => updateItem(itemId, patchJson, expectedRevision)}
+                />
+              ) : null}
               {panel.id === "associations" ? (
                 <AssociationsPanel
                   createLinkedItem={handleCreateLinked}

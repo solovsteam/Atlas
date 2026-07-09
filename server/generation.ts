@@ -13,8 +13,9 @@ import {
   type GenerationSpec
 } from "../shared/generation";
 import { linkItems, unlinkItems } from "./links";
-import { deleteSlotsForItem } from "./schedule";
-import { newScheduleSlotRow } from "../shared/schedule";
+import { deleteSlotsForItem, itemsAssignedToSlot, listOwnedSlotAssignments } from "./schedule";
+import { newScheduleSlotRow, type ScheduleSlotPatch } from "../shared/schedule";
+import { itemFromRow as itemFromRowAgain } from "../shared/item";
 
 type Db = ServerContext["db"];
 
@@ -26,9 +27,21 @@ function listOccurrences(db: Db, userId: string, templateId: string): Item[] {
     .filter((item) => item.generatedFromId === templateId);
 }
 
-function listSlotsForItem(db: Db, userId: string, itemId: string) {
-  return (db.scheduleSlots.where("ownerId", userId).all() as Array<{ id: string; itemId: string; slotStatus: string; startsAt: string; endsAt: string }>)
-    .filter((slot) => slot.itemId === itemId);
+function primarySlotIdForItem(db: Db, userId: string, itemId: string): string | null {
+  const assignments = listOwnedSlotAssignments(db, userId).filter((entry) => entry.itemId === itemId);
+  if (assignments.length === 0) {
+    return null;
+  }
+  return assignments[0]!.slotId;
+}
+
+function listSlotRowsForItem(db: Db, userId: string, itemId: string) {
+  const slotId = primarySlotIdForItem(db, userId, itemId);
+  if (!slotId) {
+    return [];
+  }
+  const row = db.scheduleSlots.get(slotId) as { id: string; slotStatus: string; startsAt: string; endsAt: string } | null;
+  return row ? [row] : [];
 }
 
 function ensureGeneratesLink(db: Db, userId: string, templateId: string, childId: string): void {
@@ -77,14 +90,14 @@ function createOccurrence(
 
   const item = itemFromRow(inserted);
   const times = slotTimesForOccurrence(occurrenceKey, child.schedule);
-  db.scheduleSlots.insert(
+  const boxRow = db.scheduleSlots.insert(
     newScheduleSlotRow(userId, {
-      itemId: item.id,
       kind: "fixed",
       startsAt: times.startsAt,
       endsAt: times.endsAt
     })
-  );
+  ) as { id: string };
+  db.slotAssignments.insert({ ownerId: userId, slotId: boxRow.id, itemId: item.id });
   ensureGeneratesLink(db, userId, template.id, item.id);
   return item;
 }
@@ -101,7 +114,7 @@ function syncOccurrenceSchedule(
   }
 
   const times = slotTimesForOccurrence(item.occurrenceKey, spec.child.schedule);
-  const slots = listSlotsForItem(db, userId, item.id).filter((slot) => slot.slotStatus !== "archived");
+  const slots = listSlotRowsForItem(db, userId, item.id).filter((slot) => slot.slotStatus !== "archived");
   const primary = slots[0];
 
   if (primary) {
@@ -111,14 +124,14 @@ function syncOccurrenceSchedule(
     return;
   }
 
-  db.scheduleSlots.insert(
+  const boxRow = db.scheduleSlots.insert(
     newScheduleSlotRow(userId, {
-      itemId: item.id,
       kind: "fixed",
       startsAt: times.startsAt,
       endsAt: times.endsAt
     })
-  );
+  ) as { id: string };
+  db.slotAssignments.insert({ ownerId: userId, slotId: boxRow.id, itemId: item.id });
 }
 
 function applySpecToFutureOccurrence(
@@ -258,7 +271,7 @@ export function trackGeneratedItemOverrides(
   return mergeOverriddenFields(item.overriddenFields, additions);
 }
 
-export function trackGeneratedScheduleOverrides(item: Item, patch: { startsAt?: string | null; endsAt?: string | null }): string[] | null {
+function trackGeneratedScheduleOverrides(item: Item, patch: ScheduleSlotPatch): string[] | null {
   if (!item.generatedFromId) {
     return null;
   }
@@ -274,4 +287,30 @@ export function trackGeneratedScheduleOverrides(item: Item, patch: { startsAt?: 
     return null;
   }
   return mergeOverriddenFields(item.overriddenFields, additions);
+}
+
+export function trackGeneratedScheduleOverridesForSlot(
+  db: ServerContext["db"],
+  userId: string,
+  slotId: string,
+  patch: ScheduleSlotPatch
+): void {
+  if (patch.startsAt === undefined && patch.endsAt === undefined) {
+    return;
+  }
+  const itemIds = itemsAssignedToSlot(db, userId, slotId);
+  for (const itemId of itemIds) {
+    const row = db.items.get(itemId);
+    if (!row) {
+      continue;
+    }
+    const item = itemFromRowAgain(row as ItemRow);
+    if (!item.generatedFromId) {
+      continue;
+    }
+    const overrideFields = trackGeneratedScheduleOverrides(item, patch);
+    if (overrideFields) {
+      db.items.update(itemId, { overriddenFields: toJson(overrideFields) });
+    }
+  }
 }

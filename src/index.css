@@ -17,3 +17,10 @@ a {
   color: inherit;
   text-decoration: none;
 }
+
+/* iOS Safari zooms focused inputs when font-size < 16px. */
+input,
+textarea,
+select {
+  font-size: max(16px, 1em);
+}

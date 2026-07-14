@@ -63,7 +63,7 @@ export function ItemEditor({
       <label className="mb-4 block">
         <span className="mb-1 block text-xs uppercase tracking-wide text-neutral-500">Notes</span>
         <textarea
-          className="min-h-64 w-full border border-neutral-700 bg-black px-3 py-2 text-sm leading-6 outline-none focus:border-white"
+          className="min-h-64 w-full border border-neutral-700 bg-black px-3 py-2 text-base leading-6 outline-none focus:border-white"
           value={autosave.draft.body}
           onChange={(event) => autosave.updateBody(event.target.value)}
         />

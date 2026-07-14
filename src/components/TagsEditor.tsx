@@ -45,7 +45,7 @@ export function TagsEditor({
         </div>
         <div className="flex gap-2">
           <input
-            className="min-w-0 flex-1 border border-neutral-700 bg-black px-3 py-2 text-sm outline-none focus:border-white"
+            className="min-w-0 flex-1 border border-neutral-700 bg-black px-3 py-2 text-base outline-none focus:border-white"
             placeholder="Add tag"
             value={tagInput}
             onChange={(event) => setTagInput(event.target.value)}

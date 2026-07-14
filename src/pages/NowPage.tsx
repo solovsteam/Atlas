@@ -68,7 +68,7 @@ export function NowPage() {
 
       <form className="mb-4 flex gap-3" onSubmit={(event) => void onAdd(event)}>
         <input
-          className="min-w-0 flex-1 border border-neutral-700 bg-black px-3 py-2 text-sm outline-none focus:border-white"
+          className="min-w-0 flex-1 border border-neutral-700 bg-black px-3 py-2 text-base outline-none focus:border-white"
           placeholder="Search or add an item…"
           value={query}
           onChange={(event) => setQuery(event.target.value)}

@@ -1,5 +1,6 @@
 import type { Item, ItemPatch, UpdateItemResult } from "@shared/item";
 import { useAutosaveItem } from "../hooks/useAutosaveItem";
+import { trackItemPatchUndo, trackTaskStatusUndo, useUndo } from "../context/UndoContext";
 import { TagsEditor } from "./TagsEditor";
 import { TaskStatusButtons } from "./TaskStatusButtons";
 
@@ -10,10 +11,28 @@ export function ItemEditor({
   item: Item;
   updateItem: (id: string, patchJson: string, expectedRevision: number) => Promise<UpdateItemResult>;
 }) {
-  const autosave = useAutosaveItem(item, updateItem);
+  const { push } = useUndo();
+  const autosave = useAutosaveItem(item, updateItem, (before, nextRevision) => {
+    trackItemPatchUndo(push, item, before, nextRevision);
+  });
 
   async function patchItem(patch: ItemPatch) {
-    await updateItem(item.id, JSON.stringify(patch), autosave.revision);
+    const before: ItemPatch = {};
+    if (patch.isTask !== undefined) {
+      before.isTask = item.isTask;
+    }
+    if (patch.taskStatus !== undefined) {
+      before.taskStatus = item.taskStatus;
+    }
+
+    const result = await updateItem(item.id, JSON.stringify(patch), autosave.revision);
+    if ("ok" in result && result.ok) {
+      if (patch.taskStatus !== undefined) {
+        trackTaskStatusUndo(push, item, result.revision);
+      } else if (Object.keys(before).length > 0) {
+        trackItemPatchUndo(push, item, before, result.revision);
+      }
+    }
   }
 
   return (

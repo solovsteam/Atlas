@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { Item, ItemPatch, UpdateItemResult } from "@shared/item";
+import { trackItemPatchUndo, useUndo } from "../context/UndoContext";
 
 export function TagsEditor({
   item,
@@ -9,9 +10,15 @@ export function TagsEditor({
   updateItem: (id: string, patchJson: string, expectedRevision: number) => Promise<UpdateItemResult>;
 }) {
   const [tagInput, setTagInput] = useState("");
+  const { push } = useUndo();
 
   async function patchItem(patch: ItemPatch) {
-    return updateItem(item.id, JSON.stringify(patch), item.revision);
+    const before = { tags: item.tags };
+    const result = await updateItem(item.id, JSON.stringify(patch), item.revision);
+    if ("ok" in result && result.ok) {
+      trackItemPatchUndo(push, item, before, result.revision);
+    }
+    return result;
   }
 
   async function addTag() {

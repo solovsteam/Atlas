@@ -8,7 +8,9 @@ type ConflictState = {
   localPatch: ItemPatch;
 };
 
-export function useAutosaveItem(item: Item | null, updateItem: UpdateMutation) {
+type UndoTrackFn = (before: ItemPatch, nextRevision: number) => void;
+
+export function useAutosaveItem(item: Item | null, updateItem: UpdateMutation, onUndoTrack?: UndoTrackFn) {
   const [draft, setDraft] = useState<{ title: string; body: string }>({ title: "", body: "" });
   const [revision, setRevision] = useState(0);
   const [saving, setSaving] = useState(false);
@@ -19,9 +21,11 @@ export function useAutosaveItem(item: Item | null, updateItem: UpdateMutation) {
   const revisionRef = useRef(revision);
   const itemIdRef = useRef("");
   const savingRef = useRef(false);
+  const itemRef = useRef(item);
 
   draftRef.current = draft;
   revisionRef.current = revision;
+  itemRef.current = item;
 
   useEffect(() => {
     if (!item) {
@@ -69,6 +73,17 @@ export function useAutosaveItem(item: Item | null, updateItem: UpdateMutation) {
       return;
     }
 
+    const beforeUndo: ItemPatch = {};
+    const snapshot = itemRef.current;
+    if (snapshot) {
+      if (patch.title !== undefined) {
+        beforeUndo.title = snapshot.title;
+      }
+      if (patch.body !== undefined) {
+        beforeUndo.body = snapshot.body;
+      }
+    }
+
     pendingPatchRef.current = {};
     savingRef.current = true;
     setSaving(true);
@@ -88,6 +103,9 @@ export function useAutosaveItem(item: Item | null, updateItem: UpdateMutation) {
       if ("ok" in result && result.ok) {
         revisionRef.current = result.revision;
         setRevision(result.revision);
+        if (onUndoTrack && Object.keys(beforeUndo).length > 0) {
+          onUndoTrack(beforeUndo, result.revision);
+        }
       }
     } finally {
       savingRef.current = false;

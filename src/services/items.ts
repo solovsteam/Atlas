@@ -100,15 +100,14 @@ export async function updateItem(
   return { ok: true, revision: nextRevision };
 }
 
-export async function deleteItem(client: Client, userId: string, id: string): Promise<boolean> {
-  const { data: row } = await client.from("items").select("owner_id").eq("id", id).maybeSingle();
-  if (!row || row.owner_id !== userId) {
-    return false;
-  }
+export async function deleteItem(client: Client, userId: string, id: string): Promise<void> {
+  const { data, error } = await client.from("items").delete().eq("id", id).eq("owner_id", userId).select("id");
 
-  const { error } = await client.from("items").delete().eq("id", id);
   if (error) {
     throw new Error(error.message);
   }
-  return true;
+
+  if (!data?.length) {
+    throw new Error("Could not delete item");
+  }
 }

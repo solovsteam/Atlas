@@ -24,11 +24,15 @@ export function ItemPage() {
   const currentItem = item;
 
   async function handleDelete() {
-    if (!window.confirm(`Delete "${currentItem.title}"? This cannot be undone.`)) {
+    if (!window.confirm(`Delete "${currentItem.title}"?`)) {
       return;
     }
-    await deleteItem(currentItem.id);
-    navigate("/");
+    try {
+      await deleteItem(currentItem.id);
+      navigate("/");
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : "Could not delete item");
+    }
   }
 
   return (

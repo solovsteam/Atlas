@@ -32,6 +32,10 @@ export function useItems(userId: string | undefined) {
     void refresh();
   }, [refresh]);
 
+  const removeItemById = useCallback((id: string) => {
+    setItems((current) => current.filter((entry) => entry.id !== id));
+  }, []);
+
   useEffect(() => {
     if (!userId) {
       return;
@@ -44,9 +48,9 @@ export function useItems(userId: string | undefined) {
         { event: "*", schema: "public", table: "items", filter: `owner_id=eq.${userId}` },
         (payload) => {
           if (payload.eventType === "DELETE") {
-            const oldRow = payload.old as { id?: string };
-            if (oldRow.id) {
-              setItems((current) => current.filter((entry) => entry.id !== oldRow.id));
+            const deletedId = (payload.old as { id?: string }).id;
+            if (deletedId) {
+              setItems((current) => current.filter((entry) => entry.id !== deletedId));
             }
             return;
           }
@@ -71,5 +75,5 @@ export function useItems(userId: string | undefined) {
     };
   }, [userId]);
 
-  return { items, loading, error, refresh };
+  return { items, loading, error, refresh, removeItemById };
 }

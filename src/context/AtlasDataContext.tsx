@@ -1,4 +1,4 @@
-import { createContext, useContext, type ReactNode } from "react";
+import { createContext, useCallback, useContext, type ReactNode } from "react";
 import type { Item } from "@shared/item";
 import type { CreateItemResult, UpdateItemResult } from "@shared/item";
 import { useAuthSession } from "../hooks/useAuthSession";
@@ -20,8 +20,16 @@ const AtlasDataContext = createContext<AtlasDataContextValue | null>(null);
 export function AtlasDataProvider({ children }: { children: ReactNode }) {
   const { session } = useAuthSession();
   const userId = session?.user.id;
-  const { items, loading, error } = useItems(userId);
+  const { items, loading, error, removeItemById } = useItems(userId);
   const mutations = useItemMutations(userId);
+
+  const deleteItem = useCallback(
+    async (id: string) => {
+      await mutations.deleteItem(id);
+      removeItemById(id);
+    },
+    [mutations.deleteItem, removeItemById]
+  );
 
   return (
     <AtlasDataContext.Provider
@@ -32,7 +40,7 @@ export function AtlasDataProvider({ children }: { children: ReactNode }) {
         itemsError: error,
         createItem: mutations.createItem,
         updateItem: mutations.updateItem,
-        deleteItem: mutations.deleteItem
+        deleteItem
       }}
     >
       {children}

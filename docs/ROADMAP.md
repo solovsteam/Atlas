@@ -13,6 +13,25 @@ Atlas is a unified notes, tasks, and calendar app. The active codebase is **Vite
 - **Now inbox:** relevance-ranked list with tags, status boosts, stable ordering.
 - **Calendar:** intervals as items; tasks linked via `scheduled_in`.
 - **Long-term values:** user-owned data, optional local-first, sync when online (especially for notifications and multi-device).
+- **Undo-first interaction:** destructive actions run immediately; **undo** is the safety net — no confirmation dialogs (see below).
+
+---
+
+## Interaction model: undo, not confirmation
+
+Atlas deliberately avoids “Are you sure?” patterns. The user should act freely; mistakes are reversed with **Undo** (header button or Cmd/Ctrl+Z).
+
+| Do | Don't |
+|----|-------|
+| Execute delete/create/edit immediately | `window.confirm` before destructive actions |
+| Push an undo op after each reversible mutation | Modal “This cannot be undone” copy |
+| Let undo restore prior state (item, field, status) | Rely on warnings instead of `UndoContext` |
+
+When implementing new features (unlink, archive, bulk delete, etc.):
+
+1. Perform the action on click/submit.
+2. Register undo via `src/context/UndoContext.tsx` helpers or a new `UndoOp` variant in `shared/commands.ts`.
+3. Never add confirmation UI unless the user explicitly requests it in a future design change.
 
 ---
 
@@ -131,4 +150,5 @@ Google OAuth: publish consent screen when opening to non-test users. Google does
 3. Do not modify `.lakebed/reference/` except to refresh archive if explicitly asked.
 4. Add Supabase changes as SQL migrations in `supabase/migrations/`.
 5. For features listed as “to port”, start from reference implementation, adapt to Supabase patterns in this codebase.
-6. Consider notifications and sync implications when adding time-based or calendar features.
+6. Respect **undo, not confirmation** — see § Interaction model above.
+7. Consider notifications and sync implications when adding time-based or calendar features.

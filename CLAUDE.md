@@ -49,6 +49,15 @@ Supabase CLI (optional): `supabase link`, `supabase db push` from this directory
 - Realtime: subscribe in hooks (see `useItems.ts`), not in every component.
 - Revision field on items for optimistic concurrency (see `updateItem` in services).
 
+## UX: undo replaces confirmation
+
+Atlas uses **undo** (`UndoContext`, Cmd/Ctrl+Z, header Undo button) instead of “Are you sure?” dialogs.
+
+- **Do not** add `window.confirm`, `window.alert` for destructive actions, or other confirmation modals for normal edits/deletes/creates.
+- Destructive actions (delete, remove link, clear field, etc.) should execute immediately and push an **undo op** so the user can reverse the action.
+- Errors that block the action (network failure, permission denied) may still surface inline or as a brief non-blocking message — not a confirmation gate before trying.
+- When adding new mutations, wire undo in the same change (see `trackDeleteUndo`, `trackCreateUndo`, `trackItemPatchUndo`, `trackTaskStatusUndo` in `src/context/UndoContext.tsx`).
+
 ## Porting from Lakebed reference
 
 When implementing Phase 2+ features:

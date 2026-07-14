@@ -26,9 +26,6 @@ export function ItemPage() {
   const currentItem = item;
 
   async function handleDelete() {
-    if (!window.confirm(`Delete "${currentItem.title}"?`)) {
-      return;
-    }
     try {
       await deleteItem(currentItem.id);
       trackDeleteUndo(push, currentItem);

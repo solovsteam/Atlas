@@ -35,9 +35,6 @@ export function NowPage() {
   async function onDelete(item: Item, event: React.MouseEvent) {
     event.preventDefault();
     event.stopPropagation();
-    if (!window.confirm(`Delete "${item.title}"?`)) {
-      return;
-    }
     try {
       await deleteItem(item.id);
       trackDeleteUndo(push, item);

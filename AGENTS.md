@@ -46,7 +46,7 @@ Supabase CLI (optional): `supabase link`, `supabase db push` from this directory
 
 - One row per item in `public.items`; extend via migrations for new fields/tables.
 - RLS: users only access `owner_id = auth.uid()`.
-- Realtime: subscribe in hooks (see `useItems.ts`), not in every component.
+- Realtime: subscribe in hooks (see `useItems.ts`). DELETE events use a separate listener without `owner_id` filter — delete payloads only carry `id`, so filtered DELETE events are dropped on other tabs.
 - Revision field on items for optimistic concurrency (see `updateItem` in services).
 
 ## UX: undo replaces confirmation

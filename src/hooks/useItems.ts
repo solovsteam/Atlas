@@ -57,16 +57,22 @@ export function useItems(userId: string | undefined) {
       .channel(`items:${userId}`)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "items", filter: `owner_id=eq.${userId}` },
+        { event: "INSERT", schema: "public", table: "items", filter: `owner_id=eq.${userId}` },
         (payload) => {
-          if (payload.eventType === "DELETE") {
-            const deletedId = (payload.old as { id?: string }).id;
-            if (deletedId) {
-              setItems((current) => current.filter((entry) => entry.id !== deletedId));
+          const row = payload.new as DbItemRow;
+          const item = itemFromDbRow(row);
+          setItems((current) => {
+            if (current.some((entry) => entry.id === item.id)) {
+              return current;
             }
-            return;
-          }
-
+            return [item, ...current];
+          });
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "items", filter: `owner_id=eq.${userId}` },
+        (payload) => {
           const row = payload.new as DbItemRow;
           const item = itemFromDbRow(row);
           setItems((current) => {
@@ -80,6 +86,15 @@ export function useItems(userId: string | undefined) {
           });
         }
       )
+      // DELETE payloads only include replica-identity columns (id), not owner_id —
+      // so an owner_id filter silently drops delete events on other tabs.
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "items" }, (payload) => {
+        const deletedId = (payload.old as { id?: string }).id;
+        if (!deletedId) {
+          return;
+        }
+        setItems((current) => current.filter((entry) => entry.id !== deletedId));
+      })
       .subscribe();
 
     return () => {

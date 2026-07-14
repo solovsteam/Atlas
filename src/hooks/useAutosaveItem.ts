@@ -8,7 +8,7 @@ type ConflictState = {
   localPatch: ItemPatch;
 };
 
-type UndoTrackFn = (before: ItemPatch, nextRevision: number) => void;
+type UndoTrackFn = (before: ItemPatch) => void;
 
 export function useAutosaveItem(item: Item | null, updateItem: UpdateMutation, onUndoTrack?: UndoTrackFn) {
   const [draft, setDraft] = useState<{ title: string; body: string }>({ title: "", body: "" });
@@ -22,6 +22,7 @@ export function useAutosaveItem(item: Item | null, updateItem: UpdateMutation, o
   const itemIdRef = useRef("");
   const savingRef = useRef(false);
   const itemRef = useRef(item);
+  const editBaselineRef = useRef<{ title: string; body: string } | null>(null);
 
   draftRef.current = draft;
   revisionRef.current = revision;
@@ -40,6 +41,7 @@ export function useAutosaveItem(item: Item | null, updateItem: UpdateMutation, o
     revisionRef.current = item.revision;
     setConflict(null);
     pendingPatchRef.current = {};
+    editBaselineRef.current = null;
     if (timerRef.current !== null) {
       clearTimeout(timerRef.current);
       timerRef.current = null;
@@ -73,18 +75,20 @@ export function useAutosaveItem(item: Item | null, updateItem: UpdateMutation, o
       return;
     }
 
+    const baseline = editBaselineRef.current ?? {
+      title: itemRef.current?.title ?? "",
+      body: itemRef.current?.body ?? ""
+    };
     const beforeUndo: ItemPatch = {};
-    const snapshot = itemRef.current;
-    if (snapshot) {
-      if (patch.title !== undefined) {
-        beforeUndo.title = snapshot.title;
-      }
-      if (patch.body !== undefined) {
-        beforeUndo.body = snapshot.body;
-      }
+    if (patch.title !== undefined) {
+      beforeUndo.title = baseline.title;
+    }
+    if (patch.body !== undefined) {
+      beforeUndo.body = baseline.body;
     }
 
     pendingPatchRef.current = {};
+    editBaselineRef.current = null;
     savingRef.current = true;
     setSaving(true);
 
@@ -104,7 +108,7 @@ export function useAutosaveItem(item: Item | null, updateItem: UpdateMutation, o
         revisionRef.current = result.revision;
         setRevision(result.revision);
         if (onUndoTrack && Object.keys(beforeUndo).length > 0) {
-          onUndoTrack(beforeUndo, result.revision);
+          onUndoTrack(beforeUndo);
         }
       }
     } finally {
@@ -117,6 +121,9 @@ export function useAutosaveItem(item: Item | null, updateItem: UpdateMutation, o
   }
 
   function scheduleSave(patch: ItemPatch) {
+    if (!editBaselineRef.current && itemRef.current) {
+      editBaselineRef.current = { title: itemRef.current.title, body: itemRef.current.body };
+    }
     pendingPatchRef.current = { ...pendingPatchRef.current, ...patch };
     if (timerRef.current !== null) {
       clearTimeout(timerRef.current);
@@ -157,6 +164,7 @@ export function useAutosaveItem(item: Item | null, updateItem: UpdateMutation, o
       setRevision(conflict.serverItem.revision);
       setConflict(null);
       pendingPatchRef.current = {};
+      editBaselineRef.current = null;
       return;
     }
     setConflict(null);

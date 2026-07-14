@@ -36,6 +36,18 @@ export function useItems(userId: string | undefined) {
     setItems((current) => current.filter((entry) => entry.id !== id));
   }, []);
 
+  const upsertItem = useCallback((item: Item) => {
+    setItems((current) => {
+      const index = current.findIndex((entry) => entry.id === item.id);
+      if (index === -1) {
+        return [item, ...current];
+      }
+      const next = [...current];
+      next[index] = item;
+      return next;
+    });
+  }, []);
+
   useEffect(() => {
     if (!userId) {
       return;
@@ -75,5 +87,5 @@ export function useItems(userId: string | undefined) {
     };
   }, [userId]);
 
-  return { items, loading, error, refresh, removeItemById };
+  return { items, loading, error, refresh, removeItemById, upsertItem };
 }

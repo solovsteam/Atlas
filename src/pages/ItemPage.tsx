@@ -1,12 +1,14 @@
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMemo } from "react";
 import { useAtlasData } from "../context/AtlasDataContext";
+import { trackDeleteUndo, useUndo } from "../context/UndoContext";
 import { ItemEditor } from "../components/ItemEditor";
 
 export function ItemPage() {
   const { id = "" } = useParams();
   const { items, updateItem, deleteItem } = useAtlasData();
   const navigate = useNavigate();
+  const { push } = useUndo();
 
   const item = useMemo(() => items.find((entry) => entry.id === id) ?? null, [items, id]);
 
@@ -29,6 +31,7 @@ export function ItemPage() {
     }
     try {
       await deleteItem(currentItem.id);
+      trackDeleteUndo(push, currentItem);
       navigate("/");
     } catch (err) {
       window.alert(err instanceof Error ? err.message : "Could not delete item");

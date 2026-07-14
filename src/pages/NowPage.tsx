@@ -4,7 +4,7 @@ import type { Item, TaskStatus } from "@shared/item";
 import { searchItems } from "@shared/relevance";
 import { useAtlasData } from "../context/AtlasDataContext";
 import { useRelevance } from "../context/RelevanceContext";
-import { trackTaskStatusUndo, useUndo } from "../context/UndoContext";
+import { trackCreateUndo, trackDeleteUndo, trackTaskStatusUndo, useUndo } from "../context/UndoContext";
 import { useStableInboxOrder } from "../hooks/useStableInboxOrder";
 import { ItemKindBadge } from "../components/ItemKindBadge";
 import { StatusBoostBar } from "../components/StatusBoostBar";
@@ -28,16 +28,24 @@ export function NowPage() {
   async function setTaskStatus(item: Item, status: TaskStatus) {
     const result = await updateItem(item.id, JSON.stringify({ taskStatus: status }), item.revision);
     if ("ok" in result && result.ok) {
-      trackTaskStatusUndo(push, item, result.revision);
+      trackTaskStatusUndo(push, item);
     }
   }
 
   async function onDelete(item: Item, event: React.MouseEvent) {
     event.preventDefault();
     event.stopPropagation();
-    await deleteItem(item.id);
-    if (selectedId === item.id) {
-      setSelectedId(null);
+    if (!window.confirm(`Delete "${item.title}"?`)) {
+      return;
+    }
+    try {
+      await deleteItem(item.id);
+      trackDeleteUndo(push, item);
+      if (selectedId === item.id) {
+        setSelectedId(null);
+      }
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : "Could not delete item");
     }
   }
 
@@ -48,6 +56,7 @@ export function NowPage() {
       return;
     }
     const result = await createItem(title);
+    trackCreateUndo(push, result.id);
     setQuery("");
     navigate(`/item/${result.id}`);
   }

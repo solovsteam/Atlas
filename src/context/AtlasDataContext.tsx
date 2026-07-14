@@ -13,6 +13,7 @@ type AtlasDataContextValue = {
   createItem: (title: string) => Promise<CreateItemResult>;
   updateItem: (id: string, patchJson: string, expectedRevision: number) => Promise<UpdateItemResult>;
   deleteItem: (id: string) => Promise<void>;
+  restoreItem: (item: Item) => Promise<void>;
 };
 
 const AtlasDataContext = createContext<AtlasDataContextValue | null>(null);
@@ -20,7 +21,7 @@ const AtlasDataContext = createContext<AtlasDataContextValue | null>(null);
 export function AtlasDataProvider({ children }: { children: ReactNode }) {
   const { session } = useAuthSession();
   const userId = session?.user.id;
-  const { items, loading, error, removeItemById } = useItems(userId);
+  const { items, loading, error, removeItemById, upsertItem } = useItems(userId);
   const mutations = useItemMutations(userId);
 
   const deleteItem = useCallback(
@@ -29,6 +30,14 @@ export function AtlasDataProvider({ children }: { children: ReactNode }) {
       removeItemById(id);
     },
     [mutations.deleteItem, removeItemById]
+  );
+
+  const restoreItem = useCallback(
+    async (item: Item) => {
+      await mutations.restoreItem(item);
+      upsertItem(item);
+    },
+    [mutations.restoreItem, upsertItem]
   );
 
   return (
@@ -40,7 +49,8 @@ export function AtlasDataProvider({ children }: { children: ReactNode }) {
         itemsError: error,
         createItem: mutations.createItem,
         updateItem: mutations.updateItem,
-        deleteItem
+        deleteItem,
+        restoreItem
       }}
     >
       {children}

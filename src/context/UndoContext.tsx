@@ -2,8 +2,6 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import type { UndoOp } from "@shared/commands";
 import type { Item, ItemPatch, UpdateItemResult } from "@shared/item";
 
-type UpdateItemFn = (id: string, patchJson: string, expectedRevision: number) => Promise<UpdateItemResult>;
-
 type UndoContextValue = {
   canUndo: boolean;
   push: (op: UndoOp) => void;
@@ -18,13 +16,21 @@ const UndoContext = createContext<UndoContextValue>({
 
 export function UndoProvider({
   children,
-  updateItem
+  items,
+  updateItem,
+  deleteItem,
+  restoreItem
 }: {
   children: ReactNode;
-  updateItem: UpdateItemFn;
+  items: Item[];
+  updateItem: (id: string, patchJson: string, expectedRevision: number) => Promise<UpdateItemResult>;
+  deleteItem: (id: string) => Promise<void>;
+  restoreItem: (item: Item) => Promise<void>;
 }) {
   const stackRef = useRef<UndoOp[]>([]);
   const [canUndo, setCanUndo] = useState(false);
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
 
   const refresh = useCallback(() => {
     setCanUndo(stackRef.current.length > 0);
@@ -41,6 +47,10 @@ export function UndoProvider({
     [refresh]
   );
 
+  const getRevision = useCallback((id: string): number | undefined => {
+    return itemsRef.current.find((entry) => entry.id === id)?.revision;
+  }, []);
+
   const undo = useCallback(async () => {
     const op = stackRef.current.pop();
     refresh();
@@ -48,15 +58,30 @@ export function UndoProvider({
       return;
     }
 
+    if (op.kind === "createItem") {
+      await deleteItem(op.id);
+      return;
+    }
+
+    if (op.kind === "deleteItem") {
+      await restoreItem(op.snapshot);
+      return;
+    }
+
+    const revision = getRevision(op.id);
+    if (revision === undefined) {
+      return;
+    }
+
     if (op.kind === "updateItem") {
-      await updateItem(op.id, JSON.stringify(op.before), op.revision);
+      await updateItem(op.id, JSON.stringify(op.before), revision);
       return;
     }
 
     if (op.kind === "setTaskStatus") {
-      await updateItem(op.id, JSON.stringify({ taskStatus: op.before }), op.revision);
+      await updateItem(op.id, JSON.stringify({ taskStatus: op.before }), revision);
     }
-  }, [refresh, updateItem]);
+  }, [deleteItem, getRevision, refresh, restoreItem, updateItem]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -76,20 +101,26 @@ export function useUndo() {
   return useContext(UndoContext);
 }
 
-export function trackTaskStatusUndo(push: UndoContextValue["push"], item: Item, nextRevision: number) {
+export function trackTaskStatusUndo(push: UndoContextValue["push"], item: Item) {
   push({
     kind: "setTaskStatus",
     id: item.id,
-    before: item.taskStatus,
-    revision: nextRevision
+    before: item.taskStatus
   });
 }
 
-export function trackItemPatchUndo(push: UndoContextValue["push"], item: Item, before: ItemPatch, nextRevision: number) {
+export function trackItemPatchUndo(push: UndoContextValue["push"], id: string, before: ItemPatch) {
   push({
     kind: "updateItem",
-    id: item.id,
-    before,
-    revision: nextRevision
+    id,
+    before
   });
+}
+
+export function trackCreateUndo(push: UndoContextValue["push"], id: string) {
+  push({ kind: "createItem", id });
+}
+
+export function trackDeleteUndo(push: UndoContextValue["push"], item: Item) {
+  push({ kind: "deleteItem", snapshot: item });
 }

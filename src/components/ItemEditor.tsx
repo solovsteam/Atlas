@@ -12,8 +12,8 @@ export function ItemEditor({
   updateItem: (id: string, patchJson: string, expectedRevision: number) => Promise<UpdateItemResult>;
 }) {
   const { push } = useUndo();
-  const autosave = useAutosaveItem(item, updateItem, (before, nextRevision) => {
-    trackItemPatchUndo(push, item, before, nextRevision);
+  const autosave = useAutosaveItem(item, updateItem, (before) => {
+    trackItemPatchUndo(push, item.id, before);
   });
 
   async function patchItem(patch: ItemPatch) {
@@ -28,9 +28,9 @@ export function ItemEditor({
     const result = await updateItem(item.id, JSON.stringify(patch), autosave.revision);
     if ("ok" in result && result.ok) {
       if (patch.taskStatus !== undefined) {
-        trackTaskStatusUndo(push, item, result.revision);
+        trackTaskStatusUndo(push, item);
       } else if (Object.keys(before).length > 0) {
-        trackItemPatchUndo(push, item, before, result.revision);
+        trackItemPatchUndo(push, item.id, before);
       }
     }
   }

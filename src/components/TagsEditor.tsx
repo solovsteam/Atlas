@@ -13,10 +13,10 @@ export function TagsEditor({
   const { push } = useUndo();
 
   async function patchItem(patch: ItemPatch) {
-    const before = { tags: item.tags };
+    const before = { tags: [...item.tags] };
     const result = await updateItem(item.id, JSON.stringify(patch), item.revision);
     if ("ok" in result && result.ok) {
-      trackItemPatchUndo(push, item, before, result.revision);
+      trackItemPatchUndo(push, item.id, before);
     }
     return result;
   }

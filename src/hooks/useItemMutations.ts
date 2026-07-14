@@ -1,7 +1,7 @@
 import { useCallback } from "react";
-import type { CreateItemResult, UpdateItemResult } from "@shared/item";
+import type { Item, CreateItemResult, UpdateItemResult } from "@shared/item";
 import { supabase } from "../lib/supabase";
-import { createItem, deleteItem, updateItem } from "../services/items";
+import { createItem, deleteItem, restoreItem, updateItem } from "../services/items";
 
 export function useItemMutations(userId: string | undefined) {
   const create = useCallback(
@@ -34,5 +34,15 @@ export function useItemMutations(userId: string | undefined) {
     [userId]
   );
 
-  return { createItem: create, updateItem: update, deleteItem: remove };
+  const restore = useCallback(
+    async (item: Item): Promise<void> => {
+      if (!userId) {
+        throw new Error("Not signed in");
+      }
+      await restoreItem(supabase, userId, item);
+    },
+    [userId]
+  );
+
+  return { createItem: create, updateItem: update, deleteItem: remove, restoreItem: restore };
 }

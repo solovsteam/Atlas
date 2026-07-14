@@ -62,7 +62,7 @@ function LoginScreen({ onSignIn }: { onSignIn: () => void }) {
 
 function AppShell() {
   const { session, loading, signInWithGoogle, signOut } = useAuthSession();
-  const { items, itemsLoading, itemsError, updateItem } = useAtlasData();
+  const { items, itemsLoading, itemsError, updateItem, deleteItem, restoreItem } = useAtlasData();
 
   if (loading) {
     return <main className="min-h-screen bg-black px-6 py-10 text-white">Loading…</main>;
@@ -76,7 +76,7 @@ function AppShell() {
   const picture = authPicture(session.user);
 
   return (
-    <UndoProvider updateItem={updateItem}>
+    <UndoProvider items={items} updateItem={updateItem} deleteItem={deleteItem} restoreItem={restoreItem}>
       <RelevanceProvider items={items}>
         <main className="min-h-screen bg-black px-6 py-10 text-white" lang="de">
           <section className="mx-auto max-w-6xl">

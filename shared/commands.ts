@@ -1,5 +1,7 @@
-import type { ItemPatch, TaskStatus } from "./item";
+import type { Item, ItemPatch, TaskStatus } from "./item";
 
 export type UndoOp =
-  | { kind: "updateItem"; id: string; before: ItemPatch; revision: number }
-  | { kind: "setTaskStatus"; id: string; before: TaskStatus | null; revision: number };
+  | { kind: "updateItem"; id: string; before: ItemPatch }
+  | { kind: "setTaskStatus"; id: string; before: TaskStatus | null }
+  | { kind: "createItem"; id: string }
+  | { kind: "deleteItem"; snapshot: Item };

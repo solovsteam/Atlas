@@ -111,3 +111,29 @@ export async function deleteItem(client: Client, userId: string, id: string): Pr
     throw new Error("Could not delete item");
   }
 }
+
+export async function restoreItem(client: Client, userId: string, item: Item): Promise<void> {
+  const { data, error } = await client
+    .from("items")
+    .insert({
+      id: item.id,
+      owner_id: userId,
+      title: item.title,
+      body: item.body,
+      is_task: item.isTask,
+      task_status: item.taskStatus ?? "",
+      manual_relevance: item.manualRelevance,
+      tags: item.tags,
+      revision: item.revision
+    })
+    .select("id")
+    .single();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  if (!data) {
+    throw new Error("Could not restore item");
+  }
+}

@@ -31,6 +31,16 @@ Atlas/                     # repo root
   scripts/                 # macOS dev launcher
 ```
 
+## Git workflow
+
+**Default:** after meaningful changes, **commit and push** yourself (`git add` → `git commit` → `git push`). User expects GitHub/Vercel to stay current without being asked each time.
+
+**Branches:** only when user explicitly asks for a backup branch — otherwise work on `main`.
+
+**Never commit:** `.env.local`, secrets, or when user says don't commit.
+
+See also `.cursor/rules/git-workflow.mdc`.
+
 ## Commands
 
 ```sh

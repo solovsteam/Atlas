@@ -1,0 +1,33 @@
+---
+description: Auto commit and push after changes; branches only when user asks
+alwaysApply: true
+---
+
+# Git workflow
+
+## Default: commit and push
+
+After completing meaningful code or doc changes, **run git yourself** — do not only print commands for the user.
+
+1. `git status` / `git diff` to review what changed
+2. `git add` relevant files (not secrets like `.env.local`)
+3. `git commit` with a concise message (HEREDOC)
+4. `git push` to `origin` on the current branch
+
+The user expects the repo (and Vercel deploy via GitHub) to stay up to date without being asked each time.
+
+## When NOT to commit
+
+- Question-only or review-only turns with no file changes
+- User explicitly says "don't commit" or "WIP"
+- Only exploratory/local experiments the user said to hold
+
+## Branches / backups
+
+- **Do not** create branches or backup copies unless the user explicitly asks (e.g. "make a backup branch", "branch first").
+- When they do ask: create a named branch, push with `-u`, then continue on `main` unless told otherwise.
+
+## Safety (unchanged)
+
+- Never force-push `main`, never amend pushed commits unless user requests it
+- Never commit `.env.local` or credentials

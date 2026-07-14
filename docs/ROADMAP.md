@@ -116,7 +116,7 @@ Notifications need **shared state** and usually **something online** for cross-d
 
 | Mode | Who | Notes |
 |------|-----|-------|
-| **Local dev only** | You, technical users | `npm run dev`, `.env.local`, Supabase project. macOS: `scripts/Atlas2 Dev.app`. |
+| **Local dev only** | You, technical users | `scripts/setup.sh`, then `npm run dev` or `scripts/Atlas Dev.app` (macOS). |
 | **Hosted frontend** | General users | Vercel + same Supabase; add production URL to Supabase Auth redirect URLs. |
 | **Local-first (future)** | Privacy-focused users | SQLite/files + optional sync; larger refactor. |
 

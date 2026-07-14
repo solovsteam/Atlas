@@ -5,13 +5,13 @@
   <key>CFBundleDevelopmentRegion</key>
   <string>en</string>
   <key>CFBundleExecutable</key>
-  <string>Atlas2Dev</string>
+  <string>AtlasDev</string>
   <key>CFBundleIdentifier</key>
-  <string>dev.atlas2.launcher</string>
+  <string>dev.atlas.launcher</string>
   <key>CFBundleInfoDictionaryVersion</key>
   <string>6.0</string>
   <key>CFBundleName</key>
-  <string>Atlas2 Dev</string>
+  <string>Atlas Dev</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>

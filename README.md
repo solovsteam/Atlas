@@ -23,6 +23,30 @@ Calendar, intervals, generators, documentation items, item links, notifications,
 - Node.js 20+
 - A [Supabase](https://supabase.com) project
 
+## First run (after cloning)
+
+Atlas is a **developer-run** app for now: clone → setup → run dev server → browser. There is no standalone installer yet.
+
+```sh
+git clone https://github.com/solovsteam/Atlas.git
+cd Atlas
+./scripts/setup.sh          # Windows: scripts\setup.bat
+# Edit .env.local with Supabase URL + anon key (see below)
+```
+
+Then start the app:
+
+| Platform | How |
+|----------|-----|
+| **macOS** | Double-click **`scripts/Atlas Dev.app`** (drag to Dock), or `npm run dev` |
+| **Windows / Linux** | `npm run dev` → open http://localhost:5173 |
+
+The macOS `.app` is a tiny launcher (shell script + plist) committed in `scripts/` — not a separate installer. It opens Terminal, runs `npm run dev`, and opens your browser. **Node.js and `npm install` are still required.**
+
+### For end users (not developers)
+
+Non-technical users should use a **hosted URL** (Vercel + Supabase), not a cloned repo. Packaging a desktop app (Tauri/Electron) is a later step — see [`docs/ROADMAP.md`](docs/ROADMAP.md).
+
 ## One-time Supabase setup
 
 1. Create a project at [supabase.com/dashboard](https://supabase.com/dashboard).
@@ -33,7 +57,7 @@ Calendar, intervals, generators, documentation items, item links, notifications,
    - **Authentication → URL Configuration:** Site URL and Redirect URLs include `http://localhost:5173` for local dev.
 4. Copy **Project Settings → API** URL and anon key into `.env.local`.
 
-## Local development
+## Local development (manual)
 
 ```sh
 cp .env.example .env.local
@@ -44,9 +68,9 @@ npm run dev
 
 Open **http://localhost:5173**
 
-### macOS launcher
+### macOS Dock shortcut
 
-Double-click **`scripts/Atlas2 Dev.app`** (drag to Dock). Starts the dev server and opens the browser.
+Double-click **`scripts/Atlas Dev.app`** (drag to Dock). Requires setup above first.
 
 ## Deploy (optional)
 

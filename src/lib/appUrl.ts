@@ -1,14 +1,14 @@
 const DEFAULT_APP_ORIGIN = "http://localhost:5173";
 
-/** OAuth and bookmarks need a stable origin with an explicit scheme and port. */
+/** OAuth redirect target — always prefer the URL the user actually opened. */
 export function getAppOrigin(): string {
+  if (typeof window !== "undefined" && window.location?.origin) {
+    return normalizeOrigin(window.location.origin);
+  }
+
   const fromEnv = import.meta.env.VITE_APP_URL?.trim();
   if (fromEnv) {
     return normalizeOrigin(fromEnv);
-  }
-
-  if (typeof window !== "undefined" && window.location?.origin) {
-    return normalizeOrigin(window.location.origin);
   }
 
   return DEFAULT_APP_ORIGIN;

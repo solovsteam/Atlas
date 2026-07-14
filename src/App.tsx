@@ -46,7 +46,7 @@ function LoginScreen({ onSignIn }: { onSignIn: () => void }) {
   return (
     <main className="flex min-h-screen items-center justify-center bg-black px-6 text-white">
       <section className="max-w-md text-center">
-        <h1 className="text-4xl font-bold tracking-tight">Atlas2</h1>
+        <h1 className="text-4xl font-bold tracking-tight">Atlas</h1>
         <p className="mt-3 text-sm text-neutral-400">Sign in to access your notes and tasks.</p>
         <button
           className="mt-8 border border-neutral-700 px-4 py-2 text-sm font-medium text-neutral-200 hover:border-white hover:text-white"

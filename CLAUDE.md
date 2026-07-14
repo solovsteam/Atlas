@@ -1,72 +1,65 @@
-# Lakebed App Instructions
+# Atlas — agent instructions
 
-This directory is for a Lakebed "capsule". Lakebed is an all-inclusive suite of tools to build web applications purely from code and a CLI.
+Atlas is a **Vite + React + Supabase** app in this directory. The old Lakebed capsule is deprecated; archived reference code lives in `.lakebed/reference/`.
 
-Your role is to build software within this capsule. Lakebed is the runtime, the compiler, the database, and the hosting platform. You will be able to control all of this just by writing code and running commands through the CLI.
+**Read [`docs/ROADMAP.md`](docs/ROADMAP.md) before feature work** — it covers architecture, phased features, and notifications.
 
 ## Hard rules
 
-- No installing node modules. You can use the built-in APIs. Write TypeScript for anything that is not included.
-- Lakebed CLI should always be run with `npx lakebed [command]`. It is not a global. Launch with `npx` always.
-- All client code goes in the `client` directory, and all server code goes in the `server` directory. Shared code can go in `shared`.
-- Use `lakebed/server` only from `server/*.ts`.
-- Use `lakebed/client` only from `client/*.tsx`.
-- Data needed on client should be fetched through queries. User-driven changes should be done via mutations. Endpoints should be treated as an "escape hatch" for exposing functionality over endpoints for HTTP-based flows.
-- Styling must be done via raw CSS or Tailwind classes in the JSX.
-- Do not add a CSS, PostCSS, or Tailwind build pipeline. They are built in.
-- There is no file based routing. Use the built-in client router from `lakebed/client` when you need pages.
-- All imports must be from Lakebed or from relative paths.
-- Do not use Node built-ins in app code.
-- Use auth through `ctx.auth` on the server and `useAuth()` on the client.
-- Read server-only environment variables through `ctx.env`; define them in `.env.lakebed.server`.
-- Auth can be added with a Google sign-in using `<SignInWithGoogle />` or `signInWithGoogle()` from `lakebed/client`.
-- Keep `shared/` free of DOM, Node, env, and Lakebed runtime imports.
-- Environment variables are only available on the server, and must be defined in `.env.lakebed.server`. They are not available during build time. If you need build-time environment variables, define them in code and do conditional logic based on them. They will be synced with production on `npx lakebed deploy`.
+- All app code lives in this directory (`src/`, `shared/`, `supabase/`).
+- Use **npm** for dependencies (`package.json`). Run `npm install` when adding packages.
+- Client: React in `src/`. Serverless backend: **Supabase** (Postgres, RLS, Auth, Realtime, Edge Functions if needed).
+- **Do not** use Lakebed or `npx lakebed`. Do not edit `.lakebed/reference/` unless refreshing the archive.
+- Keep `shared/` free of DOM, Node, env, and Supabase imports (pure TypeScript only).
+- Data reads/writes go through **`src/services/`** and hooks — not Supabase calls in pages/components.
+- Styling: Tailwind classes in JSX (Tailwind v4 via `@tailwindcss/vite`).
+- Routing: `react-router-dom` in `src/App.tsx`.
+- Auth: Supabase Auth via `src/hooks/useAuthSession.ts` and `src/lib/supabase.ts`.
+- Secrets: `.env.local` locally (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`). Never commit secrets. Do not use `service_role` key in the frontend.
 
-## Default project structure
+## Project structure
 
-- `server/index.ts`: schema, queries, mutations, and external endpoints.
-- `client/index.tsx`: Preact UI entrypoint.
-- `shared/`: pure TypeScript shared by client and server.
+```txt
+Atlas/                     # repo root
+  shared/                  # Domain types and pure logic
+  src/
+    components/ pages/ hooks/ context/ services/ lib/
+  supabase/migrations/     # SQL schema + RLS
+  docs/
+    ROADMAP.md             # Product + architecture source of truth
+  .lakebed/reference/      # Read-only porting reference (gitignored)
+  scripts/                 # macOS dev launcher
+```
 
 ## Commands
 
-Run locally:
-
 ```sh
-npx lakebed dev
+npm install
+npm run dev          # http://localhost:5173
+npm run build
+npm run lint
 ```
 
-Deploy:
+Supabase CLI (optional): `supabase link`, `supabase db push` from this directory.
 
-```sh
-npx lakebed deploy
-```
+## Supabase conventions
 
-Inspect local state while `npx lakebed dev` is running:
+- One row per item in `public.items`; extend via migrations for new fields/tables.
+- RLS: users only access `owner_id = auth.uid()`.
+- Realtime: subscribe in hooks (see `useItems.ts`), not in every component.
+- Revision field on items for optimistic concurrency (see `updateItem` in services).
 
-```sh
-npx lakebed db list --port 3000
-npx lakebed db dump --port 3000
-npx lakebed logs --port 3000
-```
+## Porting from Lakebed reference
 
-## External endpoints
+When implementing Phase 2+ features:
 
-Use `endpoint({ method, path }, handler)` from `lakebed/server` when the app needs to expose an HTTP route for webhooks or other non-Lakebed clients. Endpoint handlers receive request data including `headers.get(name)`, URL params, query params, and body helpers.
+1. Read the feature row in `docs/ROADMAP.md`.
+2. Study the matching files under `.lakebed/reference/`.
+3. Add migration(s), extend `shared/`, implement `src/services/`, then UI.
+4. Adapt Preact/Lakebed patterns to React + Supabase (queries/mutations → service functions + hooks).
 
-## Additional resources
+## Current limits
 
-- [Lakebed docs](https://docs.lakebed.dev/)
-- [Capsule API docs](https://docs.lakebed.dev/capsule-api/)
-
-## Current Limits
-
-- One server entry.
-- One client entry.
-- Guest auth locally, with built-in Google sign-in through Shoo.
-- No file storage.
-- No outbound fetch in anonymous deploys. Claim the deploy before using server-side fetch.
-- Non-empty `.env.lakebed.server` files sync only after a deploy is claimed.
-- Local state resets when `npx lakebed dev` restarts.
-- All production deploys are on 'lakebed.app'
+- MVP item schema is a subset of full Lakebed item model (no intervals, links, docs, generators in DB yet).
+- No notification system shipped; follow roadmap in `docs/ROADMAP.md` when adding.
+- Local dev uses HTTP; production should use HTTPS (e.g. Vercel).

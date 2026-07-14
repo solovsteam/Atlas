@@ -1,0 +1,42 @@
+#!/bin/bash
+set -euo pipefail
+
+# Atlas2/scripts/Atlas2 Dev.app/Contents/MacOS/ → repo root is four levels up
+ATLAS2_DIR="$(cd "$(dirname "$0")/../../../.." && pwd)"
+APP_URL="http://localhost:5173"
+
+server_running() {
+  lsof -i :5173 -sTCP:LISTEN >/dev/null 2>&1
+}
+
+open_app() {
+  open "$APP_URL"
+}
+
+wait_for_server() {
+  for _ in $(seq 1 40); do
+    if server_running; then
+      return 0
+    fi
+    sleep 0.25
+  done
+  return 1
+}
+
+if server_running; then
+  open_app
+  exit 0
+fi
+
+osascript <<EOF
+tell application "Terminal"
+  activate
+  do script "cd '$ATLAS2_DIR' && npm run dev"
+end tell
+EOF
+
+if wait_for_server; then
+  open_app
+else
+  osascript -e 'display notification "Atlas2 dev server did not start on port 5173." with title "Atlas2 Dev"'
+fi

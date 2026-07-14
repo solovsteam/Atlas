@@ -16,26 +16,8 @@ type RankSignals = {
   isNote: boolean;
   tagMatch: boolean;
   statusBoost: boolean;
-  locationMatch: boolean;
-  inStartableWindow: boolean;
   manualRelevance: number;
 };
-
-function minutesSinceMidnight(date: Date): number {
-  return date.getHours() * 60 + date.getMinutes();
-}
-
-function inStartableWindow(item: Item, now: Date): boolean {
-  if (!item.startableWindow) {
-    return false;
-  }
-  const current = minutesSinceMidnight(now);
-  const { startMinutes, endMinutes } = item.startableWindow;
-  if (startMinutes <= endMinutes) {
-    return current >= startMinutes && current <= endMinutes;
-  }
-  return current >= startMinutes || current <= endMinutes;
-}
 
 function hasTagMatch(item: Item, ctx: RelevanceContext): boolean {
   return ctx.activeTags.length > 0 && item.tags.some((tag) => ctx.activeTags.includes(tag));
@@ -70,8 +52,6 @@ function rankSignals(item: Item, ctx: RelevanceContext): RankSignals {
     isNote: !item.isTask,
     tagMatch: hasTagMatch(item, ctx),
     statusBoost: hasStatusBoost(item, ctx),
-    locationMatch: Boolean(item.location && ctx.userLocation && item.location === ctx.userLocation),
-    inStartableWindow: inStartableWindow(item, ctx.now),
     manualRelevance: item.manualRelevance
   };
 }
@@ -114,16 +94,6 @@ export function compareItems(a: Item, b: Item, ctx: RelevanceContext): number {
     return result;
   }
 
-  result = compareBooleanSignal(left.locationMatch, right.locationMatch);
-  if (result !== 0) {
-    return result;
-  }
-
-  result = compareBooleanSignal(left.inStartableWindow, right.inStartableWindow);
-  if (result !== 0) {
-    return result;
-  }
-
   if (left.manualRelevance !== right.manualRelevance) {
     return right.manualRelevance - left.manualRelevance;
   }
@@ -136,7 +106,10 @@ export function sortItemsByRelevance(items: Item[], ctx: RelevanceContext): Item
 }
 
 export function buildInboxEntries(items: Item[], ctx: RelevanceContext): InboxEntry[] {
-  return sortItemsByRelevance(items, ctx);
+  return sortItemsByRelevance(
+    items.filter((item) => !item.isInterval && !item.isGenerator),
+    ctx
+  );
 }
 
 export function collectTags(items: Item[]): string[] {
@@ -158,11 +131,10 @@ export function searchItems(items: Item[], query: string): Item[] {
   }
   return items
     .filter(
-      (item) => item.title.toLowerCase().includes(needle) || item.body.toLowerCase().includes(needle)
+      (item) =>
+        !item.isInterval &&
+        !item.isGenerator &&
+        (item.title.toLowerCase().includes(needle) || item.body.toLowerCase().includes(needle))
     )
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-}
-
-export function sortItemsByUpdated(items: Item[]): Item[] {
-  return [...items].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }

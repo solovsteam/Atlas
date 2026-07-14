@@ -2,40 +2,6 @@ export type TaskStatus = "active" | "done" | "cancelled";
 
 export const TASK_STATUSES: TaskStatus[] = ["active", "done", "cancelled"];
 
-export type StartableWindow = {
-  startMinutes: number;
-  endMinutes: number;
-};
-
-export type CompletionRule =
-  | { kind: "manual" }
-  | { kind: "documentation"; schemaField: string }
-  | { kind: "allChildrenDone" };
-
-export type ItemRow = {
-  id: string;
-  ownerId: string;
-  title: string;
-  body: string;
-  isTask: boolean;
-  isDocumentation: boolean;
-  taskStatus: string;
-  manualRelevance: string;
-  tags: string;
-  location: string;
-  startableWindow: string;
-  completionRule: string;
-  documentationSchema: string;
-  documentationData: string;
-  recurrenceRule: string;
-  generatedFromId: string;
-  occurrenceKey: string;
-  overriddenFields: string;
-  revision: string;
-  createdAt: string;
-  updatedAt: string;
-};
-
 export type Item = {
   id: string;
   ownerId: string;
@@ -43,18 +9,11 @@ export type Item = {
   body: string;
   isTask: boolean;
   isDocumentation: boolean;
+  isInterval: boolean;
+  isGenerator: boolean;
   taskStatus: TaskStatus | null;
   manualRelevance: number;
   tags: string[];
-  location: string;
-  startableWindow: StartableWindow | null;
-  completionRule: CompletionRule | null;
-  documentationSchema: unknown | null;
-  documentationData: unknown | null;
-  recurrenceRule: unknown | null;
-  generatedFromId: string;
-  occurrenceKey: string;
-  overriddenFields: string[];
   revision: number;
   createdAt: string;
   updatedAt: string;
@@ -64,17 +23,9 @@ export type ItemPatch = Partial<{
   title: string;
   body: string;
   isTask: boolean;
-  isDocumentation: boolean;
   taskStatus: TaskStatus | null;
   manualRelevance: number;
   tags: string[];
-  location: string;
-  startableWindow: StartableWindow | null;
-  completionRule: CompletionRule | null;
-  documentationSchema: unknown | null;
-  documentationData: unknown | null;
-  recurrenceRule: unknown | null;
-  overriddenFields: string[];
 }>;
 
 export type UpdateItemResult =
@@ -97,13 +48,6 @@ export function parseJson<T>(value: string, fallback: T): T {
   }
 }
 
-export function toJson(value: unknown): string {
-  if (value === null || value === undefined) {
-    return "";
-  }
-  return JSON.stringify(value);
-}
-
 export function parseTaskStatus(value: string, isTask: boolean): TaskStatus | null {
   if (!isTask) {
     return null;
@@ -114,59 +58,56 @@ export function parseTaskStatus(value: string, isTask: boolean): TaskStatus | nu
   return "active";
 }
 
-export function itemFromRow(row: ItemRow): Item {
-  const isTask = Boolean(row.isTask);
-  const isDocumentation = Boolean(row.isDocumentation);
+export function itemFromDbRow(row: {
+  id: string;
+  owner_id: string;
+  title: string;
+  body: string;
+  is_task: boolean;
+  task_status: string;
+  manual_relevance: number;
+  tags: unknown;
+  revision: number;
+  created_at: string;
+  updated_at: string;
+}): Item {
+  const isTask = Boolean(row.is_task);
+  const tags = Array.isArray(row.tags) ? row.tags.filter((tag): tag is string => typeof tag === "string") : [];
   return {
     id: row.id,
-    ownerId: row.ownerId,
+    ownerId: row.owner_id,
     title: row.title,
     body: row.body,
     isTask,
-    isDocumentation,
-    taskStatus: parseTaskStatus(row.taskStatus, isTask),
-    manualRelevance: Number.parseInt(row.manualRelevance || "0", 10) || 0,
-    tags: parseJson<string[]>(row.tags, []),
-    location: row.location,
-    startableWindow: parseJson<StartableWindow | null>(row.startableWindow, null),
-    completionRule: parseJson<CompletionRule | null>(row.completionRule, null),
-    documentationSchema: parseJson<unknown | null>(row.documentationSchema, null),
-    documentationData: parseJson<unknown | null>(row.documentationData, null),
-    recurrenceRule: parseJson<unknown | null>(row.recurrenceRule, null),
-    generatedFromId: row.generatedFromId,
-    occurrenceKey: row.occurrenceKey,
-    overriddenFields: parseJson<string[]>(row.overriddenFields, []),
-    revision: Number.parseInt(row.revision || "0", 10) || 0,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt
-  };
-}
-
-export function newItemRow(ownerId: string, title: string): Omit<ItemRow, "id" | "createdAt" | "updatedAt"> {
-  return {
-    ownerId,
-    title: cleanTitle(title),
-    body: "",
-    isTask: false,
     isDocumentation: false,
-    taskStatus: "",
-    manualRelevance: "0",
-    tags: "[]",
-    location: "",
-    startableWindow: "",
-    completionRule: "",
-    documentationSchema: "",
-    documentationData: "",
-    recurrenceRule: "",
-    generatedFromId: "",
-    occurrenceKey: "",
-    overriddenFields: "[]",
-    revision: "0"
+    isInterval: false,
+    isGenerator: false,
+    taskStatus: parseTaskStatus(row.task_status, isTask),
+    manualRelevance: Number(row.manual_relevance) || 0,
+    tags,
+    revision: row.revision,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
   };
 }
 
-export function applyPatch(row: ItemRow, patch: ItemPatch): Partial<ItemRow> {
-  const next: Partial<ItemRow> = {};
+export function applyPatch(item: Item, patch: ItemPatch): Partial<{
+  title: string;
+  body: string;
+  is_task: boolean;
+  task_status: string;
+  manual_relevance: number;
+  tags: string[];
+}> {
+  const next: Partial<{
+    title: string;
+    body: string;
+    is_task: boolean;
+    task_status: string;
+    manual_relevance: number;
+    tags: string[];
+  }> = {};
+
   if (patch.title !== undefined) {
     next.title = cleanTitle(patch.title);
   }
@@ -174,51 +115,28 @@ export function applyPatch(row: ItemRow, patch: ItemPatch): Partial<ItemRow> {
     next.body = cleanBody(patch.body);
   }
   if (patch.isTask !== undefined) {
-    next.isTask = patch.isTask;
+    next.is_task = patch.isTask;
     if (!patch.isTask) {
-      next.taskStatus = "";
-    } else if (patch.taskStatus === undefined && !row.taskStatus) {
-      next.taskStatus = "active";
+      next.task_status = "";
+    } else if (patch.taskStatus === undefined && !item.taskStatus) {
+      next.task_status = "active";
     }
-  }
-  if (patch.isDocumentation !== undefined) {
-    next.isDocumentation = patch.isDocumentation;
   }
   if (patch.taskStatus !== undefined) {
     if (patch.taskStatus === null) {
-      next.taskStatus = "";
+      next.task_status = "";
     } else if (TASK_STATUSES.includes(patch.taskStatus)) {
-      next.taskStatus = patch.taskStatus;
-      next.isTask = true;
+      next.task_status = patch.taskStatus;
+      next.is_task = true;
     }
   }
   if (patch.manualRelevance !== undefined) {
-    next.manualRelevance = String(patch.manualRelevance);
+    next.manual_relevance = patch.manualRelevance;
   }
   if (patch.tags !== undefined) {
-    next.tags = toJson(patch.tags);
+    next.tags = patch.tags;
   }
-  if (patch.location !== undefined) {
-    next.location = patch.location.trim();
-  }
-  if (patch.startableWindow !== undefined) {
-    next.startableWindow = patch.startableWindow ? toJson(patch.startableWindow) : "";
-  }
-  if (patch.completionRule !== undefined) {
-    next.completionRule = patch.completionRule ? toJson(patch.completionRule) : "";
-  }
-  if (patch.documentationSchema !== undefined) {
-    next.documentationSchema = patch.documentationSchema ? toJson(patch.documentationSchema) : "";
-  }
-  if (patch.documentationData !== undefined) {
-    next.documentationData = patch.documentationData ? toJson(patch.documentationData) : "";
-  }
-  if (patch.recurrenceRule !== undefined) {
-    next.recurrenceRule = patch.recurrenceRule ? toJson(patch.recurrenceRule) : "";
-  }
-  if (patch.overriddenFields !== undefined) {
-    next.overriddenFields = toJson(patch.overriddenFields);
-  }
+
   return next;
 }
 
@@ -231,15 +149,21 @@ export function cleanBody(value: string): string {
 }
 
 export function itemKindLabel(item: Item): string {
-  const parts: string[] = [];
   if (item.isTask) {
-    parts.push(`task · ${item.taskStatus ?? "active"}`);
+    return `task · ${item.taskStatus ?? "active"}`;
   }
-  if (item.isDocumentation) {
-    parts.push("documentation");
-  }
-  if (parts.length === 0) {
-    return "note";
-  }
-  return parts.join(" · ");
+  return "note";
+}
+
+export function newItemInsert(ownerId: string, title: string) {
+  return {
+    owner_id: ownerId,
+    title: cleanTitle(title),
+    body: "",
+    is_task: false,
+    task_status: "",
+    manual_relevance: 0,
+    tags: [] as string[],
+    revision: 0
+  };
 }

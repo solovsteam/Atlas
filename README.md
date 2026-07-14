@@ -1,65 +1,68 @@
 # Atlas
 
-Atlas is a unified notes, tasks, and calendar app built on [Lakebed](https://lakebed.dev).
+Unified notes, tasks, and calendar app — **Vite + React + Supabase**.
 
-## Deployed app
+**Agents:** read [`AGENTS.md`](AGENTS.md) and [`docs/ROADMAP.md`](docs/ROADMAP.md) before making changes.
 
-https://open-signal-da4407053d.lakebed.app
+## MVP (shipped)
 
-## Phase 1 features
+- Google sign-in (Supabase Auth)
+- Items: create, edit title/body, delete
+- Task toggle + status (active / done / cancelled)
+- Now inbox with relevance ranking, tag filters, and search
+- Item detail with autosave and revision conflict handling
+- Undo (Cmd/Ctrl+Z and button)
+- Realtime item updates
 
-- Unified **Item** model (tasks subsume notes)
-- Directed **itemLinks** graph (parents/children, no folders)
-- **Now** inbox with relevance ranking and tag/status boosts
-- Stable list ordering (re-ranks on selection change or filter toggle)
-- Item detail with **Content** and **Associations**
-- Autosave with revision-based conflict detection
+## Planned (see roadmap)
 
-## Phase 2 features
+Calendar, intervals, generators, documentation items, item links, notifications, optional local-first sync — porting from archived Lakebed reference in `.lakebed/reference/` (local, gitignored).
 
-- **scheduleSlots** table — fixed, due, window, and all-day bindings
-- **Calendar** week view (`/calendar`) with archived slots grayed out
-- Item detail **Schedule** editor — create, edit, archive, restore, delete slots
-- Marking a task done/cancelled auto-archives its schedule slots
-- Fuzzy date parsing (`4 july 12` → `04.07.2026 12:00`)
+## Prerequisites
 
-## Phase 3 features
+- Node.js 20+
+- A [Supabase](https://supabase.com) project
 
-- **Relevance metadata UI** — edit tags, location, daily startable window, manual relevance boost
-- **Documentation items** — schema editor, tracked state form, documentation links
-- **Completion rules** — manual, all-children-done, or documentation-field auto-complete
-- **Recurrence** — daily/weekly/monthly templates materialize generated occurrences
-- **Undo** — Cmd/Ctrl+Z and Undo button for task status, item patches, and links
+## One-time Supabase setup
 
-## Phase 4 features
+1. Create a project at [supabase.com/dashboard](https://supabase.com/dashboard).
+2. Run [`supabase/migrations/001_items.sql`](supabase/migrations/001_items.sql) in the SQL Editor (or `supabase db push` if linked).
+3. Enable Google auth:
+   - **Authentication → Providers → Google** — OAuth client from [Google Cloud Console](https://console.cloud.google.com/).
+   - Google redirect URI: `https://<project-ref>.supabase.co/auth/v1/callback`
+   - **Authentication → URL Configuration:** Site URL and Redirect URLs include `http://localhost:5173` for local dev.
+4. Copy **Project Settings → API** URL and anon key into `.env.local`.
 
-- **Time boxes** decoupled from tasks — `scheduleSlots` are calendar intervals; `slotAssignments` links 0..N tasks to each box
-- **Calendar views** — day (time grid), week, and month with view toggle
-- **Time box detail** — `/calendar/box/:slotId` lists assigned tasks, assign/unassign, edit times
-- **Empty boxes** — create free-time blocks from Calendar without tasks; overlap between active boxes is rejected
-- **Item Schedule tab** — scheduling constraints (location, startable window) separate from calendar placements
-- **Generators** — still create a time box + assignment per occurrence
-
-Auto-scheduling from constraints is planned for a later phase.
-
-## Develop locally
+## Local development
 
 ```sh
-npx lakebed dev
+cp .env.example .env.local
+# Edit .env.local
+npm install
+npm run dev
 ```
 
-Local state resets when dev restarts. Use deploy for persistent data.
+Open **http://localhost:5173**
 
-## Deploy
+### macOS launcher
 
-```sh
-npx lakebed deploy
+Double-click **`scripts/Atlas2 Dev.app`** (drag to Dock). Starts the dev server and opens the browser.
+
+## Deploy (optional)
+
+Host the static frontend on Vercel; database and auth stay on Supabase. See [`docs/ROADMAP.md`](docs/ROADMAP.md) for deployment modes and [`vercel.json`](vercel.json) for SPA routing.
+
+## Project structure
+
+```txt
+shared/              Pure domain logic
+src/                 React app (components, pages, hooks, services)
+supabase/migrations/ Postgres schema + RLS
+docs/                Roadmap and guides
+.lakebed/reference/  Lakebed porting archive (gitignored, local only)
+scripts/             Dev launcher (macOS)
 ```
-By default, use deploy over dev unless specifically told otherwise.
 
-## Inspect deployed state
+## Legacy Lakebed app
 
-```sh
-npx lakebed inspect dep_-9wbI5D3Xqk8RFUu
-npx lakebed db dump dep_-9wbI5D3Xqk8RFUu
-```
+Deprecated. Reference snapshot: `.lakebed/reference/`. Do not use `npx lakebed`.

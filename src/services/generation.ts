@@ -1,17 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
-  childDocumentationData,
-  formatOccurrenceKey,
-  isPastOccurrenceKey,
-  needsCalendarSchedule,
+  materializeGeneratorItem,
   OVERRIDE_FIELDS,
-  parseGenerationSpec,
-  plannedOccurrenceKeys,
-  resolveChildTitle,
-  slotTimesForOccurrence,
-  type GenerationSpec
+  parseGeneratorSpec,
+  resolveGeneratorEntries,
+  type GeneratorSpec
 } from "@shared/generation";
-import { toJson, type Item } from "@shared/item";
+import type { Item } from "@shared/item";
 import { fetchOwnedItems } from "./items";
 import type { Database } from "../types/database";
 
@@ -28,33 +23,36 @@ async function deleteOccurrence(client: Client, userId: string, itemId: string):
   }
 }
 
-function occurrenceInsert(userId: string, template: Item, spec: GenerationSpec, occurrenceKey: string) {
-  const child = spec.child;
-  const title = resolveChildTitle(child.title, occurrenceKey, template);
-  const times = needsCalendarSchedule(child) ? slotTimesForOccurrence(occurrenceKey, child.schedule) : null;
+function occurrenceInsert(userId: string, template: Item, spec: GeneratorSpec, occurrenceKey: string, items: Item[]) {
+  const entry = resolveGeneratorEntries(spec, template.id, items).find((candidate) => candidate.key === occurrenceKey);
+  if (!entry) {
+    throw new Error("Generator entry not found");
+  }
+
+  const materialized = materializeGeneratorItem(spec, entry);
 
   return {
     owner_id: userId,
-    title,
-    body: child.body,
-    is_task: child.isTask,
-    is_documentation: child.isDocumentation,
-    is_interval: Boolean(child.isInterval && times),
+    title: materialized.title,
+    body: materialized.body,
+    is_task: materialized.isTask,
+    is_documentation: materialized.isDocumentation,
+    is_interval: materialized.isInterval,
     is_generator: false,
-    task_status: child.isTask ? "active" : "",
+    task_status: materialized.taskStatus ?? "",
     manual_relevance: template.manualRelevance,
-    tags: template.tags,
-    completion_rule: child.completionRule,
-    documentation_schema: child.inputSchema.length > 0 ? child.inputSchema : null,
-    documentation_data: child.inputSchema.length > 0 ? childDocumentationData(child) : null,
+    tags: materialized.tags,
+    completion_rule: null,
+    documentation_schema: null,
+    documentation_data: null,
     recurrence_rule: null,
     generated_from_id: template.id,
     occurrence_key: occurrenceKey,
     overridden_fields: [] as string[],
-    interval_kind: child.isInterval && times ? "fixed" : "",
-    interval_starts_at: child.isInterval && times ? times.startsAt : "",
-    interval_ends_at: child.isInterval && times ? times.endsAt : "",
-    interval_status: child.isInterval && times ? "scheduled" : "",
+    interval_kind: "",
+    interval_starts_at: "",
+    interval_ends_at: "",
+    interval_status: "",
     revision: 0
   };
 }
@@ -63,89 +61,72 @@ async function createOccurrence(
   client: Client,
   userId: string,
   template: Item,
-  spec: GenerationSpec,
-  occurrenceKey: string
+  spec: GeneratorSpec,
+  occurrenceKey: string,
+  items: Item[]
 ): Promise<void> {
-  const row = occurrenceInsert(userId, template, spec, occurrenceKey);
+  const row = occurrenceInsert(userId, template, spec, occurrenceKey, items);
   const { error } = await client.from("items").insert(row);
   if (error) {
     throw new Error(error.message);
   }
 }
 
-async function applySpecToFutureOccurrence(
+async function applySpecToOccurrence(
   client: Client,
   userId: string,
   template: Item,
   item: Item,
-  spec: GenerationSpec
+  spec: GeneratorSpec,
+  items: Item[]
 ): Promise<void> {
-  const overrides = new Set(item.overriddenFields);
-  const child = spec.child;
-  const updates: Record<string, unknown> = {};
-  const desiredTitle = resolveChildTitle(child.title, item.occurrenceKey, template);
+  const entry = resolveGeneratorEntries(spec, template.id, items).find((candidate) => candidate.key === item.occurrenceKey);
+  if (!entry) {
+    return;
+  }
 
-  if (!overrides.has(OVERRIDE_FIELDS.title) && item.title !== desiredTitle) {
-    updates.title = desiredTitle;
+  const overrides = new Set(item.overriddenFields);
+  const materialized = materializeGeneratorItem(spec, entry);
+  const updates: Record<string, unknown> = {};
+
+  if (!overrides.has(OVERRIDE_FIELDS.title) && item.title !== materialized.title) {
+    updates.title = materialized.title;
   }
-  if (!overrides.has(OVERRIDE_FIELDS.body) && item.body !== child.body) {
-    updates.body = child.body;
+  if (!overrides.has(OVERRIDE_FIELDS.body) && item.body !== materialized.body) {
+    updates.body = materialized.body;
   }
-  if (!overrides.has(OVERRIDE_FIELDS.isTask) && item.isTask !== child.isTask) {
-    updates.is_task = child.isTask;
-    if (!child.isTask) {
+  if (!overrides.has(OVERRIDE_FIELDS.isTask) && item.isTask !== materialized.isTask) {
+    updates.is_task = materialized.isTask;
+    if (!materialized.isTask) {
       updates.task_status = "";
     } else if (!item.isTask) {
       updates.task_status = "active";
     }
   }
-  if (!overrides.has(OVERRIDE_FIELDS.isDocumentation) && item.isDocumentation !== child.isDocumentation) {
-    updates.is_documentation = child.isDocumentation;
+  if (!overrides.has(OVERRIDE_FIELDS.isDocumentation) && item.isDocumentation !== materialized.isDocumentation) {
+    updates.is_documentation = materialized.isDocumentation;
   }
-  if (!overrides.has(OVERRIDE_FIELDS.isInterval) && item.isInterval !== child.isInterval) {
-    updates.is_interval = child.isInterval;
+  if (!overrides.has(OVERRIDE_FIELDS.isInterval) && item.isInterval !== materialized.isInterval) {
+    updates.is_interval = materialized.isInterval;
   }
-  if (!overrides.has(OVERRIDE_FIELDS.completionRule)) {
-    const nextRule = child.completionRule ? toJson(child.completionRule) : "";
-    const currentRule = item.completionRule ? toJson(item.completionRule) : "";
-    if (nextRule !== currentRule) {
-      updates.completion_rule = child.completionRule;
-    }
-  }
-  if (!overrides.has(OVERRIDE_FIELDS.inputSchema)) {
-    const nextSchema = child.inputSchema.length > 0 ? child.inputSchema : null;
-    const currentSchema = item.documentationSchema;
-    if (JSON.stringify(nextSchema) !== JSON.stringify(currentSchema)) {
-      updates.documentation_schema = nextSchema;
-      if (child.inputSchema.length > 0 && !item.documentationData) {
-        updates.documentation_data = childDocumentationData(child);
-      }
-    }
+  if (!overrides.has(OVERRIDE_FIELDS.tags) && JSON.stringify(item.tags) !== JSON.stringify(materialized.tags)) {
+    updates.tags = materialized.tags;
   }
 
-  if (needsCalendarSchedule(child) && item.isInterval) {
-    if (!overrides.has(OVERRIDE_FIELDS.scheduleStartsAt) || !overrides.has(OVERRIDE_FIELDS.scheduleEndsAt)) {
-      const times = slotTimesForOccurrence(item.occurrenceKey, child.schedule);
-      if (!overrides.has(OVERRIDE_FIELDS.scheduleStartsAt) && item.intervalStartsAt !== times.startsAt) {
-        updates.interval_starts_at = times.startsAt;
-      }
-      if (!overrides.has(OVERRIDE_FIELDS.scheduleEndsAt) && item.intervalEndsAt !== times.endsAt) {
-        updates.interval_ends_at = times.endsAt;
-      }
-    }
+  if (Object.keys(updates).length === 0) {
+    return;
   }
 
-  if (Object.keys(updates).length > 0) {
-    const nextRevision = item.revision + 1;
-    const { error } = await client
-      .from("items")
-      .update({ ...updates, revision: nextRevision })
-      .eq("id", item.id)
-      .eq("owner_id", userId)
-      .eq("revision", item.revision);
-    if (error) {
-      throw new Error(error.message);
-    }
+  const nextRevision = item.revision + 1;
+  const { error } = await client
+    .from("items")
+    .update({ ...updates, revision: nextRevision })
+    .eq("id", item.id)
+    .eq("owner_id", userId)
+    .eq("revision", item.revision);
+
+  if (error) {
+    throw new Error(error.message);
   }
 }
 
@@ -153,42 +134,36 @@ export async function syncOccurrences(
   client: Client,
   userId: string,
   templateId: string,
-  itemsCache: Item[],
-  now = new Date()
+  itemsCache: Item[]
 ): Promise<void> {
   const template = itemsCache.find((entry) => entry.id === templateId);
   if (!template?.isGenerator || template.generatedFromId) {
     return;
   }
 
-  const spec = parseGenerationSpec(template.recurrenceRule, template);
+  const spec = parseGeneratorSpec(template.recurrenceRule, template);
   if (!spec) {
     return;
   }
 
-  const keys = plannedOccurrenceKeys(spec, template, now);
-  const keySet = new Set(keys);
-  const todayKey = formatOccurrenceKey(new Date(now.getFullYear(), now.getMonth(), now.getDate()));
+  const entries = resolveGeneratorEntries(spec, templateId, itemsCache);
+  const keySet = new Set(entries.map((entry) => entry.key));
   const existing = listOccurrences(itemsCache, templateId);
   const existingByKey = new Map(existing.map((item) => [item.occurrenceKey, item]));
 
   for (const item of existing) {
-    const isFuture = item.occurrenceKey >= todayKey;
-    if (isFuture && !keySet.has(item.occurrenceKey)) {
+    if (!keySet.has(item.occurrenceKey)) {
       await deleteOccurrence(client, userId, item.id);
     }
   }
 
-  for (const key of keys) {
-    const current = existingByKey.get(key);
+  for (const entry of entries) {
+    const current = existingByKey.get(entry.key);
     if (!current) {
-      await createOccurrence(client, userId, template, spec, key);
+      await createOccurrence(client, userId, template, spec, entry.key, itemsCache);
       continue;
     }
-    if (isPastOccurrenceKey(key, now)) {
-      continue;
-    }
-    await applySpecToFutureOccurrence(client, userId, template, current, spec);
+    await applySpecToOccurrence(client, userId, template, current, spec, itemsCache);
   }
 }
 
@@ -208,10 +183,10 @@ export async function deleteOccurrencesForTemplate(client: Client, userId: strin
   }
 }
 
-export async function syncAllGenerations(client: Client, userId: string, itemsCache: Item[], now = new Date()): Promise<void> {
+export async function syncAllGenerations(client: Client, userId: string, itemsCache: Item[]): Promise<void> {
   const templates = itemsCache.filter((item) => item.isGenerator && !item.generatedFromId);
   for (const template of templates) {
-    await syncOccurrences(client, userId, template.id, itemsCache, now);
+    await syncOccurrences(client, userId, template.id, itemsCache);
   }
 }
 

@@ -1,323 +1,51 @@
-import { defaultDocumentationData, parseDocumentationSchema, type DocumentationSchema } from "./documentation";
-import type { CompletionRule, Item } from "./item";
-import { parseCompletionRule } from "./completion";
-import {
-  formatOccurrenceKey,
-  occurrenceKeysInHorizon,
-  parseOccurrenceKey,
-  type RecurrenceFrequency,
-  type RecurrenceRule
-} from "./recurrence";
+import type { Item } from "./item";
 
-export type GenerationSchedule = {
-  time: string;
-  durationMinutes: number;
-};
+export const GENERATOR_SPEC_VERSION = 2;
 
-export type OccurrenceMode = "recurrence" | "range" | "dates";
+export type GeneratorSourceKind = "range" | "dates" | "strings" | "items";
 
-export type OccurrenceRange = {
-  startDate: string;
-  count: number;
-  stepDays: number;
-};
+export type GeneratorSource =
+  | { kind: "range"; count: number }
+  | { kind: "dates"; dates: string[] }
+  | { kind: "strings"; values: string[] }
+  | { kind: "items"; tags: string[] };
 
-export type GenerationChildSpec = {
+export type GeneratorItemTemplate = {
   title: string;
   body: string;
   isTask: boolean;
   isDocumentation: boolean;
   isInterval: boolean;
-  inputSchema: DocumentationSchema;
-  completionRule: CompletionRule | null;
-  schedule: GenerationSchedule;
+  tags: string[];
 };
 
-export type GenerationSpec = {
-  kind: "schedule_tasks";
-  occurrenceMode: OccurrenceMode;
-  frequency: RecurrenceFrequency;
-  interval: number;
-  horizonDays: number;
-  range: OccurrenceRange;
-  dates: string[];
-  anchor?: string;
-  exclusions: string[];
-  child: GenerationChildSpec;
+export type GeneratorSpec = {
+  version: typeof GENERATOR_SPEC_VERSION;
+  source: GeneratorSource;
+  template: GeneratorItemTemplate;
 };
 
-const FREQUENCIES: RecurrenceFrequency[] = ["daily", "weekly", "monthly"];
-const OCCURRENCE_MODES: OccurrenceMode[] = ["recurrence", "range", "dates"];
-const TIME_RE = /^([01]?\d|2[0-3]):([0-5]\d)$/;
+export type GeneratorContext = {
+  index: number;
+  value: string;
+  date: string;
+  item: Item | null;
+};
 
-function addDays(date: Date, days: number): Date {
-  const next = new Date(date);
-  next.setDate(next.getDate() + days);
-  return next;
-}
+export type GeneratorEntry = {
+  key: string;
+  context: GeneratorContext;
+};
 
-function defaultRange(template?: Item): OccurrenceRange {
-  const anchor = template?.createdAt ? new Date(template.createdAt) : new Date();
-  return {
-    startDate: formatOccurrenceKey(new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate())),
-    count: 10,
-    stepDays: 1
-  };
-}
-
-function parseOccurrenceMode(value: unknown): OccurrenceMode {
-  if (typeof value === "string" && OCCURRENCE_MODES.includes(value as OccurrenceMode)) {
-    return value as OccurrenceMode;
-  }
-  return "recurrence";
-}
-
-function parseOccurrenceRange(value: unknown, template?: Item): OccurrenceRange {
-  const fallback = defaultRange(template);
-  if (!value || typeof value !== "object") {
-    return fallback;
-  }
-  const raw = value as Record<string, unknown>;
-  const startDate = String(raw.startDate ?? fallback.startDate);
-  const count = Number(raw.count ?? fallback.count);
-  const stepDays = Number(raw.stepDays ?? fallback.stepDays);
-  return {
-    startDate: parseOccurrenceKey(startDate) ? startDate : fallback.startDate,
-    count: Number.isFinite(count) ? Math.min(Math.max(Math.floor(count), 1), 999) : fallback.count,
-    stepDays: Number.isFinite(stepDays) ? Math.min(Math.max(Math.floor(stepDays), 1), 365) : fallback.stepDays
-  };
-}
-
-function parseDateList(value: unknown): string[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-  return [...new Set(value.map((entry) => String(entry)).filter((entry) => parseOccurrenceKey(entry)))].sort();
-}
-
-export function parseGenerationSchedule(value: unknown): GenerationSchedule | null {
-  if (!value || typeof value !== "object") {
-    return null;
-  }
-  const raw = value as Record<string, unknown>;
-  const time = String(raw.time ?? "09:00");
-  if (!TIME_RE.test(time)) {
-    return null;
-  }
-  const durationMinutes = Number(raw.durationMinutes ?? 30);
-  if (!Number.isFinite(durationMinutes) || durationMinutes < 1 || durationMinutes > 24 * 60) {
-    return null;
-  }
-  return { time, durationMinutes: Math.floor(durationMinutes) };
-}
-
-export function defaultChildSpec(template?: Item): GenerationChildSpec {
-  return {
-    title: template?.title ?? "Generated item",
-    body: "",
-    isTask: false,
-    isDocumentation: false,
-    isInterval: false,
-    inputSchema: [],
-    completionRule: null,
-    schedule: { time: "09:00", durationMinutes: 30 }
-  };
-}
-
-export function parseGenerationChildSpec(value: unknown, template?: Item): GenerationChildSpec {
-  const fallbackTitle = template?.title ?? "Generated item";
-  if (!value || typeof value !== "object") {
-    return defaultChildSpec(template);
-  }
-  const raw = value as Record<string, unknown>;
-  const schedule = parseGenerationSchedule(raw.schedule) ?? { time: "09:00", durationMinutes: 30 };
-  const inputSchema = parseDocumentationSchema(raw.inputSchema ?? raw.documentationSchema);
-  const completionRule = parseCompletionRule(raw.completionRule);
-  const title = String(raw.title ?? fallbackTitle).trim().slice(0, 200) || fallbackTitle;
-  const body = String(raw.body ?? "").slice(0, 50000);
-  const isTask = raw.isTask === undefined ? true : Boolean(raw.isTask);
-  const isDocumentation = raw.isDocumentation === undefined ? false : Boolean(raw.isDocumentation);
-  const isInterval = raw.isInterval === undefined ? false : Boolean(raw.isInterval);
-
-  return {
-    title,
-    body,
-    isTask,
-    isDocumentation,
-    isInterval,
-    inputSchema,
-    completionRule: isTask ? completionRule ?? { kind: "manual" } : null,
-    schedule
-  };
-}
-
-export function parseGenerationSpec(value: unknown, template?: Item): GenerationSpec | null {
-  if (!value || typeof value !== "object") {
-    return null;
-  }
-  const raw = value as Record<string, unknown>;
-
-  if (!FREQUENCIES.includes(raw.frequency as RecurrenceFrequency)) {
-    return null;
-  }
-
-  const interval = Number(raw.interval ?? 1);
-  const horizonDays = Number(raw.horizonDays ?? 90);
-  if (!Number.isFinite(interval) || interval < 1 || interval > 365) {
-    return null;
-  }
-  if (!Number.isFinite(horizonDays) || horizonDays < 1 || horizonDays > 365) {
-    return null;
-  }
-
-  const exclusions = Array.isArray(raw.exclusions)
-    ? raw.exclusions.map((entry) => String(entry)).filter((entry) => parseOccurrenceKey(entry))
-    : [];
-
-  const anchor = typeof raw.anchor === "string" && raw.anchor.trim() ? raw.anchor.trim() : undefined;
-  const occurrenceMode = parseOccurrenceMode(raw.occurrenceMode);
-
-  if (occurrenceMode === "range") {
-    const range = parseOccurrenceRange(raw.range, template);
-    if (!parseOccurrenceKey(range.startDate)) {
-      return null;
-    }
-  }
-
-  if (occurrenceMode === "dates") {
-    const dates = parseDateList(raw.dates);
-    if (dates.length === 0) {
-      return null;
-    }
-  }
-
-  const child = raw.kind === "schedule_tasks" || raw.child ? parseGenerationChildSpec(raw.child, template) : defaultChildSpec(template);
-
-  return {
-    kind: "schedule_tasks",
-    occurrenceMode,
-    frequency: raw.frequency as RecurrenceFrequency,
-    interval: Math.floor(interval),
-    horizonDays: Math.floor(horizonDays),
-    range: parseOccurrenceRange(raw.range, template),
-    dates: parseDateList(raw.dates),
-    anchor,
-    exclusions,
-    child
-  };
-}
-
-export function generationSpecToRecurrenceRule(spec: GenerationSpec): unknown {
-  return spec;
-}
-
-export function generationSpecLabel(spec: GenerationSpec | null): string {
-  if (!spec) {
-    return "None";
-  }
-
-  const scheduleSuffix = needsCalendarSchedule(spec.child) ? ` at ${spec.child.schedule.time}` : "";
-
-  if (spec.occurrenceMode === "range") {
-    return `${spec.range.count}× every ${spec.range.stepDays} day(s) from ${spec.range.startDate}${scheduleSuffix}`;
-  }
-
-  if (spec.occurrenceMode === "dates") {
-    return `${spec.dates.length} explicit date(s)${scheduleSuffix}`;
-  }
-
-  const unit = spec.frequency === "daily" ? "day" : spec.frequency === "weekly" ? "week" : "month";
-  const plural = spec.interval === 1 ? unit : `${unit}s`;
-  return `Every ${spec.interval} ${plural}${scheduleSuffix}`;
-}
-
-export function needsCalendarSchedule(child: GenerationChildSpec): boolean {
-  return child.isTask || child.isInterval;
-}
-
-export function resolveChildTitle(titleTemplate: string, occurrenceKey: string, template?: Item): string {
-  const base = titleTemplate.trim() || template?.title || "Generated item";
-  if (base.includes("{date}")) {
-    return base.replaceAll("{date}", occurrenceKey);
-  }
-  if (base.includes("{index}")) {
-    return base;
-  }
-  return `${base} · ${occurrenceKey}`;
-}
-
-export function generationAnchor(spec: GenerationSpec, template: Item): Date {
-  if (spec.occurrenceMode === "range" && parseOccurrenceKey(spec.range.startDate)) {
-    return parseOccurrenceKey(spec.range.startDate)!;
-  }
-  if (spec.anchor) {
-    const parsed = new Date(spec.anchor);
-    if (!Number.isNaN(parsed.getTime())) {
-      return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
-    }
-  }
-  const created = new Date(template.createdAt);
-  return new Date(created.getFullYear(), created.getMonth(), created.getDate());
-}
-
-function recurrenceRuleFromSpec(spec: GenerationSpec): RecurrenceRule {
-  return {
-    frequency: spec.frequency,
-    interval: spec.interval,
-    horizonDays: spec.horizonDays
-  };
-}
-
-function keysFromRange(range: OccurrenceRange): string[] {
-  const start = parseOccurrenceKey(range.startDate);
-  if (!start) {
-    return [];
-  }
-  const keys: string[] = [];
-  for (let index = 0; index < range.count; index += 1) {
-    keys.push(formatOccurrenceKey(addDays(start, index * range.stepDays)));
-  }
-  return keys;
-}
-
-export function plannedOccurrenceKeys(spec: GenerationSpec, template: Item, now: Date): string[] {
-  const excluded = new Set(spec.exclusions);
-  let keys: string[] = [];
-
-  if (spec.occurrenceMode === "range") {
-    keys = keysFromRange(spec.range);
-  } else if (spec.occurrenceMode === "dates") {
-    keys = [...spec.dates];
-  } else {
-    const anchor = generationAnchor(spec, template);
-    keys = occurrenceKeysInHorizon(recurrenceRuleFromSpec(spec), anchor, now);
-  }
-
-  return keys.filter((key) => !excluded.has(key));
-}
-
-export function slotTimesForOccurrence(occurrenceKey: string, schedule: GenerationSchedule): {
-  startsAt: string;
-  endsAt: string;
-} {
-  const day = parseOccurrenceKey(occurrenceKey);
-  if (!day) {
-    throw new Error("Invalid occurrence key");
-  }
-  const [hours, minutes] = schedule.time.split(":").map(Number);
-  const startsAt = new Date(day.getFullYear(), day.getMonth(), day.getDate(), hours, minutes, 0, 0);
-  const endsAt = new Date(startsAt.getTime() + schedule.durationMinutes * 60_000);
-  return { startsAt: startsAt.toISOString(), endsAt: endsAt.toISOString() };
-}
-
-export function isPastOccurrenceKey(occurrenceKey: string, now: Date): boolean {
-  const today = formatOccurrenceKey(new Date(now.getFullYear(), now.getMonth(), now.getDate()));
-  return occurrenceKey < today;
-}
-
-export function childDocumentationData(spec: GenerationChildSpec): Record<string, unknown> {
-  return defaultDocumentationData(spec.inputSchema);
-}
+export type MaterializedGeneratorItem = {
+  title: string;
+  body: string;
+  isTask: boolean;
+  isDocumentation: boolean;
+  isInterval: boolean;
+  tags: string[];
+  taskStatus: string | null;
+};
 
 export const OVERRIDE_FIELDS = {
   title: "title",
@@ -325,15 +53,264 @@ export const OVERRIDE_FIELDS = {
   isTask: "isTask",
   isDocumentation: "isDocumentation",
   isInterval: "isInterval",
-  completionRule: "completionRule",
-  inputSchema: "inputSchema",
-  taskStatus: "taskStatus",
-  scheduleStartsAt: "schedule.startsAt",
-  scheduleEndsAt: "schedule.endsAt"
+  tags: "tags",
+  taskStatus: "taskStatus"
 } as const;
+
+export function defaultGeneratorSpec(template?: Item): GeneratorSpec {
+  return {
+    version: GENERATOR_SPEC_VERSION,
+    source: { kind: "range", count: 5 },
+    template: {
+      title: template?.title ? `${template.title} {index}` : "Item {index}",
+      body: "",
+      isTask: true,
+      isDocumentation: false,
+      isInterval: false,
+      tags: []
+    }
+  };
+}
+
+function parseStringList(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return [...new Set(value.map((entry) => String(entry).trim()).filter(Boolean))];
+}
+
+function parseTags(value: unknown): string[] {
+  return parseStringList(value).map((tag) => tag.toLowerCase());
+}
+
+function parseSource(value: unknown): GeneratorSource | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  const raw = value as Record<string, unknown>;
+  const kind = raw.kind;
+
+  if (kind === "range") {
+    const count = Number(raw.count ?? 1);
+    if (!Number.isFinite(count) || count < 1 || count > 999) {
+      return null;
+    }
+    return { kind: "range", count: Math.floor(count) };
+  }
+
+  if (kind === "dates") {
+    const dates = parseStringList(raw.dates).filter((entry) => /^\d{4}-\d{2}-\d{2}$/.test(entry));
+    if (dates.length === 0) {
+      return null;
+    }
+    return { kind: "dates", dates };
+  }
+
+  if (kind === "strings") {
+    const values = parseStringList(raw.values);
+    if (values.length === 0) {
+      return null;
+    }
+    return { kind: "strings", values };
+  }
+
+  if (kind === "items") {
+    const tags = parseTags(raw.tags);
+    if (tags.length === 0) {
+      return null;
+    }
+    return { kind: "items", tags };
+  }
+
+  return null;
+}
+
+function parseTemplate(value: unknown, fallbackTitle: string): GeneratorItemTemplate | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  const raw = value as Record<string, unknown>;
+  const title = String(raw.title ?? fallbackTitle).trim().slice(0, 200);
+  if (!title) {
+    return null;
+  }
+
+  return {
+    title,
+    body: String(raw.body ?? "").slice(0, 50000),
+    isTask: raw.isTask === undefined ? true : Boolean(raw.isTask),
+    isDocumentation: Boolean(raw.isDocumentation),
+    isInterval: Boolean(raw.isInterval),
+    tags: parseTags(raw.tags)
+  };
+}
+
+export function parseGeneratorSpec(value: unknown, template?: Item): GeneratorSpec | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  const raw = value as Record<string, unknown>;
+  if (raw.version !== GENERATOR_SPEC_VERSION) {
+    return null;
+  }
+
+  const source = parseSource(raw.source);
+  const fallbackTitle = template?.title ? `implement {item.title}` : "Item {index}";
+  const itemTemplate = parseTemplate(raw.template, fallbackTitle);
+  if (!source || !itemTemplate) {
+    return null;
+  }
+
+  return {
+    version: GENERATOR_SPEC_VERSION,
+    source,
+    template: itemTemplate
+  };
+}
+
+export function generatorSpecLabel(spec: GeneratorSpec | null): string {
+  if (!spec) {
+    return "Not configured";
+  }
+
+  switch (spec.source.kind) {
+    case "range":
+      return `range(${spec.source.count})`;
+    case "dates":
+      return `${spec.source.dates.length} date(s)`;
+    case "strings":
+      return `${spec.source.values.length} string(s)`;
+    case "items":
+      return `items tagged ${spec.source.tags.join(", ")}`;
+  }
+}
+
+function itemMatchesTags(item: Item, tags: string[]): boolean {
+  return tags.every((tag) => item.tags.includes(tag));
+}
+
+export function resolveGeneratorEntries(
+  spec: GeneratorSpec,
+  templateId: string,
+  items: Item[]
+): GeneratorEntry[] {
+  const entries: GeneratorEntry[] = [];
+
+  if (spec.source.kind === "range") {
+    for (let index = 0; index < spec.source.count; index += 1) {
+      entries.push({
+        key: `i:${index}`,
+        context: { index, value: String(index), date: "", item: null }
+      });
+    }
+    return entries;
+  }
+
+  if (spec.source.kind === "dates") {
+    spec.source.dates.forEach((date, index) => {
+      entries.push({
+        key: `d:${date}`,
+        context: { index, value: date, date, item: null }
+      });
+    });
+    return entries;
+  }
+
+  if (spec.source.kind === "strings") {
+    spec.source.values.forEach((value, index) => {
+      entries.push({
+        key: `s:${index}:${value}`,
+        context: { index, value, date: "", item: null }
+      });
+    });
+    return entries;
+  }
+
+  if (spec.source.kind === "items") {
+    const source = spec.source;
+    const candidates = items.filter(
+      (item) =>
+        item.id !== templateId &&
+        item.generatedFromId !== templateId &&
+        itemMatchesTags(item, source.tags)
+    );
+
+    candidates.forEach((item, index) => {
+      entries.push({
+        key: `item:${item.id}`,
+        context: { index, value: item.title, date: "", item }
+      });
+    });
+  }
+
+  return entries;
+}
+
+function resolveTemplatePath(context: GeneratorContext, path: string): string {
+  if (path === "index") {
+    return String(context.index);
+  }
+  if (path === "value") {
+    return context.value;
+  }
+  if (path === "date") {
+    return context.date;
+  }
+  if (path.startsWith("item.")) {
+    const field = path.slice("item.".length);
+    const source = context.item;
+    if (!source) {
+      return "";
+    }
+    if (field === "title") {
+      return source.title;
+    }
+    if (field === "body") {
+      return source.body;
+    }
+    if (field === "id") {
+      return source.id;
+    }
+    if (field === "tags") {
+      return source.tags.join(", ");
+    }
+  }
+  return "";
+}
+
+export function renderGeneratorTemplate(template: string, context: GeneratorContext): string {
+  return template.replace(/\{([a-zA-Z0-9_.]+)\}/g, (_match, path: string) => resolveTemplatePath(context, path));
+}
+
+export function materializeGeneratorItem(spec: GeneratorSpec, entry: GeneratorEntry): MaterializedGeneratorItem {
+  const title = renderGeneratorTemplate(spec.template.title, entry.context).trim().slice(0, 200);
+  const body = renderGeneratorTemplate(spec.template.body, entry.context).slice(0, 50000);
+  const tags = spec.template.tags.map((tag) => renderGeneratorTemplate(tag, entry.context).trim().toLowerCase()).filter(Boolean);
+
+  return {
+    title: title || "Untitled",
+    body,
+    isTask: spec.template.isTask,
+    isDocumentation: spec.template.isDocumentation,
+    isInterval: spec.template.isInterval,
+    tags,
+    taskStatus: spec.template.isTask ? "active" : null
+  };
+}
+
+export function templateVariablesForSource(kind: GeneratorSourceKind): string[] {
+  switch (kind) {
+    case "range":
+      return ["{index}"];
+    case "dates":
+      return ["{index}", "{date}"];
+    case "strings":
+      return ["{index}", "{value}"];
+    case "items":
+      return ["{index}", "{item.title}", "{item.body}", "{item.id}", "{item.tags}"];
+  }
+}
 
 export function mergeOverriddenFields(current: string[], additions: string[]): string[] {
   return [...new Set([...current, ...additions])];
 }
-
-export { formatOccurrenceKey, parseOccurrenceKey, OCCURRENCE_MODES, FREQUENCIES };

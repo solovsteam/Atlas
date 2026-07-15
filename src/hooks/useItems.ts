@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Item } from "@shared/item";
 import { itemFromDbRow } from "@shared/item";
+import { parseGeneratorSpec } from "@shared/generation";
 import { supabase } from "../lib/supabase";
 import { refreshItemsAfterGenerationSync, syncAllGenerations } from "../services/generation";
 import { fetchOwnedItems } from "../services/items";
@@ -12,6 +13,12 @@ export function useItems(userId: string | undefined) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [extendedSchema, setExtendedSchema] = useState(true);
+  const initialLoadDoneRef = useRef(false);
+
+  const needsItemsSourceSync = items.some(
+    (entry) =>
+      entry.isGenerator && !entry.generatedFromId && parseGeneratorSpec(entry.recurrenceRule)?.source.kind === "items"
+  );
 
   const refresh = useCallback(async () => {
     if (!userId) {
@@ -27,6 +34,7 @@ export function useItems(userId: string | undefined) {
       const next = await fetchOwnedItems(supabase, userId);
       setItems(next);
       setLoading(false);
+      initialLoadDoneRef.current = true;
 
       void syncAllGenerations(supabase, userId, next)
         .then(() => refreshItemsAfterGenerationSync(supabase, userId))
@@ -41,6 +49,21 @@ export function useItems(userId: string | undefined) {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    if (!userId || loading || !initialLoadDoneRef.current || !needsItemsSourceSync) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      void syncAllGenerations(supabase, userId, items)
+        .then(() => refreshItemsAfterGenerationSync(supabase, userId))
+        .then((refreshed) => setItems(refreshed))
+        .catch(() => {});
+    }, 1200);
+
+    return () => window.clearTimeout(timer);
+  }, [items, userId, loading, needsItemsSourceSync]);
 
   const removeItemById = useCallback((id: string) => {
     setItems((current) => current.filter((entry) => entry.id !== id));

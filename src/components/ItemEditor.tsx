@@ -1,4 +1,5 @@
 import type { Item, ItemPatch, UpdateItemResult } from "@shared/item";
+import { defaultGeneratorSpec, parseGeneratorSpec } from "@shared/generation";
 import { EXTENDED_SCHEMA_MESSAGE } from "@shared/item";
 import { useAutosaveItem } from "../hooks/useAutosaveItem";
 import { trackItemPatchUndo, trackTaskStatusUndo, useUndo } from "../context/UndoContext";
@@ -18,7 +19,7 @@ export function ItemEditor({
   updateItem: (id: string, patchJson: string, expectedRevision: number) => Promise<UpdateItemResult>;
 }) {
   const { push } = useUndo();
-  const { extendedSchema } = useAtlasData();
+  const { extendedSchema, items } = useAtlasData();
   const autosave = useAutosaveItem(item, updateItem, (before) => {
     trackItemPatchUndo(push, item.id, before);
   });
@@ -108,7 +109,16 @@ export function ItemEditor({
               active={item.isGenerator}
               label="Generator"
               disabled={!extendedSchema}
-              onToggle={() => void patchItemSafe({ isGenerator: !item.isGenerator })}
+              onToggle={() =>
+                void patchItemSafe(
+                  item.isGenerator
+                    ? { isGenerator: false }
+                    : {
+                        isGenerator: true,
+                        recurrenceRule: parseGeneratorSpec(item.recurrenceRule, item) ?? defaultGeneratorSpec(item)
+                      }
+                )
+              }
             />
           ) : null}
         </div>
@@ -129,7 +139,7 @@ export function ItemEditor({
 
       {item.isInterval ? <IntervalEditor item={item} updateItem={updateItem} /> : null}
       {item.isGenerator || item.generatedFromId ? (
-        <GenerationEditor item={item} occurrences={occurrences} updateItem={updateItem} />
+        <GenerationEditor item={item} items={items} occurrences={occurrences} updateItem={updateItem} />
       ) : null}
 
       <TagsEditor item={item} updateItem={updateItem} />

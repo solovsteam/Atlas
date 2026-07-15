@@ -11,6 +11,10 @@ export function ItemPage() {
   const { push } = useUndo();
 
   const item = useMemo(() => items.find((entry) => entry.id === id) ?? null, [items, id]);
+  const occurrences = useMemo(
+    () => (item?.isGenerator ? items.filter((entry) => entry.generatedFromId === item.id) : []),
+    [items, item]
+  );
 
   if (!item) {
     return (
@@ -50,7 +54,7 @@ export function ItemPage() {
         </button>
       </div>
 
-      <ItemEditor item={currentItem} updateItem={updateItem} />
+      <ItemEditor item={currentItem} occurrences={occurrences} updateItem={updateItem} />
     </section>
   );
 }

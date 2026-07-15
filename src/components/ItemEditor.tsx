@@ -1,14 +1,18 @@
 import type { Item, ItemPatch, UpdateItemResult } from "@shared/item";
 import { useAutosaveItem } from "../hooks/useAutosaveItem";
 import { trackItemPatchUndo, trackTaskStatusUndo, useUndo } from "../context/UndoContext";
+import { GenerationEditor } from "./GenerationEditor";
+import { IntervalEditor } from "./IntervalEditor";
 import { TagsEditor } from "./TagsEditor";
 import { TaskStatusButtons } from "./TaskStatusButtons";
 
 export function ItemEditor({
   item,
+  occurrences,
   updateItem
 }: {
   item: Item;
+  occurrences: Item[];
   updateItem: (id: string, patchJson: string, expectedRevision: number) => Promise<UpdateItemResult>;
 }) {
   const { push } = useUndo();
@@ -23,6 +27,17 @@ export function ItemEditor({
     }
     if (patch.taskStatus !== undefined) {
       before.taskStatus = item.taskStatus;
+    }
+    if (patch.isInterval !== undefined) {
+      before.isInterval = item.isInterval;
+      before.intervalKind = item.intervalKind;
+      before.intervalStartsAt = item.intervalStartsAt;
+      before.intervalEndsAt = item.intervalEndsAt;
+      before.intervalStatus = item.intervalStatus;
+    }
+    if (patch.isGenerator !== undefined) {
+      before.isGenerator = item.isGenerator;
+      before.recurrenceRule = item.recurrenceRule;
     }
 
     const result = await updateItem(item.id, JSON.stringify(patch), autosave.revision);
@@ -55,6 +70,36 @@ export function ItemEditor({
         <p className="mb-3 text-xs uppercase tracking-wide text-neutral-500">Capabilities</p>
         <div className="mb-4 flex flex-wrap gap-2">
           <CapabilityToggle active={item.isTask} label="Task" onToggle={() => void patchItem({ isTask: !item.isTask })} />
+          <CapabilityToggle
+            active={item.isInterval}
+            label="Interval"
+            onToggle={() =>
+              void patchItem(
+                item.isInterval
+                  ? {
+                      isInterval: false,
+                      intervalKind: "",
+                      intervalStartsAt: null,
+                      intervalEndsAt: null,
+                      intervalStatus: ""
+                    }
+                  : {
+                      isInterval: true,
+                      intervalKind: "fixed",
+                      intervalStatus: "scheduled"
+                    }
+              )
+            }
+          />
+          {!item.generatedFromId ? (
+            <CapabilityToggle
+              active={item.isGenerator}
+              label="Generator"
+              onToggle={() =>
+                void patchItem(item.isGenerator ? { isGenerator: false, recurrenceRule: null } : { isGenerator: true })
+              }
+            />
+          ) : null}
         </div>
 
         {item.isTask ? (
@@ -70,6 +115,11 @@ export function ItemEditor({
           {autosave.saving ? "Saving…" : ""}
         </p>
       </div>
+
+      {item.isInterval ? <IntervalEditor item={item} updateItem={updateItem} /> : null}
+      {item.isGenerator || item.generatedFromId ? (
+        <GenerationEditor item={item} occurrences={occurrences} updateItem={updateItem} />
+      ) : null}
 
       <TagsEditor item={item} updateItem={updateItem} />
 

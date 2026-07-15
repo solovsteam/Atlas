@@ -10,6 +10,7 @@ import {
   type ItemPatch,
   type UpdateItemResult
 } from "@shared/item";
+import { deleteOccurrencesForTemplate, syncAllGenerations, syncOccurrences } from "./generation";
 import type { Database, DbItemRow } from "../types/database";
 
 type Client = SupabaseClient<Database>;
@@ -25,7 +26,23 @@ export async function listOwnedItems(client: Client, userId: string): Promise<It
     throw new Error(error.message);
   }
 
-  return (data ?? []).map((row) => itemFromDbRow(row as DbItemRow));
+  const items = (data ?? []).map((row) => itemFromDbRow(row as DbItemRow));
+
+  try {
+    await syncAllGenerations(client, userId);
+    const { data: refreshed, error: refreshError } = await client
+      .from("items")
+      .select("*")
+      .eq("owner_id", userId)
+      .order("updated_at", { ascending: false });
+    if (!refreshError && refreshed) {
+      return refreshed.map((row) => itemFromDbRow(row as DbItemRow));
+    }
+  } catch {
+    // Generation sync is best-effort on load; return items we already have.
+  }
+
+  return items;
 }
 
 export async function createItem(client: Client, userId: string, title: string): Promise<CreateItemResult> {
@@ -71,8 +88,16 @@ export async function updateItem(
   }
 
   const patch = parseJson<ItemPatch>(patchJson, {});
+
+  if (patch.isGenerator === false && current.isGenerator) {
+    await deleteOccurrencesForTemplate(client, userId, id);
+  }
+
   const updates = applyPatch(current, patch);
   if (Object.keys(updates).length === 0) {
+    if (current.isGenerator && !current.generatedFromId && (patch.recurrenceRule !== undefined || patch.isGenerator)) {
+      await syncOccurrences(client, userId, id);
+    }
     return { ok: true, revision: current.revision };
   }
 
@@ -95,6 +120,13 @@ export async function updateItem(
       return { conflict: true, serverItem: itemFromDbRow(latest as DbItemRow) };
     }
     throw new Error("Item not found");
+  }
+
+  const updatedItem = itemFromDbRow(updated as DbItemRow);
+  if (updatedItem.isGenerator && !updatedItem.generatedFromId) {
+    if (patch.recurrenceRule !== undefined || patch.isGenerator !== undefined) {
+      await syncOccurrences(client, userId, id);
+    }
   }
 
   return { ok: true, revision: nextRevision };
@@ -121,9 +153,23 @@ export async function restoreItem(client: Client, userId: string, item: Item): P
       title: item.title,
       body: item.body,
       is_task: item.isTask,
+      is_documentation: item.isDocumentation,
+      is_interval: item.isInterval,
+      is_generator: item.isGenerator,
       task_status: item.taskStatus ?? "",
       manual_relevance: item.manualRelevance,
       tags: item.tags,
+      completion_rule: item.completionRule,
+      documentation_schema: item.documentationSchema,
+      documentation_data: item.documentationData,
+      recurrence_rule: item.recurrenceRule,
+      generated_from_id: item.generatedFromId || null,
+      occurrence_key: item.occurrenceKey,
+      overridden_fields: item.overriddenFields,
+      interval_kind: item.intervalKind,
+      interval_starts_at: item.intervalStartsAt,
+      interval_ends_at: item.intervalEndsAt,
+      interval_status: item.intervalStatus,
       revision: item.revision
     })
     .select("id")

@@ -4,8 +4,7 @@ import { itemKindLabel } from "@shared/item";
 const KIND_STYLES: Record<string, string> = {
   note: "border-neutral-700 text-neutral-400",
   task: "border-sky-900 text-sky-400",
-  interval: "border-violet-900 text-violet-400",
-  generator: "border-amber-900 text-amber-400"
+  interval: "border-violet-900 text-violet-400"
 };
 
 function styleForItem(item: Item): string {
@@ -14,9 +13,6 @@ function styleForItem(item: Item): string {
       return "border-green-900 text-green-400";
     }
     return KIND_STYLES.task;
-  }
-  if (item.isGenerator) {
-    return KIND_STYLES.generator;
   }
   if (item.isInterval) {
     return KIND_STYLES.interval;

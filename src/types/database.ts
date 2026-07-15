@@ -6,7 +6,6 @@ export type DbItemRow = {
   is_task: boolean;
   is_documentation: boolean;
   is_interval: boolean;
-  is_generator: boolean;
   task_status: string;
   manual_relevance: number;
   tags: unknown;
@@ -34,7 +33,6 @@ export type DbItemInsert = {
   is_task?: boolean;
   is_documentation?: boolean;
   is_interval?: boolean;
-  is_generator?: boolean;
   task_status?: string;
   manual_relevance?: number;
   tags?: unknown;

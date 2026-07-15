@@ -114,7 +114,7 @@ export function occurrenceTitle(template: Item, occurrenceKey: string): string {
   return `${template.title} · ${occurrenceKey}`;
 }
 
-export function isGeneratedOccurrence(item: Item): boolean {
+export function isRecurrenceOccurrence(item: Item): boolean {
   return Boolean(item.generatedFromId && item.occurrenceKey);
 }
 

@@ -1,7 +1,6 @@
 alter table public.items
   add column is_documentation boolean not null default false,
   add column is_interval boolean not null default false,
-  add column is_generator boolean not null default false,
   add column interval_kind text not null default '',
   add column interval_starts_at text not null default '',
   add column interval_ends_at text not null default '',
@@ -19,6 +18,3 @@ create index items_generated_from_idx on public.items (generated_from_id)
 
 create index items_interval_idx on public.items (owner_id, is_interval)
   where is_interval = true;
-
-create index items_generator_idx on public.items (owner_id, is_generator)
-  where is_generator = true;

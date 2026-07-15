@@ -18,6 +18,7 @@ If `.lakebed/reference/` is missing, restore from git history before the flatten
 |------|---------|
 | `AGENTS.md` / `CLAUDE.md` | Stack rules |
 | `docs/ROADMAP.md` | Product direction, notifications, phases |
+| `docs/LESSONS.md` | Migration notes, mistakes to avoid |
 
 ## Verify
 

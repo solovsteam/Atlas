@@ -79,6 +79,6 @@ When implementing Phase 2+ features:
 
 ## Current limits
 
-- MVP item schema is a subset of full Lakebed item model (no intervals, links, docs, generators in DB yet).
+- Extended item fields (intervals, documentation, recurrence) are partially ported; item links and notifications are not shipped yet.
 - No notification system shipped; follow roadmap in `docs/ROADMAP.md` when adding.
 - Local dev uses HTTP; production should use HTTPS (e.g. Vercel).

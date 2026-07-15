@@ -1,25 +1,21 @@
 import type { Item, ItemPatch, UpdateItemResult } from "@shared/item";
-import { defaultGeneratorSpec, parseGeneratorSpec } from "@shared/generation";
 import { EXTENDED_SCHEMA_MESSAGE } from "@shared/item";
 import { useAutosaveItem } from "../hooks/useAutosaveItem";
 import { trackItemPatchUndo, trackTaskStatusUndo, useUndo } from "../context/UndoContext";
 import { useAtlasData } from "../context/AtlasDataContext";
-import { GenerationEditor } from "./GenerationEditor";
 import { IntervalEditor } from "./IntervalEditor";
 import { TagsEditor } from "./TagsEditor";
 import { TaskStatusButtons } from "./TaskStatusButtons";
 
 export function ItemEditor({
   item,
-  occurrences,
   updateItem
 }: {
   item: Item;
-  occurrences: Item[];
   updateItem: (id: string, patchJson: string, expectedRevision: number) => Promise<UpdateItemResult>;
 }) {
   const { push } = useUndo();
-  const { extendedSchema, items } = useAtlasData();
+  const { extendedSchema } = useAtlasData();
   const autosave = useAutosaveItem(item, updateItem, (before) => {
     trackItemPatchUndo(push, item.id, before);
   });
@@ -38,10 +34,6 @@ export function ItemEditor({
       before.intervalStartsAt = item.intervalStartsAt;
       before.intervalEndsAt = item.intervalEndsAt;
       before.intervalStatus = item.intervalStatus;
-    }
-    if (patch.isGenerator !== undefined) {
-      before.isGenerator = item.isGenerator;
-      before.recurrenceRule = item.recurrenceRule;
     }
 
     const result = await updateItem(item.id, JSON.stringify(patch), item.revision);
@@ -104,23 +96,6 @@ export function ItemEditor({
               )
             }
           />
-          {!item.generatedFromId ? (
-            <CapabilityToggle
-              active={item.isGenerator}
-              label="Generator"
-              disabled={!extendedSchema}
-              onToggle={() =>
-                void patchItemSafe(
-                  item.isGenerator
-                    ? { isGenerator: false }
-                    : {
-                        isGenerator: true,
-                        recurrenceRule: parseGeneratorSpec(item.recurrenceRule, item) ?? defaultGeneratorSpec(item)
-                      }
-                )
-              }
-            />
-          ) : null}
         </div>
 
         {item.isTask ? (
@@ -138,9 +113,6 @@ export function ItemEditor({
       </div>
 
       {item.isInterval ? <IntervalEditor item={item} updateItem={updateItem} /> : null}
-      {item.isGenerator || item.generatedFromId ? (
-        <GenerationEditor item={item} items={items} occurrences={occurrences} updateItem={updateItem} />
-      ) : null}
 
       <TagsEditor item={item} updateItem={updateItem} />
 

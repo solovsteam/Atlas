@@ -17,7 +17,6 @@ export type Item = {
   isTask: boolean;
   isDocumentation: boolean;
   isInterval: boolean;
-  isGenerator: boolean;
   taskStatus: TaskStatus | null;
   manualRelevance: number;
   tags: string[];
@@ -43,7 +42,6 @@ export type ItemPatch = Partial<{
   isTask: boolean;
   isDocumentation: boolean;
   isInterval: boolean;
-  isGenerator: boolean;
   taskStatus: TaskStatus | null;
   manualRelevance: number;
   tags: string[];
@@ -68,13 +66,12 @@ export type CreateItemResult = {
 };
 
 export const EXTENDED_SCHEMA_MESSAGE =
-  "Interval and generator need the latest database schema. Run supabase/migrations/003_interval_generator.sql in your Supabase project.";
+  "Intervals and other extended item fields need the latest database schema. Run supabase/migrations/003_interval_extended.sql in your Supabase project.";
 
 export function patchUsesExtendedFields(patch: ItemPatch): boolean {
   return (
     patch.isDocumentation !== undefined ||
     patch.isInterval !== undefined ||
-    patch.isGenerator !== undefined ||
     patch.completionRule !== undefined ||
     patch.documentationSchema !== undefined ||
     patch.documentationData !== undefined ||
@@ -109,9 +106,6 @@ export function mergeItemPatch(item: Item, patch: ItemPatch): Item {
   }
   if (patch.isInterval !== undefined) {
     next.isInterval = patch.isInterval;
-  }
-  if (patch.isGenerator !== undefined) {
-    next.isGenerator = patch.isGenerator;
   }
   if (patch.taskStatus !== undefined) {
     if (patch.taskStatus === null) {
@@ -194,7 +188,6 @@ export function itemFromDbRow(row: {
   is_task: boolean;
   is_documentation?: boolean;
   is_interval?: boolean;
-  is_generator?: boolean;
   task_status: string;
   manual_relevance: number;
   tags: unknown;
@@ -227,7 +220,6 @@ export function itemFromDbRow(row: {
     isTask,
     isDocumentation: Boolean(row.is_documentation),
     isInterval: Boolean(row.is_interval),
-    isGenerator: Boolean(row.is_generator),
     taskStatus: parseTaskStatus(row.task_status, isTask),
     manualRelevance: Number(row.manual_relevance) || 0,
     tags,
@@ -258,7 +250,6 @@ export function applyPatch(
   is_task: boolean;
   is_documentation: boolean;
   is_interval: boolean;
-  is_generator: boolean;
   task_status: string;
   manual_relevance: number;
   tags: string[];
@@ -279,7 +270,6 @@ export function applyPatch(
     is_task: boolean;
     is_documentation: boolean;
     is_interval: boolean;
-    is_generator: boolean;
     task_status: string;
     manual_relevance: number;
     tags: string[];
@@ -313,9 +303,6 @@ export function applyPatch(
   }
   if (includeExtended && patch.isInterval !== undefined) {
     next.is_interval = patch.isInterval;
-  }
-  if (includeExtended && patch.isGenerator !== undefined) {
-    next.is_generator = patch.isGenerator;
   }
   if (patch.taskStatus !== undefined) {
     if (patch.taskStatus === null) {
@@ -381,9 +368,6 @@ export function itemKindLabel(item: Item): string {
   if (item.isInterval) {
     parts.push("interval");
   }
-  if (item.isGenerator) {
-    parts.push("generator");
-  }
   if (parts.length === 0) {
     return "note";
   }
@@ -391,7 +375,7 @@ export function itemKindLabel(item: Item): string {
 }
 
 export function newItemInsert(ownerId: string, title: string) {
-  // Only columns from 001_items.sql — migration 003 adds defaults for interval/generator fields.
+  // Only columns from 001_items.sql — migration 003 adds defaults for interval fields.
   return {
     owner_id: ownerId,
     title: cleanTitle(title),
@@ -413,7 +397,6 @@ export function itemToDbInsert(item: Item, ownerId: string) {
     is_task: item.isTask,
     is_documentation: item.isDocumentation,
     is_interval: item.isInterval,
-    is_generator: item.isGenerator,
     task_status: item.taskStatus ?? "",
     manual_relevance: item.manualRelevance,
     tags: item.tags,

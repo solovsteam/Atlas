@@ -5,7 +5,6 @@ import {
   EXTENDED_SCHEMA_MESSAGE,
   itemFromDbRow,
   itemToDbInsert,
-  mergeItemPatch,
   newItemInsert,
   parseJson,
   patchUsesExtendedFields,
@@ -14,7 +13,6 @@ import {
   type ItemPatch,
   type UpdateItemResult
 } from "@shared/item";
-import { deleteOccurrencesForTemplate, syncOccurrences } from "./generation";
 import type { Database, DbItemRow } from "../types/database";
 
 type Client = SupabaseClient<Database>;
@@ -61,10 +59,6 @@ export async function createItem(client: Client, userId: string, title: string):
   return { id: data.id, revision: data.revision };
 }
 
-function queueGenerationSync(client: Client, userId: string, templateId: string, items: Item[]): void {
-  void syncOccurrences(client, userId, templateId, items).catch(() => {});
-}
-
 export async function updateItem(
   client: Client,
   userId: string,
@@ -101,15 +95,8 @@ export async function updateItem(
     return { conflict: true, serverItem: current };
   }
 
-  if (patch.isGenerator === false && current.isGenerator) {
-    await deleteOccurrencesForTemplate(client, userId, id);
-  }
-
   const updates = applyPatch(current, patch, { includeExtended: extendedSchema });
   if (Object.keys(updates).length === 0) {
-    if (current.isGenerator && !current.generatedFromId && (patch.recurrenceRule !== undefined || patch.isGenerator)) {
-      queueGenerationSync(client, userId, id, [mergeItemPatch(current, patch)]);
-    }
     return { ok: true, revision: current.revision };
   }
 
@@ -132,13 +119,6 @@ export async function updateItem(
       return { conflict: true, serverItem: itemFromDbRow(latest as DbItemRow) };
     }
     throw new Error("Item not found");
-  }
-
-  const updatedItem = itemFromDbRow(updated as DbItemRow);
-  if (updatedItem.isGenerator && !updatedItem.generatedFromId) {
-    if (patch.recurrenceRule !== undefined || patch.isGenerator !== undefined) {
-      queueGenerationSync(client, userId, id, [updatedItem]);
-    }
   }
 
   return { ok: true, revision: nextRevision };

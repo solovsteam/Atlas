@@ -8,7 +8,7 @@ Atlas is a unified notes, tasks, and calendar app. The active codebase is **Vite
 
 ## Product vision
 
-- **One model:** everything is an **Item** (notes, tasks, intervals, generators, documentation).
+- **One model:** everything is an **Item** (notes, tasks, intervals, documentation).
 - **Graph, not folders:** relationships via **item links** (`context`, `documentation`, `generates`, `scheduled_in`).
 - **Now inbox:** relevance-ranked list with tags, status boosts, stable ordering.
 - **Calendar:** intervals as items; tasks linked via `scheduled_in`.
@@ -86,7 +86,7 @@ Source: `.lakebed/reference/` (read-only archive, gitignored).
 | Phase | Features | Reference paths |
 |-------|----------|-----------------|
 | **2** | Item links, associations panel, breadcrumbs | `shared/links.ts`, `client/components/AssociationsPanel.tsx`, `server/links.ts` |
-| **3** | Documentation items, completion rules, recurrence, generators | `shared/documentation.ts`, `completion.ts`, `recurrence.ts`, `generation.ts`, related client components |
+| **3** | Documentation items, completion rules, recurrence | `shared/documentation.ts`, `completion.ts`, `recurrence.ts`, related client components |
 | **4** | Intervals as items, calendar (day/week/month), task placement, schedule tab | `shared/interval.ts`, `schedule.ts`, `client/pages/CalendarPage.tsx`, `server/intervals.ts` |
 | **5** | Relevance metadata UI (location, startable window), fuzzy dates | `shared/startable.ts`, `locale.ts`, `client/components/*` |
 | **—** | Lakebed → Supabase data import | Design when schema catches up |
@@ -120,7 +120,7 @@ Notifications need **shared state** and usually **something online** for cross-d
 
 ### v3 — Calendar-aware & interval notifications
 
-- Notify when interval starts/ends, task startable window opens, generator creates occurrences.
+- Notify when interval starts/ends or a task startable window opens.
 - Depends on Phase 4 interval model being ported.
 
 ### Design rules for new code
@@ -145,7 +145,7 @@ Google OAuth: publish consent screen when opening to non-test users. Google does
 
 ## Agent checklist (new work)
 
-1. Read this file and [`AGENTS.md`](../AGENTS.md).
+1. Read this file, [`AGENTS.md`](../AGENTS.md), and [`LESSONS.md`](LESSONS.md).
 2. Keep domain logic in `shared/`; persistence in `src/services/`.
 3. Do not modify `.lakebed/reference/` except to refresh archive if explicitly asked.
 4. Add Supabase changes as SQL migrations in `supabase/migrations/`.

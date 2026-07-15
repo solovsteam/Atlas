@@ -2,7 +2,7 @@
 
 Unified notes, tasks, and calendar app — **Vite + React + Supabase**.
 
-**Agents:** read [`AGENTS.md`](AGENTS.md) and [`docs/ROADMAP.md`](docs/ROADMAP.md) before making changes.
+**Agents:** read [`AGENTS.md`](AGENTS.md), [`docs/ROADMAP.md`](docs/ROADMAP.md), and [`docs/LESSONS.md`](docs/LESSONS.md) before making changes.
 
 ## MVP (shipped)
 
@@ -16,7 +16,7 @@ Unified notes, tasks, and calendar app — **Vite + React + Supabase**.
 
 ## Planned (see roadmap)
 
-Calendar, intervals, generators, documentation items, item links, notifications, optional local-first sync — porting from archived Lakebed reference in `.lakebed/reference/` (local, gitignored).
+Calendar, intervals, documentation items, item links, notifications, optional local-first sync — porting from archived Lakebed reference in `.lakebed/reference/` (local, gitignored).
 
 ## Prerequisites
 
@@ -50,7 +50,7 @@ Non-technical users should use a **hosted URL** (Vercel + Supabase), not a clone
 ## One-time Supabase setup
 
 1. Create a project at [supabase.com/dashboard](https://supabase.com/dashboard).
-2. Run [`supabase/migrations/001_items.sql`](supabase/migrations/001_items.sql) in the SQL Editor (or `supabase db push` if linked).
+2. Run all SQL files in [`supabase/migrations/`](supabase/migrations/) in order (or `supabase db push` if linked).
 3. Enable Google auth:
    - **Authentication → Providers → Google** — OAuth client from [Google Cloud Console](https://console.cloud.google.com/).
    - Google redirect URI: `https://<project-ref>.supabase.co/auth/v1/callback`

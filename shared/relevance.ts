@@ -106,10 +106,7 @@ export function sortItemsByRelevance(items: Item[], ctx: RelevanceContext): Item
 }
 
 export function buildInboxEntries(items: Item[], ctx: RelevanceContext): InboxEntry[] {
-  return sortItemsByRelevance(
-    items.filter((item) => !item.isInterval && !item.isGenerator),
-    ctx
-  );
+  return sortItemsByRelevance(items, ctx);
 }
 
 export function collectTags(items: Item[]): string[] {
@@ -130,11 +127,6 @@ export function searchItems(items: Item[], query: string): Item[] {
     return [];
   }
   return items
-    .filter(
-      (item) =>
-        !item.isInterval &&
-        !item.isGenerator &&
-        (item.title.toLowerCase().includes(needle) || item.body.toLowerCase().includes(needle))
-    )
+    .filter((item) => item.title.toLowerCase().includes(needle) || item.body.toLowerCase().includes(needle))
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }

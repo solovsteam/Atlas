@@ -1,10 +1,10 @@
 import type { Item } from "./item";
 import { formatIsoDateTime } from "./locale";
 
-export type SlotKind = "fixed" | "due" | "window" | "allDay";
+export type SlotKind = "fixed" | "due" | "allDay";
 export type SlotStatus = "scheduled" | "archived";
 
-export const SLOT_KINDS: SlotKind[] = ["fixed", "due", "window", "allDay"];
+export const SLOT_KINDS: SlotKind[] = ["fixed", "due", "allDay"];
 export const SLOT_STATUSES: SlotStatus[] = ["scheduled", "archived"];
 
 export type ScheduleSlot = {
@@ -28,6 +28,9 @@ export type ScheduleSlotPatch = Partial<{
 }>;
 
 export function parseSlotKind(value: string): SlotKind {
+  if (value === "window") {
+    return "fixed";
+  }
   if (SLOT_KINDS.includes(value as SlotKind)) {
     return value as SlotKind;
   }
@@ -87,8 +90,6 @@ export function slotKindLabel(kind: SlotKind): string {
       return "Fixed time";
     case "due":
       return "Due date";
-    case "window":
-      return "Work window";
     case "allDay":
       return "All day";
   }

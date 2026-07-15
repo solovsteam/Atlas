@@ -10,7 +10,6 @@ export type RelevanceContext = {
 export type InboxEntry = Item;
 
 type RankSignals = {
-  boostedInactive: boolean;
   activeTask: boolean;
   inactiveTask: boolean;
   isNote: boolean;
@@ -32,21 +31,12 @@ function hasStatusBoost(item: Item, ctx: RelevanceContext): boolean {
   );
 }
 
-function hasBoostedInactiveStatus(item: Item, ctx: RelevanceContext): boolean {
-  if (!item.isTask) {
-    return false;
-  }
-  const status = item.taskStatus ?? "active";
-  return status !== "active" && hasStatusBoost(item, ctx);
-}
-
 function rankSignals(item: Item, ctx: RelevanceContext): RankSignals {
   const status = item.taskStatus ?? "active";
   const activeTask = item.isTask && status === "active";
   const inactiveTask = item.isTask && status !== "active";
 
   return {
-    boostedInactive: hasBoostedInactiveStatus(item, ctx),
     activeTask,
     inactiveTask,
     isNote: !item.isTask,
@@ -67,12 +57,21 @@ export function compareItems(a: Item, b: Item, ctx: RelevanceContext): number {
   const left = rankSignals(a, ctx);
   const right = rankSignals(b, ctx);
 
-  let result = compareBooleanSignal(left.boostedInactive, right.boostedInactive);
-  if (result !== 0) {
-    return result;
+  if (ctx.activeTags.length > 0) {
+    const result = compareBooleanSignal(left.tagMatch, right.tagMatch);
+    if (result !== 0) {
+      return result;
+    }
   }
 
-  result = compareBooleanSignal(left.activeTask, right.activeTask);
+  if (ctx.activeStatusBoosts.length > 0) {
+    const result = compareBooleanSignal(left.statusBoost, right.statusBoost);
+    if (result !== 0) {
+      return result;
+    }
+  }
+
+  let result = compareBooleanSignal(left.activeTask, right.activeTask);
   if (result !== 0) {
     return result;
   }
@@ -82,16 +81,6 @@ export function compareItems(a: Item, b: Item, ctx: RelevanceContext): number {
   }
   if (left.inactiveTask && right.isNote) {
     return 1;
-  }
-
-  result = compareBooleanSignal(left.tagMatch, right.tagMatch);
-  if (result !== 0) {
-    return result;
-  }
-
-  result = compareBooleanSignal(left.statusBoost, right.statusBoost);
-  if (result !== 0) {
-    return result;
   }
 
   if (left.manualRelevance !== right.manualRelevance) {

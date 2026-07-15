@@ -1,6 +1,8 @@
 import type { Item, ItemPatch, UpdateItemResult } from "@shared/item";
+import { EXTENDED_SCHEMA_MESSAGE } from "@shared/item";
 import { useAutosaveItem } from "../hooks/useAutosaveItem";
 import { trackItemPatchUndo, trackTaskStatusUndo, useUndo } from "../context/UndoContext";
+import { useAtlasData } from "../context/AtlasDataContext";
 import { GenerationEditor } from "./GenerationEditor";
 import { IntervalEditor } from "./IntervalEditor";
 import { TagsEditor } from "./TagsEditor";
@@ -16,6 +18,7 @@ export function ItemEditor({
   updateItem: (id: string, patchJson: string, expectedRevision: number) => Promise<UpdateItemResult>;
 }) {
   const { push } = useUndo();
+  const { extendedSchema } = useAtlasData();
   const autosave = useAutosaveItem(item, updateItem, (before) => {
     trackItemPatchUndo(push, item.id, before);
   });
@@ -40,13 +43,25 @@ export function ItemEditor({
       before.recurrenceRule = item.recurrenceRule;
     }
 
-    const result = await updateItem(item.id, JSON.stringify(patch), autosave.revision);
+    const result = await updateItem(item.id, JSON.stringify(patch), item.revision);
+    if ("conflict" in result && result.conflict) {
+      window.alert("This item was updated elsewhere. Refresh the page to continue.");
+      return;
+    }
     if ("ok" in result && result.ok) {
       if (patch.taskStatus !== undefined) {
         trackTaskStatusUndo(push, item);
       } else if (Object.keys(before).length > 0) {
         trackItemPatchUndo(push, item.id, before);
       }
+    }
+  }
+
+  async function patchItemSafe(patch: ItemPatch) {
+    try {
+      await patchItem(patch);
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : "Could not save changes");
     }
   }
 
@@ -68,13 +83,17 @@ export function ItemEditor({
 
       <div className="mb-6 rounded border border-neutral-800 p-4">
         <p className="mb-3 text-xs uppercase tracking-wide text-neutral-500">Capabilities</p>
+        {!extendedSchema ? (
+          <p className="mb-4 text-sm text-amber-200/90">{EXTENDED_SCHEMA_MESSAGE}</p>
+        ) : null}
         <div className="mb-4 flex flex-wrap gap-2">
-          <CapabilityToggle active={item.isTask} label="Task" onToggle={() => void patchItem({ isTask: !item.isTask })} />
+          <CapabilityToggle active={item.isTask} label="Task" onToggle={() => void patchItemSafe({ isTask: !item.isTask })} />
           <CapabilityToggle
             active={item.isInterval}
             label="Interval"
+            disabled={!extendedSchema}
             onToggle={() =>
-              void patchItem(
+              void patchItemSafe(
                 item.isInterval
                   ? {
                       isInterval: false,
@@ -95,8 +114,9 @@ export function ItemEditor({
             <CapabilityToggle
               active={item.isGenerator}
               label="Generator"
+              disabled={!extendedSchema}
               onToggle={() =>
-                void patchItem(item.isGenerator ? { isGenerator: false, recurrenceRule: null } : { isGenerator: true })
+                void patchItemSafe(item.isGenerator ? { isGenerator: false, recurrenceRule: null } : { isGenerator: true })
               }
             />
           ) : null}
@@ -105,7 +125,7 @@ export function ItemEditor({
         {item.isTask ? (
           <div className="mb-4">
             <p className="mb-2 text-xs text-neutral-500">Task status</p>
-            <TaskStatusButtons status={item.taskStatus ?? "active"} onChange={(status) => void patchItem({ taskStatus: status })} />
+            <TaskStatusButtons status={item.taskStatus ?? "active"} onChange={(status) => void patchItemSafe({ taskStatus: status })} />
           </div>
         ) : (
           <p className="mb-4 text-sm text-neutral-500">Plain note — no task status until you enable Task.</p>
@@ -141,14 +161,25 @@ export function ItemEditor({
   );
 }
 
-function CapabilityToggle({ active, label, onToggle }: { active: boolean; label: string; onToggle: () => void }) {
+function CapabilityToggle({
+  active,
+  label,
+  disabled = false,
+  onToggle
+}: {
+  active: boolean;
+  label: string;
+  disabled?: boolean;
+  onToggle: () => void;
+}) {
   return (
     <button
       className={
         active
           ? "rounded border border-white bg-white px-3 py-1.5 text-xs font-medium text-black"
-          : "rounded border border-neutral-700 px-3 py-1.5 text-xs text-neutral-300 hover:border-neutral-500"
+          : "rounded border border-neutral-700 px-3 py-1.5 text-xs text-neutral-300 hover:border-neutral-500 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-neutral-700"
       }
+      disabled={disabled}
       type="button"
       onClick={onToggle}
     >

@@ -2,21 +2,29 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   applyPatch,
   cleanTitle,
+  EXTENDED_SCHEMA_MESSAGE,
   itemFromDbRow,
   itemToDbInsert,
+  mergeItemPatch,
   newItemInsert,
   parseJson,
+  patchUsesExtendedFields,
   type CreateItemResult,
   type Item,
   type ItemPatch,
   type UpdateItemResult
 } from "@shared/item";
-import { deleteOccurrencesForTemplate, syncAllGenerations, syncOccurrences } from "./generation";
+import { deleteOccurrencesForTemplate, syncOccurrences } from "./generation";
 import type { Database, DbItemRow } from "../types/database";
 
 type Client = SupabaseClient<Database>;
 
-export async function listOwnedItems(client: Client, userId: string): Promise<Item[]> {
+export type UpdateItemOptions = {
+  knownItem?: Item;
+  extendedSchema?: boolean;
+};
+
+export async function fetchOwnedItems(client: Client, userId: string): Promise<Item[]> {
   const { data, error } = await client
     .from("items")
     .select("*")
@@ -27,23 +35,11 @@ export async function listOwnedItems(client: Client, userId: string): Promise<It
     throw new Error(error.message);
   }
 
-  const items = (data ?? []).map((row) => itemFromDbRow(row as DbItemRow));
+  return (data ?? []).map((row) => itemFromDbRow(row as DbItemRow));
+}
 
-  try {
-    await syncAllGenerations(client, userId);
-    const { data: refreshed, error: refreshError } = await client
-      .from("items")
-      .select("*")
-      .eq("owner_id", userId)
-      .order("updated_at", { ascending: false });
-    if (!refreshError && refreshed) {
-      return refreshed.map((row) => itemFromDbRow(row as DbItemRow));
-    }
-  } catch {
-    // Generation sync is best-effort on load; return items we already have.
-  }
-
-  return items;
+export async function listOwnedItems(client: Client, userId: string): Promise<Item[]> {
+  return fetchOwnedItems(client, userId);
 }
 
 export async function createItem(client: Client, userId: string, title: string): Promise<CreateItemResult> {
@@ -65,39 +61,54 @@ export async function createItem(client: Client, userId: string, title: string):
   return { id: data.id, revision: data.revision };
 }
 
+function queueGenerationSync(client: Client, userId: string, templateId: string, items: Item[]): void {
+  void syncOccurrences(client, userId, templateId, items).catch(() => {});
+}
+
 export async function updateItem(
   client: Client,
   userId: string,
   id: string,
   patchJson: string,
-  expectedRevision: number
+  expectedRevision: number,
+  options: UpdateItemOptions = {}
 ): Promise<UpdateItemResult> {
-  const { data: row, error: fetchError } = await client.from("items").select("*").eq("id", id).single();
+  const extendedSchema = options.extendedSchema ?? true;
+  const patch = parseJson<ItemPatch>(patchJson, {});
 
-  if (fetchError || !row) {
-    throw new Error("Item not found");
+  if (patchUsesExtendedFields(patch) && !extendedSchema) {
+    throw new Error(EXTENDED_SCHEMA_MESSAGE);
   }
 
-  const dbRow = row as DbItemRow;
-  if (dbRow.owner_id !== userId) {
-    throw new Error("Item not found");
+  let current: Item | null = options.knownItem ?? null;
+  if (current && (current.id !== id || current.ownerId !== userId)) {
+    current = null;
   }
 
-  const current = itemFromDbRow(dbRow);
+  if (!current) {
+    const { data: row, error: fetchError } = await client.from("items").select("*").eq("id", id).single();
+    if (fetchError || !row) {
+      throw new Error("Item not found");
+    }
+    const dbRow = row as DbItemRow;
+    if (dbRow.owner_id !== userId) {
+      throw new Error("Item not found");
+    }
+    current = itemFromDbRow(dbRow);
+  }
+
   if (current.revision !== expectedRevision) {
     return { conflict: true, serverItem: current };
   }
-
-  const patch = parseJson<ItemPatch>(patchJson, {});
 
   if (patch.isGenerator === false && current.isGenerator) {
     await deleteOccurrencesForTemplate(client, userId, id);
   }
 
-  const updates = applyPatch(current, patch);
+  const updates = applyPatch(current, patch, { includeExtended: extendedSchema });
   if (Object.keys(updates).length === 0) {
     if (current.isGenerator && !current.generatedFromId && (patch.recurrenceRule !== undefined || patch.isGenerator)) {
-      await syncOccurrences(client, userId, id);
+      queueGenerationSync(client, userId, id, [mergeItemPatch(current, patch)]);
     }
     return { ok: true, revision: current.revision };
   }
@@ -126,7 +137,7 @@ export async function updateItem(
   const updatedItem = itemFromDbRow(updated as DbItemRow);
   if (updatedItem.isGenerator && !updatedItem.generatedFromId) {
     if (patch.recurrenceRule !== undefined || patch.isGenerator !== undefined) {
-      await syncOccurrences(client, userId, id);
+      queueGenerationSync(client, userId, id, [updatedItem]);
     }
   }
 

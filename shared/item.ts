@@ -67,6 +67,98 @@ export type CreateItemResult = {
   revision: number;
 };
 
+export const EXTENDED_SCHEMA_MESSAGE =
+  "Interval and generator need the latest database schema. Run supabase/migrations/003_interval_generator.sql in your Supabase project.";
+
+export function patchUsesExtendedFields(patch: ItemPatch): boolean {
+  return (
+    patch.isDocumentation !== undefined ||
+    patch.isInterval !== undefined ||
+    patch.isGenerator !== undefined ||
+    patch.completionRule !== undefined ||
+    patch.documentationSchema !== undefined ||
+    patch.documentationData !== undefined ||
+    patch.recurrenceRule !== undefined ||
+    patch.overriddenFields !== undefined ||
+    patch.intervalKind !== undefined ||
+    patch.intervalStartsAt !== undefined ||
+    patch.intervalEndsAt !== undefined ||
+    patch.intervalStatus !== undefined
+  );
+}
+
+export function mergeItemPatch(item: Item, patch: ItemPatch): Item {
+  const next: Item = { ...item };
+
+  if (patch.title !== undefined) {
+    next.title = cleanTitle(patch.title);
+  }
+  if (patch.body !== undefined) {
+    next.body = cleanBody(patch.body);
+  }
+  if (patch.isTask !== undefined) {
+    next.isTask = patch.isTask;
+    if (!patch.isTask) {
+      next.taskStatus = null;
+    } else if (patch.taskStatus === undefined && !next.taskStatus) {
+      next.taskStatus = "active";
+    }
+  }
+  if (patch.isDocumentation !== undefined) {
+    next.isDocumentation = patch.isDocumentation;
+  }
+  if (patch.isInterval !== undefined) {
+    next.isInterval = patch.isInterval;
+  }
+  if (patch.isGenerator !== undefined) {
+    next.isGenerator = patch.isGenerator;
+  }
+  if (patch.taskStatus !== undefined) {
+    if (patch.taskStatus === null) {
+      next.taskStatus = null;
+    } else if (TASK_STATUSES.includes(patch.taskStatus)) {
+      next.taskStatus = patch.taskStatus;
+      next.isTask = true;
+    }
+  }
+  if (patch.manualRelevance !== undefined) {
+    next.manualRelevance = patch.manualRelevance;
+  }
+  if (patch.tags !== undefined) {
+    next.tags = patch.tags;
+  }
+  if (patch.completionRule !== undefined) {
+    next.completionRule = patch.completionRule;
+  }
+  if (patch.documentationSchema !== undefined) {
+    next.documentationSchema = patch.documentationSchema;
+  }
+  if (patch.documentationData !== undefined) {
+    next.documentationData = patch.documentationData;
+  }
+  if (patch.recurrenceRule !== undefined) {
+    next.recurrenceRule = patch.recurrenceRule;
+  }
+  if (patch.overriddenFields !== undefined) {
+    next.overriddenFields = patch.overriddenFields;
+  }
+  if (patch.intervalKind !== undefined) {
+    next.intervalKind = patch.intervalKind;
+  }
+  if (patch.intervalStartsAt !== undefined) {
+    next.intervalStartsAt = patch.intervalStartsAt ?? "";
+  }
+  if (patch.intervalEndsAt !== undefined) {
+    next.intervalEndsAt = patch.intervalEndsAt ?? "";
+  }
+  if (patch.intervalStatus !== undefined) {
+    next.intervalStatus = patch.intervalStatus;
+  }
+
+  next.revision = item.revision + 1;
+  return next;
+}
+
 export function parseJson<T>(value: string, fallback: T): T {
   if (!value) {
     return fallback;
@@ -157,7 +249,11 @@ export function itemFromDbRow(row: {
   };
 }
 
-export function applyPatch(item: Item, patch: ItemPatch): Partial<{
+export function applyPatch(
+  item: Item,
+  patch: ItemPatch,
+  options?: { includeExtended?: boolean }
+): Partial<{
   title: string;
   body: string;
   is_task: boolean;
@@ -177,6 +273,7 @@ export function applyPatch(item: Item, patch: ItemPatch): Partial<{
   interval_ends_at: string;
   interval_status: string;
 }> {
+  const includeExtended = options?.includeExtended ?? true;
   const next: Partial<{
     title: string;
     body: string;
@@ -212,13 +309,13 @@ export function applyPatch(item: Item, patch: ItemPatch): Partial<{
       next.task_status = "active";
     }
   }
-  if (patch.isDocumentation !== undefined) {
+  if (includeExtended && patch.isDocumentation !== undefined) {
     next.is_documentation = patch.isDocumentation;
   }
-  if (patch.isInterval !== undefined) {
+  if (includeExtended && patch.isInterval !== undefined) {
     next.is_interval = patch.isInterval;
   }
-  if (patch.isGenerator !== undefined) {
+  if (includeExtended && patch.isGenerator !== undefined) {
     next.is_generator = patch.isGenerator;
   }
   if (patch.taskStatus !== undefined) {
@@ -235,31 +332,31 @@ export function applyPatch(item: Item, patch: ItemPatch): Partial<{
   if (patch.tags !== undefined) {
     next.tags = patch.tags;
   }
-  if (patch.completionRule !== undefined) {
+  if (includeExtended && patch.completionRule !== undefined) {
     next.completion_rule = patch.completionRule;
   }
-  if (patch.documentationSchema !== undefined) {
+  if (includeExtended && patch.documentationSchema !== undefined) {
     next.documentation_schema = patch.documentationSchema;
   }
-  if (patch.documentationData !== undefined) {
+  if (includeExtended && patch.documentationData !== undefined) {
     next.documentation_data = patch.documentationData;
   }
-  if (patch.recurrenceRule !== undefined) {
+  if (includeExtended && patch.recurrenceRule !== undefined) {
     next.recurrence_rule = patch.recurrenceRule;
   }
-  if (patch.overriddenFields !== undefined) {
+  if (includeExtended && patch.overriddenFields !== undefined) {
     next.overridden_fields = patch.overriddenFields;
   }
-  if (patch.intervalKind !== undefined) {
+  if (includeExtended && patch.intervalKind !== undefined) {
     next.interval_kind = patch.intervalKind;
   }
-  if (patch.intervalStartsAt !== undefined) {
+  if (includeExtended && patch.intervalStartsAt !== undefined) {
     next.interval_starts_at = patch.intervalStartsAt ?? "";
   }
-  if (patch.intervalEndsAt !== undefined) {
+  if (includeExtended && patch.intervalEndsAt !== undefined) {
     next.interval_ends_at = patch.intervalEndsAt ?? "";
   }
-  if (patch.intervalStatus !== undefined) {
+  if (includeExtended && patch.intervalStatus !== undefined) {
     next.interval_status = patch.intervalStatus;
   }
 

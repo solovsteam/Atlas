@@ -1,20 +1,24 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { childDocumentationData, formatOccurrenceKey, isPastOccurrenceKey, needsCalendarSchedule, OVERRIDE_FIELDS, parseGenerationSpec, plannedOccurrenceKeys, resolveChildTitle, slotTimesForOccurrence, type GenerationSpec } from "@shared/generation";
-import { itemFromDbRow, toJson, type Item } from "@shared/item";
-import type { Database, DbItemRow } from "../types/database";
+import {
+  childDocumentationData,
+  formatOccurrenceKey,
+  isPastOccurrenceKey,
+  needsCalendarSchedule,
+  OVERRIDE_FIELDS,
+  parseGenerationSpec,
+  plannedOccurrenceKeys,
+  resolveChildTitle,
+  slotTimesForOccurrence,
+  type GenerationSpec
+} from "@shared/generation";
+import { toJson, type Item } from "@shared/item";
+import { fetchOwnedItems } from "./items";
+import type { Database } from "../types/database";
 
 type Client = SupabaseClient<Database>;
 
 function listOccurrences(items: Item[], templateId: string): Item[] {
   return items.filter((item) => item.generatedFromId === templateId);
-}
-
-async function fetchOwnedItems(client: Client, userId: string): Promise<Item[]> {
-  const { data, error } = await client.from("items").select("*").eq("owner_id", userId);
-  if (error) {
-    throw new Error(error.message);
-  }
-  return (data ?? []).map((row) => itemFromDbRow(row as DbItemRow));
 }
 
 async function deleteOccurrence(client: Client, userId: string, itemId: string): Promise<void> {
@@ -24,12 +28,7 @@ async function deleteOccurrence(client: Client, userId: string, itemId: string):
   }
 }
 
-function occurrenceInsert(
-  userId: string,
-  template: Item,
-  spec: GenerationSpec,
-  occurrenceKey: string
-) {
+function occurrenceInsert(userId: string, template: Item, spec: GenerationSpec, occurrenceKey: string) {
   const child = spec.child;
   const title = resolveChildTitle(child.title, occurrenceKey, template);
   const times = needsCalendarSchedule(child) ? slotTimesForOccurrence(occurrenceKey, child.schedule) : null;
@@ -154,10 +153,10 @@ export async function syncOccurrences(
   client: Client,
   userId: string,
   templateId: string,
+  itemsCache: Item[],
   now = new Date()
 ): Promise<void> {
-  const items = await fetchOwnedItems(client, userId);
-  const template = items.find((entry) => entry.id === templateId);
+  const template = itemsCache.find((entry) => entry.id === templateId);
   if (!template?.isGenerator || template.generatedFromId) {
     return;
   }
@@ -170,7 +169,7 @@ export async function syncOccurrences(
   const keys = plannedOccurrenceKeys(spec, template, now);
   const keySet = new Set(keys);
   const todayKey = formatOccurrenceKey(new Date(now.getFullYear(), now.getMonth(), now.getDate()));
-  const existing = listOccurrences(items, templateId);
+  const existing = listOccurrences(itemsCache, templateId);
   const existingByKey = new Map(existing.map((item) => [item.occurrenceKey, item]));
 
   for (const item of existing) {
@@ -194,16 +193,28 @@ export async function syncOccurrences(
 }
 
 export async function deleteOccurrencesForTemplate(client: Client, userId: string, templateId: string): Promise<void> {
-  const items = await fetchOwnedItems(client, userId);
-  for (const item of listOccurrences(items, templateId)) {
-    await deleteOccurrence(client, userId, item.id);
+  const { data, error } = await client
+    .from("items")
+    .select("id")
+    .eq("owner_id", userId)
+    .eq("generated_from_id", templateId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  for (const row of data ?? []) {
+    await deleteOccurrence(client, userId, row.id);
   }
 }
 
-export async function syncAllGenerations(client: Client, userId: string, now = new Date()): Promise<void> {
-  const items = await fetchOwnedItems(client, userId);
-  const templates = items.filter((item) => item.isGenerator && !item.generatedFromId);
+export async function syncAllGenerations(client: Client, userId: string, itemsCache: Item[], now = new Date()): Promise<void> {
+  const templates = itemsCache.filter((item) => item.isGenerator && !item.generatedFromId);
   for (const template of templates) {
-    await syncOccurrences(client, userId, template.id, now);
+    await syncOccurrences(client, userId, template.id, itemsCache, now);
   }
+}
+
+export async function refreshItemsAfterGenerationSync(client: Client, userId: string): Promise<Item[]> {
+  return fetchOwnedItems(client, userId);
 }

@@ -2,13 +2,16 @@ import { useCallback, useEffect, useState } from "react";
 import type { Item } from "@shared/item";
 import { itemFromDbRow } from "@shared/item";
 import { supabase } from "../lib/supabase";
-import { listOwnedItems } from "../services/items";
+import { refreshItemsAfterGenerationSync, syncAllGenerations } from "../services/generation";
+import { fetchOwnedItems } from "../services/items";
+import { probeExtendedItemSchema } from "../services/schema";
 import type { DbItemRow } from "../types/database";
 
 export function useItems(userId: string | undefined) {
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [extendedSchema, setExtendedSchema] = useState(true);
 
   const refresh = useCallback(async () => {
     if (!userId) {
@@ -19,11 +22,18 @@ export function useItems(userId: string | undefined) {
 
     try {
       setError(null);
-      const next = await listOwnedItems(supabase, userId);
+      const schema = await probeExtendedItemSchema(supabase);
+      setExtendedSchema(schema);
+      const next = await fetchOwnedItems(supabase, userId);
       setItems(next);
+      setLoading(false);
+
+      void syncAllGenerations(supabase, userId, next)
+        .then(() => refreshItemsAfterGenerationSync(supabase, userId))
+        .then((refreshed) => setItems(refreshed))
+        .catch(() => {});
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load items");
-    } finally {
       setLoading(false);
     }
   }, [userId]);
@@ -86,8 +96,6 @@ export function useItems(userId: string | undefined) {
           });
         }
       )
-      // DELETE payloads only include replica-identity columns (id), not owner_id —
-      // so an owner_id filter silently drops delete events on other tabs.
       .on("postgres_changes", { event: "DELETE", schema: "public", table: "items" }, (payload) => {
         const deletedId = (payload.old as { id?: string }).id;
         if (!deletedId) {
@@ -102,5 +110,5 @@ export function useItems(userId: string | undefined) {
     };
   }, [userId]);
 
-  return { items, loading, error, refresh, removeItemById, upsertItem };
+  return { items, loading, error, extendedSchema, refresh, removeItemById, upsertItem };
 }

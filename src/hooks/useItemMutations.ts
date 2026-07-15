@@ -3,7 +3,7 @@ import type { Item, CreateItemResult, UpdateItemResult } from "@shared/item";
 import { supabase } from "../lib/supabase";
 import { createItem, deleteItem, restoreItem, updateItem } from "../services/items";
 
-export function useItemMutations(userId: string | undefined) {
+export function useItemMutations(userId: string | undefined, extendedSchema = true) {
   const create = useCallback(
     async (title: string): Promise<CreateItemResult> => {
       if (!userId) {
@@ -15,13 +15,18 @@ export function useItemMutations(userId: string | undefined) {
   );
 
   const update = useCallback(
-    async (id: string, patchJson: string, expectedRevision: number): Promise<UpdateItemResult> => {
+    async (
+      id: string,
+      patchJson: string,
+      expectedRevision: number,
+      knownItem?: Item
+    ): Promise<UpdateItemResult> => {
       if (!userId) {
         throw new Error("Not signed in");
       }
-      return updateItem(supabase, userId, id, patchJson, expectedRevision);
+      return updateItem(supabase, userId, id, patchJson, expectedRevision, { knownItem, extendedSchema });
     },
-    [userId]
+    [userId, extendedSchema]
   );
 
   const remove = useCallback(

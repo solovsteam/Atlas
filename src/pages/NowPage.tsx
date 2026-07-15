@@ -26,9 +26,13 @@ export function NowPage() {
   const list = showingSearch ? searchResults : visible;
 
   async function setTaskStatus(item: Item, status: TaskStatus) {
-    const result = await updateItem(item.id, JSON.stringify({ taskStatus: status }), item.revision);
-    if ("ok" in result && result.ok) {
-      trackTaskStatusUndo(push, item);
+    try {
+      const result = await updateItem(item.id, JSON.stringify({ taskStatus: status }), item.revision);
+      if ("ok" in result && result.ok) {
+        trackTaskStatusUndo(push, item);
+      }
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : "Could not update status");
     }
   }
 

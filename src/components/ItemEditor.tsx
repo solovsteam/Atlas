@@ -5,6 +5,7 @@ import { trackItemPatchUndo, trackTaskStatusUndo, useUndo } from "../context/Und
 import { useAtlasData } from "../context/AtlasDataContext";
 import { IntervalEditor } from "./IntervalEditor";
 import { TagsEditor } from "./TagsEditor";
+import { TaskDurationEditor } from "./TaskDurationEditor";
 import { TaskStatusButtons } from "./TaskStatusButtons";
 
 export function ItemEditor({
@@ -102,6 +103,7 @@ export function ItemEditor({
           <div className="mb-4">
             <p className="mb-2 text-xs text-neutral-500">Task status</p>
             <TaskStatusButtons status={item.taskStatus ?? "active"} onChange={(status) => void patchItemSafe({ taskStatus: status })} />
+            <TaskDurationEditor item={item} updateItem={updateItem} />
           </div>
         ) : (
           <p className="mb-4 text-sm text-neutral-500">Plain note — no task status until you enable Task.</p>

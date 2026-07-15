@@ -78,6 +78,7 @@ Supabase is currently used in ~5 files; `shared/` domain logic is portable. **Do
 - [x] Item detail: autosave, revision conflicts
 - [x] Undo (Cmd/Ctrl+Z and button)
 - [x] Realtime item list (Supabase Realtime)
+- [x] Task expected duration (minutes, for future calendar / auto-scheduling)
 
 ### To port from Lakebed reference
 

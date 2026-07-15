@@ -1,4 +1,5 @@
 import { parseCompletionRule } from "./completion";
+import { parseStoredTaskDuration } from "./duration";
 
 export type TaskStatus = "active" | "done" | "cancelled";
 
@@ -18,6 +19,7 @@ export type Item = {
   isDocumentation: boolean;
   isInterval: boolean;
   taskStatus: TaskStatus | null;
+  expectedDurationMinutes: number | null;
   manualRelevance: number;
   tags: string[];
   completionRule: CompletionRule | null;
@@ -43,6 +45,7 @@ export type ItemPatch = Partial<{
   isDocumentation: boolean;
   isInterval: boolean;
   taskStatus: TaskStatus | null;
+  expectedDurationMinutes: number | null;
   manualRelevance: number;
   tags: string[];
   completionRule: CompletionRule | null;
@@ -114,6 +117,9 @@ export function mergeItemPatch(item: Item, patch: ItemPatch): Item {
       next.taskStatus = patch.taskStatus;
       next.isTask = true;
     }
+  }
+  if (patch.expectedDurationMinutes !== undefined) {
+    next.expectedDurationMinutes = patch.expectedDurationMinutes;
   }
   if (patch.manualRelevance !== undefined) {
     next.manualRelevance = patch.manualRelevance;
@@ -189,6 +195,7 @@ export function itemFromDbRow(row: {
   is_documentation?: boolean;
   is_interval?: boolean;
   task_status: string;
+  task_expected_minutes?: number | null;
   manual_relevance: number;
   tags: unknown;
   completion_rule?: unknown;
@@ -221,6 +228,7 @@ export function itemFromDbRow(row: {
     isDocumentation: Boolean(row.is_documentation),
     isInterval: Boolean(row.is_interval),
     taskStatus: parseTaskStatus(row.task_status, isTask),
+    expectedDurationMinutes: parseStoredTaskDuration(row.task_expected_minutes),
     manualRelevance: Number(row.manual_relevance) || 0,
     tags,
     completionRule: parseCompletionRule(row.completion_rule),
@@ -251,6 +259,7 @@ export function applyPatch(
   is_documentation: boolean;
   is_interval: boolean;
   task_status: string;
+  task_expected_minutes: number | null;
   manual_relevance: number;
   tags: string[];
   completion_rule: unknown;
@@ -271,6 +280,7 @@ export function applyPatch(
     is_documentation: boolean;
     is_interval: boolean;
     task_status: string;
+    task_expected_minutes: number | null;
     manual_relevance: number;
     tags: string[];
     completion_rule: unknown;
@@ -311,6 +321,9 @@ export function applyPatch(
       next.task_status = patch.taskStatus;
       next.is_task = true;
     }
+  }
+  if (patch.expectedDurationMinutes !== undefined) {
+    next.task_expected_minutes = patch.expectedDurationMinutes;
   }
   if (patch.manualRelevance !== undefined) {
     next.manual_relevance = patch.manualRelevance;
@@ -398,6 +411,7 @@ export function itemToDbInsert(item: Item, ownerId: string) {
     is_documentation: item.isDocumentation,
     is_interval: item.isInterval,
     task_status: item.taskStatus ?? "",
+    task_expected_minutes: item.expectedDurationMinutes,
     manual_relevance: item.manualRelevance,
     tags: item.tags,
     completion_rule: item.completionRule,

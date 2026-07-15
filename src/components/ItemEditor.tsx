@@ -94,17 +94,11 @@ export function ItemEditor({
             onToggle={() =>
               void patchItemSafe(
                 item.isInterval
-                  ? {
-                      isInterval: false,
-                      intervalKind: "",
-                      intervalStartsAt: null,
-                      intervalEndsAt: null,
-                      intervalStatus: ""
-                    }
+                  ? { isInterval: false }
                   : {
                       isInterval: true,
-                      intervalKind: "fixed",
-                      intervalStatus: "scheduled"
+                      ...(item.intervalKind ? {} : { intervalKind: "fixed" }),
+                      ...(item.intervalStatus ? {} : { intervalStatus: "scheduled" })
                     }
               )
             }
@@ -114,9 +108,7 @@ export function ItemEditor({
               active={item.isGenerator}
               label="Generator"
               disabled={!extendedSchema}
-              onToggle={() =>
-                void patchItemSafe(item.isGenerator ? { isGenerator: false, recurrenceRule: null } : { isGenerator: true })
-              }
+              onToggle={() => void patchItemSafe({ isGenerator: !item.isGenerator })}
             />
           ) : null}
         </div>

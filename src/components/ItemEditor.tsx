@@ -79,6 +79,20 @@ export function ItemEditor({
         </div>
       ) : null}
 
+      <div className="mb-6">
+        <label className="block">
+          <span className="mb-1 block text-xs uppercase tracking-wide text-neutral-500">Title</span>
+          <input
+            className="w-full border border-neutral-700 bg-black px-3 py-2 text-2xl font-semibold outline-none focus:border-white"
+            value={autosave.draft.title}
+            onChange={(event) => autosave.updateTitle(event.target.value)}
+          />
+        </label>
+        <p className="mt-2 h-4 text-xs leading-4 text-neutral-500" aria-live="polite">
+          {autosave.saving ? "Saving…" : ""}
+        </p>
+      </div>
+
       <div className="mb-6 rounded border border-neutral-800 p-4">
         <p className="mb-3 text-xs uppercase tracking-wide text-neutral-500">Capabilities</p>
         {!extendedSchema ? (
@@ -115,21 +129,11 @@ export function ItemEditor({
         ) : (
           <p className="mb-4 text-sm text-neutral-500">Plain note — no task status until you enable Task.</p>
         )}
-
-        <p className="mt-3 h-4 text-xs leading-4 text-neutral-500" aria-live="polite">
-          {autosave.saving ? "Saving…" : ""}
-        </p>
       </div>
 
       {item.isInterval ? <IntervalEditor item={item} updateItem={updateItem} /> : null}
 
       <TagsEditor item={item} updateItem={updateItem} />
-
-      <input
-        className="mb-4 w-full border border-neutral-700 bg-black px-3 py-2 text-2xl font-semibold outline-none focus:border-white"
-        value={autosave.draft.title}
-        onChange={(event) => autosave.updateTitle(event.target.value)}
-      />
 
       <label className="mb-4 block">
         <span className="mb-1 block text-xs uppercase tracking-wide text-neutral-500">Notes</span>

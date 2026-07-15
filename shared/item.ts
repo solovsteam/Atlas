@@ -155,7 +155,6 @@ export function mergeItemPatch(item: Item, patch: ItemPatch): Item {
     next.intervalStatus = patch.intervalStatus;
   }
 
-  next.revision = item.revision + 1;
   return next;
 }
 

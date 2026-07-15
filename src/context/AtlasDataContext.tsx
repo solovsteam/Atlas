@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useRef, type ReactNode } from "react";
 import type { Item } from "@shared/item";
 import { mergeItemPatch, parseJson, type CreateItemResult, type ItemPatch, type UpdateItemResult } from "@shared/item";
 import { useAuthSession } from "../hooks/useAuthSession";
@@ -24,35 +24,66 @@ export function AtlasDataProvider({ children }: { children: ReactNode }) {
   const userId = session?.user.id;
   const { items, loading, error, extendedSchema, removeItemById, upsertItem } = useItems(userId);
   const mutations = useItemMutations(userId, extendedSchema);
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
+  const updateChainsRef = useRef(new Map<string, Promise<UpdateItemResult>>());
 
   const updateItem = useCallback(
     async (id: string, patchJson: string, expectedRevision: number): Promise<UpdateItemResult> => {
-      const current = items.find((entry) => entry.id === id) ?? null;
-      const patch = parseJson<ItemPatch>(patchJson, {});
-      const snapshot = current ? { ...current } : null;
+      const previous = updateChainsRef.current.get(id) ?? Promise.resolve({ ok: true, revision: expectedRevision } as UpdateItemResult);
 
-      if (current && current.revision === expectedRevision) {
-        upsertItem(mergeItemPatch(current, patch));
-      }
+      const run = previous
+        .catch(() => ({ ok: true, revision: expectedRevision }) as UpdateItemResult)
+        .then(async (): Promise<UpdateItemResult> => {
+          const patch = parseJson<ItemPatch>(patchJson, {});
+          const current = itemsRef.current.find((entry) => entry.id === id) ?? null;
+          const revision = current?.revision ?? expectedRevision;
+          const snapshot = current ? { ...current } : null;
 
-      try {
-        const result = await mutations.updateItem(id, patchJson, expectedRevision, current ?? undefined);
-        if ("conflict" in result && result.conflict) {
-          upsertItem(result.serverItem);
-          return result;
+          if (current) {
+            upsertItem(mergeItemPatch(current, patch));
+          }
+
+          try {
+            let result = await mutations.updateItem(id, patchJson, revision, current ?? undefined);
+
+            if ("conflict" in result && result.conflict) {
+              result = await mutations.updateItem(
+                id,
+                patchJson,
+                result.serverItem.revision,
+                result.serverItem
+              );
+            }
+
+            if ("conflict" in result && result.conflict) {
+              upsertItem(result.serverItem);
+              return result;
+            }
+
+            if ("ok" in result && result.ok && snapshot) {
+              upsertItem({ ...mergeItemPatch(snapshot, patch), revision: result.revision });
+            }
+
+            return result;
+          } catch (err) {
+            if (snapshot) {
+              upsertItem(snapshot);
+            }
+            throw err;
+          }
+        });
+
+      updateChainsRef.current.set(id, run);
+      void run.finally(() => {
+        if (updateChainsRef.current.get(id) === run) {
+          updateChainsRef.current.delete(id);
         }
-        if ("ok" in result && result.ok && snapshot) {
-          upsertItem({ ...mergeItemPatch(snapshot, patch), revision: result.revision });
-        }
-        return result;
-      } catch (err) {
-        if (snapshot) {
-          upsertItem(snapshot);
-        }
-        throw err;
-      }
+      });
+
+      return run;
     },
-    [items, mutations.updateItem, upsertItem]
+    [mutations.updateItem, upsertItem]
   );
 
   const deleteItem = useCallback(

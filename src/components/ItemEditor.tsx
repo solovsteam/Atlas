@@ -45,7 +45,6 @@ export function ItemEditor({
 
     const result = await updateItem(item.id, JSON.stringify(patch), item.revision);
     if ("conflict" in result && result.conflict) {
-      window.alert("This item was updated elsewhere. Refresh the page to continue.");
       return;
     }
     if ("ok" in result && result.ok) {

@@ -1,15 +1,15 @@
 import { useCallback } from "react";
-import type { Item, CreateItemResult, UpdateItemResult } from "@shared/item";
+import type { CreateItemResult, Item, UpdateItemResult } from "@shared/item";
 import { supabase } from "../lib/supabase";
-import { createItem, deleteItem, restoreItem, updateItem } from "../services/items";
+import { createItem, deleteItem, restoreItem, updateItem, type CreateItemOptions } from "../services/items";
 
 export function useItemMutations(userId: string | undefined, extendedSchema = true) {
   const create = useCallback(
-    async (title: string): Promise<CreateItemResult> => {
+    async (title: string, options?: CreateItemOptions): Promise<CreateItemResult> => {
       if (!userId) {
         throw new Error("Not signed in");
       }
-      return createItem(supabase, userId, title);
+      return createItem(supabase, userId, title, options);
     },
     [userId]
   );

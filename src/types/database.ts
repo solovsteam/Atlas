@@ -8,6 +8,7 @@ export type DbItemRow = {
   is_interval: boolean;
   task_status: string;
   task_expected_minutes: number | null;
+  parent_task_id: string | null;
   manual_relevance: number;
   tags: unknown;
   completion_rule: unknown;
@@ -36,6 +37,7 @@ export type DbItemInsert = {
   is_interval?: boolean;
   task_status?: string;
   task_expected_minutes?: number | null;
+  parent_task_id?: string | null;
   manual_relevance?: number;
   tags?: unknown;
   completion_rule?: unknown;

@@ -13,6 +13,7 @@ import {
   type ItemPatch,
   type UpdateItemResult
 } from "@shared/item";
+import { validateParentTaskAssignment } from "@shared/subtasks";
 import type { Database, DbItemRow } from "../types/database";
 
 type Client = SupabaseClient<Database>;
@@ -40,15 +41,43 @@ export async function listOwnedItems(client: Client, userId: string): Promise<It
   return fetchOwnedItems(client, userId);
 }
 
-export async function createItem(client: Client, userId: string, title: string): Promise<CreateItemResult> {
+export type CreateItemOptions = {
+  isTask?: boolean;
+  parentTaskId?: string | null;
+};
+
+export async function createItem(
+  client: Client,
+  userId: string,
+  title: string,
+  options: CreateItemOptions = {}
+): Promise<CreateItemResult> {
   const clean = cleanTitle(title);
   if (!clean) {
     throw new Error("Title required");
   }
 
+  if (options.parentTaskId) {
+    const items = await fetchOwnedItems(client, userId);
+    const error = validateParentTaskAssignment("new", options.parentTaskId, items);
+    if (error) {
+      throw new Error(error);
+    }
+    const parent = items.find((entry) => entry.id === options.parentTaskId);
+    if (!parent?.isTask) {
+      throw new Error("Parent must be a task");
+    }
+  }
+
+  const insert = {
+    ...newItemInsert(userId, clean),
+    ...(options.isTask ? { is_task: true, task_status: "active" } : {}),
+    ...(options.parentTaskId ? { parent_task_id: options.parentTaskId } : {})
+  };
+
   const { data, error } = await client
     .from("items")
-    .insert(newItemInsert(userId, clean))
+    .insert(insert)
     .select("*")
     .single();
 
@@ -93,6 +122,17 @@ export async function updateItem(
 
   if (current.revision !== expectedRevision) {
     return { conflict: true, serverItem: current };
+  }
+
+  if (patch.parentTaskId !== undefined) {
+    const items = await fetchOwnedItems(client, userId);
+    const error = validateParentTaskAssignment(id, patch.parentTaskId, items);
+    if (error) {
+      throw new Error(error);
+    }
+    if (patch.parentTaskId && !current.isTask && patch.isTask !== true) {
+      throw new Error("Only tasks can be subtasks");
+    }
   }
 
   const updates = applyPatch(current, patch, { includeExtended: extendedSchema });

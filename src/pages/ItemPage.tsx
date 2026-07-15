@@ -1,8 +1,10 @@
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMemo } from "react";
+import { subtasksOf } from "@shared/subtasks";
 import { useAtlasData } from "../context/AtlasDataContext";
 import { trackDeleteUndo, useUndo } from "../context/UndoContext";
 import { ItemEditor } from "../components/ItemEditor";
+import { SubtasksPanel } from "../components/SubtasksPanel";
 
 export function ItemPage() {
   const { id = "" } = useParams();
@@ -11,6 +13,7 @@ export function ItemPage() {
   const { push } = useUndo();
 
   const item = useMemo(() => items.find((entry) => entry.id === id) ?? null, [items, id]);
+  const subtasks = useMemo(() => (item ? subtasksOf(item.id, items) : []), [item, items]);
 
   if (!item) {
     return (
@@ -51,6 +54,7 @@ export function ItemPage() {
       </div>
 
       <ItemEditor item={currentItem} updateItem={updateItem} />
+      {currentItem.isTask && subtasks.length > 0 ? <SubtasksPanel item={currentItem} /> : null}
     </section>
   );
 }

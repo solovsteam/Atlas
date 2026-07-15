@@ -1,9 +1,10 @@
 import { createContext, useCallback, useContext, useRef, type ReactNode } from "react";
-import type { Item } from "@shared/item";
-import { mergeItemPatch, parseJson, type CreateItemResult, type ItemPatch, type UpdateItemResult } from "@shared/item";
+import type { CreateItemResult, Item, ItemPatch, UpdateItemResult } from "@shared/item";
+import { mergeItemPatch, parseJson } from "@shared/item";
 import { useAuthSession } from "../hooks/useAuthSession";
 import { useItemMutations } from "../hooks/useItemMutations";
 import { useItems } from "../hooks/useItems";
+import type { CreateItemOptions } from "../services/items";
 
 type AtlasDataContextValue = {
   userId: string | undefined;
@@ -11,7 +12,7 @@ type AtlasDataContextValue = {
   itemsLoading: boolean;
   itemsError: string | null;
   extendedSchema: boolean;
-  createItem: (title: string) => Promise<CreateItemResult>;
+  createItem: (title: string, options?: CreateItemOptions) => Promise<CreateItemResult>;
   updateItem: (id: string, patchJson: string, expectedRevision: number) => Promise<UpdateItemResult>;
   deleteItem: (id: string) => Promise<void>;
   restoreItem: (item: Item) => Promise<void>;

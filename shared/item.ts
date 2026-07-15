@@ -20,6 +20,7 @@ export type Item = {
   isInterval: boolean;
   taskStatus: TaskStatus | null;
   expectedDurationMinutes: number | null;
+  parentTaskId: string;
   manualRelevance: number;
   tags: string[];
   completionRule: CompletionRule | null;
@@ -46,6 +47,7 @@ export type ItemPatch = Partial<{
   isInterval: boolean;
   taskStatus: TaskStatus | null;
   expectedDurationMinutes: number | null;
+  parentTaskId: string | null;
   manualRelevance: number;
   tags: string[];
   completionRule: CompletionRule | null;
@@ -100,6 +102,7 @@ export function mergeItemPatch(item: Item, patch: ItemPatch): Item {
     next.isTask = patch.isTask;
     if (!patch.isTask) {
       next.taskStatus = null;
+      next.parentTaskId = "";
     } else if (patch.taskStatus === undefined && !next.taskStatus) {
       next.taskStatus = "active";
     }
@@ -120,6 +123,9 @@ export function mergeItemPatch(item: Item, patch: ItemPatch): Item {
   }
   if (patch.expectedDurationMinutes !== undefined) {
     next.expectedDurationMinutes = patch.expectedDurationMinutes;
+  }
+  if (patch.parentTaskId !== undefined) {
+    next.parentTaskId = patch.parentTaskId ?? "";
   }
   if (patch.manualRelevance !== undefined) {
     next.manualRelevance = patch.manualRelevance;
@@ -196,6 +202,7 @@ export function itemFromDbRow(row: {
   is_interval?: boolean;
   task_status: string;
   task_expected_minutes?: number | null;
+  parent_task_id?: string | null;
   manual_relevance: number;
   tags: unknown;
   completion_rule?: unknown;
@@ -229,6 +236,7 @@ export function itemFromDbRow(row: {
     isInterval: Boolean(row.is_interval),
     taskStatus: parseTaskStatus(row.task_status, isTask),
     expectedDurationMinutes: parseStoredTaskDuration(row.task_expected_minutes),
+    parentTaskId: row.parent_task_id ?? "",
     manualRelevance: Number(row.manual_relevance) || 0,
     tags,
     completionRule: parseCompletionRule(row.completion_rule),
@@ -260,6 +268,7 @@ export function applyPatch(
   is_interval: boolean;
   task_status: string;
   task_expected_minutes: number | null;
+  parent_task_id: string | null;
   manual_relevance: number;
   tags: string[];
   completion_rule: unknown;
@@ -281,6 +290,7 @@ export function applyPatch(
     is_interval: boolean;
     task_status: string;
     task_expected_minutes: number | null;
+    parent_task_id: string | null;
     manual_relevance: number;
     tags: string[];
     completion_rule: unknown;
@@ -324,6 +334,9 @@ export function applyPatch(
   }
   if (patch.expectedDurationMinutes !== undefined) {
     next.task_expected_minutes = patch.expectedDurationMinutes;
+  }
+  if (patch.parentTaskId !== undefined) {
+    next.parent_task_id = patch.parentTaskId || null;
   }
   if (patch.manualRelevance !== undefined) {
     next.manual_relevance = patch.manualRelevance;
@@ -412,6 +425,7 @@ export function itemToDbInsert(item: Item, ownerId: string) {
     is_interval: item.isInterval,
     task_status: item.taskStatus ?? "",
     task_expected_minutes: item.expectedDurationMinutes,
+    parent_task_id: item.parentTaskId || null,
     manual_relevance: item.manualRelevance,
     tags: item.tags,
     completion_rule: item.completionRule,

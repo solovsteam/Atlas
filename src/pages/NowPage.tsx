@@ -1,4 +1,4 @@
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useMemo, useState } from "react";
 import type { Item, TaskStatus } from "@shared/item";
 import { searchItems } from "@shared/relevance";
@@ -6,10 +6,9 @@ import { useAtlasData } from "../context/AtlasDataContext";
 import { useRelevance } from "../context/RelevanceContext";
 import { trackCreateUndo, trackDeleteUndo, trackTaskStatusUndo, useUndo } from "../context/UndoContext";
 import { useStableInboxOrder } from "../hooks/useStableInboxOrder";
-import { ItemKindBadge } from "../components/ItemKindBadge";
+import { ItemList } from "../components/ItemList";
 import { StatusBoostBar } from "../components/StatusBoostBar";
 import { TagToggleBar } from "../components/TagToggleBar";
-import { TaskStatusButtonsForItem } from "../components/TaskStatusButtons";
 
 export function NowPage() {
   const navigate = useNavigate();
@@ -101,34 +100,12 @@ export function NowPage() {
         </>
       )}
 
-      {list.length === 0 ? (
-        <p className="text-sm text-neutral-500">{showingSearch ? "No items match your search." : "No items yet."}</p>
-      ) : (
-        <ul className="divide-y divide-neutral-800 border-y border-neutral-800">
-          {list.map((entry) => (
-            <li key={entry.id}>
-              <div className="flex items-start gap-3 py-3 hover:bg-neutral-950">
-                <TaskStatusButtonsForItem item={entry} onStatusChange={setTaskStatus} />
-                <Link className="min-w-0 flex-1" to={`/item/${entry.id}`} onClick={() => setSelectedId(entry.id)}>
-                  <div className="flex min-w-0 items-center gap-2">
-                    <span className="truncate font-medium">{entry.title}</span>
-                    <ItemKindBadge item={entry} />
-                  </div>
-                  {entry.body ? <p className="mt-1 line-clamp-2 text-sm text-neutral-400">{entry.body}</p> : null}
-                </Link>
-                <button
-                  aria-label={`Delete ${entry.title}`}
-                  className="shrink-0 self-center px-2 py-1 text-xs text-neutral-600 hover:text-red-400"
-                  type="button"
-                  onClick={(event) => void onDelete(entry, event)}
-                >
-                  Delete
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
+      <ItemList
+        emptyMessage={showingSearch ? "No items match your search." : "No items yet."}
+        items={list}
+        onDelete={onDelete}
+        onStatusChange={setTaskStatus}
+      />
     </section>
   );
 }

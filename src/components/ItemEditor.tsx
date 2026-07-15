@@ -1,9 +1,13 @@
 import type { Item, ItemPatch, UpdateItemResult } from "@shared/item";
 import { EXTENDED_SCHEMA_MESSAGE } from "@shared/item";
+import { subtasksOf } from "@shared/subtasks";
+import { useMemo } from "react";
 import { useAutosaveItem } from "../hooks/useAutosaveItem";
 import { trackItemPatchUndo, trackTaskStatusUndo, useUndo } from "../context/UndoContext";
 import { useAtlasData } from "../context/AtlasDataContext";
 import { IntervalEditor } from "./IntervalEditor";
+import { SubtaskParentEditor } from "./SubtaskParentEditor";
+import { SubtaskQuickAdd } from "./SubtaskQuickAdd";
 import { TagsEditor } from "./TagsEditor";
 import { TaskDurationEditor } from "./TaskDurationEditor";
 import { TaskStatusButtons } from "./TaskStatusButtons";
@@ -16,7 +20,8 @@ export function ItemEditor({
   updateItem: (id: string, patchJson: string, expectedRevision: number) => Promise<UpdateItemResult>;
 }) {
   const { push } = useUndo();
-  const { extendedSchema } = useAtlasData();
+  const { extendedSchema, items } = useAtlasData();
+  const subtaskCount = useMemo(() => subtasksOf(item.id, items).length, [item.id, items]);
   const autosave = useAutosaveItem(item, updateItem, (before) => {
     trackItemPatchUndo(push, item.id, before);
   });
@@ -104,6 +109,8 @@ export function ItemEditor({
             <p className="mb-2 text-xs text-neutral-500">Task status</p>
             <TaskStatusButtons status={item.taskStatus ?? "active"} onChange={(status) => void patchItemSafe({ taskStatus: status })} />
             <TaskDurationEditor item={item} updateItem={updateItem} />
+            <SubtaskParentEditor item={item} items={items} updateItem={updateItem} />
+            {subtaskCount === 0 ? <SubtaskQuickAdd parentId={item.id} /> : null}
           </div>
         ) : (
           <p className="mb-4 text-sm text-neutral-500">Plain note — no task status until you enable Task.</p>

@@ -3,6 +3,7 @@ import {
   applyPatch,
   cleanTitle,
   itemFromDbRow,
+  itemToDbInsert,
   newItemInsert,
   parseJson,
   type CreateItemResult,
@@ -147,31 +148,7 @@ export async function deleteItem(client: Client, userId: string, id: string): Pr
 export async function restoreItem(client: Client, userId: string, item: Item): Promise<void> {
   const { data, error } = await client
     .from("items")
-    .insert({
-      id: item.id,
-      owner_id: userId,
-      title: item.title,
-      body: item.body,
-      is_task: item.isTask,
-      is_documentation: item.isDocumentation,
-      is_interval: item.isInterval,
-      is_generator: item.isGenerator,
-      task_status: item.taskStatus ?? "",
-      manual_relevance: item.manualRelevance,
-      tags: item.tags,
-      completion_rule: item.completionRule,
-      documentation_schema: item.documentationSchema,
-      documentation_data: item.documentationData,
-      recurrence_rule: item.recurrenceRule,
-      generated_from_id: item.generatedFromId || null,
-      occurrence_key: item.occurrenceKey,
-      overridden_fields: item.overriddenFields,
-      interval_kind: item.intervalKind,
-      interval_starts_at: item.intervalStartsAt,
-      interval_ends_at: item.intervalEndsAt,
-      interval_status: item.intervalStatus,
-      revision: item.revision
-    })
+    .insert(itemToDbInsert(item, userId))
     .select("id")
     .single();
 

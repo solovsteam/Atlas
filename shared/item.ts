@@ -295,28 +295,43 @@ export function itemKindLabel(item: Item): string {
 }
 
 export function newItemInsert(ownerId: string, title: string) {
+  // Only columns from 001_items.sql — migration 003 adds defaults for interval/generator fields.
   return {
     owner_id: ownerId,
     title: cleanTitle(title),
     body: "",
     is_task: false,
-    is_documentation: false,
-    is_interval: false,
-    is_generator: false,
     task_status: "",
     manual_relevance: 0,
     tags: [] as string[],
-    completion_rule: null,
-    documentation_schema: null,
-    documentation_data: null,
-    recurrence_rule: null,
-    generated_from_id: null,
-    occurrence_key: "",
-    overridden_fields: [] as string[],
-    interval_kind: "",
-    interval_starts_at: "",
-    interval_ends_at: "",
-    interval_status: "",
     revision: 0
+  };
+}
+
+export function itemToDbInsert(item: Item, ownerId: string) {
+  return {
+    id: item.id,
+    owner_id: ownerId,
+    title: item.title,
+    body: item.body,
+    is_task: item.isTask,
+    is_documentation: item.isDocumentation,
+    is_interval: item.isInterval,
+    is_generator: item.isGenerator,
+    task_status: item.taskStatus ?? "",
+    manual_relevance: item.manualRelevance,
+    tags: item.tags,
+    completion_rule: item.completionRule,
+    documentation_schema: item.documentationSchema,
+    documentation_data: item.documentationData,
+    recurrence_rule: item.recurrenceRule,
+    generated_from_id: item.generatedFromId || null,
+    occurrence_key: item.occurrenceKey,
+    overridden_fields: item.overriddenFields,
+    interval_kind: item.intervalKind,
+    interval_starts_at: item.intervalStartsAt,
+    interval_ends_at: item.intervalEndsAt,
+    interval_status: item.intervalStatus,
+    revision: item.revision
   };
 }

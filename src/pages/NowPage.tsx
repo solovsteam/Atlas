@@ -52,10 +52,14 @@ export function NowPage() {
     if (!title) {
       return;
     }
-    const result = await createItem(title);
-    trackCreateUndo(push, result.id);
-    setQuery("");
-    navigate(`/item/${result.id}`);
+    try {
+      const result = await createItem(title);
+      trackCreateUndo(push, result.id);
+      setQuery("");
+      navigate(`/item/${result.id}`);
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : "Could not create item");
+    }
   }
 
   return (

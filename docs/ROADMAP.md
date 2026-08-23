@@ -83,7 +83,7 @@ Supabase is currently used in ~5 files; `shared/` domain logic is portable. **Do
 
 ### Experiment branch (`experiment/scientific-atlas`)
 
-See [EXPERIMENT.md](EXPERIMENT.md). This branch additionally ships Tasks / Items / Calendar / Archive, `scheduled_in` links, due/appointment fields, a TMT + switching-cost scheduler (not earliest-fit), and Now as a focus view. Do not treat that as `main` product status.
+See [EXPERIMENT.md](EXPERIMENT.md). This branch additionally ships Tasks / Items / Calendar / Archive, `scheduled_in` links, due/appointment fields, a TMT + switching-cost scheduler (not earliest-fit), and Now as a focus view. Items keeps done/cancelled tasks (Tasks does not). Do not treat that as `main` product status.
 
 ### To port from Lakebed reference
 

@@ -1,4 +1,4 @@
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useMemo, useState } from "react";
 import type { Item, TaskStatus } from "@shared/item";
 import { scheduledTaskIds } from "@shared/links";
@@ -10,7 +10,6 @@ import { TaskStatusButtonsForItem } from "../components/TaskStatusButtons";
 const DURATION_PRESETS = [15, 30, 60, 90];
 
 export function TasksPage() {
-  const navigate = useNavigate();
   const { items, links, createItem, updateItem } = useAtlasData();
   const { push } = useUndo();
   const [title, setTitle] = useState("");
@@ -33,7 +32,6 @@ export function TasksPage() {
       trackCreateUndo(push, result.id);
       setTitle("");
       setError(null);
-      navigate(`/item/${result.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not create task");
     }

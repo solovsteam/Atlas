@@ -15,9 +15,9 @@ Placement default is **`delta_cost_switch`**: for each interval in time order, a
 | Surface | Question | Objective |
 |---------|----------|-----------|
 | **Now** (`/`) | What should I start in this moment? | Tiny choice set (Hick). Appointments and already-committed work beat equally “important” unplaced work (implementation intentions). |
+| **Tasks** (`/tasks`) | What is still open? | Working set only. Done leaves immediately. |
+| **Items** (`/items`) | What exists? | Catalog. Notes and tasks stay, including done/cancelled. Archive is a filter, not a hide. |
 | **Calendar scheduler** | Where should work sit this week? | Minimize postponement cost under hard constraints; prefer contiguous same-context batches (attention residue). |
-
-Inbox sort in `shared/relevance.ts` (active → notes → `manualRelevance` → recency) is a **library** order, not a Now ranker and not a scheduler.
 
 ## Principles that change code
 

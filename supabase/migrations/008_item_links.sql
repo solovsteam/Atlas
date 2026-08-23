@@ -15,26 +15,33 @@ create index if not exists item_links_owner_kind_idx on public.item_links (owner
 
 alter table public.item_links enable row level security;
 
-drop policy if exists "item_links_select_own" on public.item_links;
-create policy "item_links_select_own"
-  on public.item_links for select
-  using (auth.uid() = owner_id);
-
-drop policy if exists "item_links_insert_own" on public.item_links;
-create policy "item_links_insert_own"
-  on public.item_links for insert
-  with check (auth.uid() = owner_id);
-
-drop policy if exists "item_links_update_own" on public.item_links;
-create policy "item_links_update_own"
-  on public.item_links for update
-  using (auth.uid() = owner_id)
-  with check (auth.uid() = owner_id);
-
-drop policy if exists "item_links_delete_own" on public.item_links;
-create policy "item_links_delete_own"
-  on public.item_links for delete
-  using (auth.uid() = owner_id);
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public' and tablename = 'item_links' and policyname = 'item_links_select_own'
+  ) then
+    execute $p$create policy "item_links_select_own" on public.item_links for select using (auth.uid() = owner_id)$p$;
+  end if;
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public' and tablename = 'item_links' and policyname = 'item_links_insert_own'
+  ) then
+    execute $p$create policy "item_links_insert_own" on public.item_links for insert with check (auth.uid() = owner_id)$p$;
+  end if;
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public' and tablename = 'item_links' and policyname = 'item_links_update_own'
+  ) then
+    execute $p$create policy "item_links_update_own" on public.item_links for update using (auth.uid() = owner_id) with check (auth.uid() = owner_id)$p$;
+  end if;
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public' and tablename = 'item_links' and policyname = 'item_links_delete_own'
+  ) then
+    execute $p$create policy "item_links_delete_own" on public.item_links for delete using (auth.uid() = owner_id)$p$;
+  end if;
+end $$;
 
 create or replace function public.set_item_links_updated_at()
 returns trigger
@@ -62,6 +69,6 @@ begin
       and schemaname = 'public'
       and tablename = 'item_links'
   ) then
-    alter publication supabase_realtime add table public.item_links;
+    execute 'alter publication supabase_realtime add table public.item_links';
   end if;
 end $$;

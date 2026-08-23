@@ -1,28 +1,66 @@
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useMemo, useState } from "react";
 import type { Item, TaskStatus } from "@shared/item";
-import { searchItems } from "@shared/relevance";
+import { buildNowFocus } from "@shared/scheduling";
+import { calendarIntervalFromItem, isArchivedSlot, slotRangeEnd, slotRangeStart } from "@shared/schedule";
 import { useAtlasData } from "../context/AtlasDataContext";
-import { useRelevance } from "../context/RelevanceContext";
-import { trackCreateUndo, trackDeleteUndo, trackTaskStatusUndo, useUndo } from "../context/UndoContext";
-import { useStableInboxOrder } from "../hooks/useStableInboxOrder";
-import { ItemList } from "../components/ItemList";
-import { StatusBoostBar } from "../components/StatusBoostBar";
-import { TagToggleBar } from "../components/TagToggleBar";
+import { trackCreateLinkUndo, trackTaskStatusUndo, useUndo } from "../context/UndoContext";
+import { TaskStatusButtonsForItem } from "../components/TaskStatusButtons";
+
+function currentInterval(items: Item[], now: Date): Item | null {
+  return (
+    items.find((item) => {
+      if (!item.isInterval) {
+        return false;
+      }
+      const slot = calendarIntervalFromItem(item);
+      if (!slot || isArchivedSlot(slot)) {
+        return false;
+      }
+      const start = slotRangeStart(slot);
+      const end = slotRangeEnd(slot);
+      if (!start || !end) {
+        return false;
+      }
+      return now.getTime() >= start.getTime() && now.getTime() < end.getTime();
+    }) ?? null
+  );
+}
+
+function FocusCard({
+  item,
+  reason,
+  onStatusChange,
+  action
+}: {
+  item: Item;
+  reason: string;
+  onStatusChange: (item: Item, status: TaskStatus) => void;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div className="rounded border border-neutral-700 p-4">
+      <p className="mb-2 text-xs uppercase tracking-wide text-neutral-500">{reason}</p>
+      <div className="flex items-start gap-3">
+        <TaskStatusButtonsForItem item={item} onStatusChange={onStatusChange} />
+        <div className="min-w-0 flex-1">
+          <Link className="text-xl font-semibold hover:underline" to={`/item/${item.id}`}>
+            {item.title || "Untitled"}
+          </Link>
+          {item.body ? <p className="mt-1 line-clamp-2 text-sm text-neutral-400">{item.body}</p> : null}
+        </div>
+        {action}
+      </div>
+    </div>
+  );
+}
 
 export function NowPage() {
-  const navigate = useNavigate();
-  const { inbox, items, activeTags, activeStatusBoosts } = useRelevance();
-  const { createItem, updateItem, deleteItem } = useAtlasData();
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
-  const resortKey = `${activeTags.join("\0")}\0${activeStatusBoosts.join("\0")}`;
-  const { visible, pendingResort, refreshOrder } = useStableInboxOrder(inbox, selectedId, resortKey);
+  const { items, links, updateItem, createLink } = useAtlasData();
   const { push } = useUndo();
-
-  const searchResults = useMemo(() => searchItems(items, query), [items, query]);
-  const showingSearch = query.trim().length > 0;
-  const list = showingSearch ? searchResults : visible;
+  const [error, setError] = useState<string | null>(null);
+  const focus = useMemo(() => buildNowFocus(items, links, new Date()), [items, links]);
+  const interval = useMemo(() => currentInterval(items, new Date()), [items]);
 
   async function setTaskStatus(item: Item, status: TaskStatus) {
     try {
@@ -31,81 +69,90 @@ export function NowPage() {
         trackTaskStatusUndo(push, item);
       }
     } catch (err) {
-      window.alert(err instanceof Error ? err.message : "Could not update status");
+      setError(err instanceof Error ? err.message : "Could not update status");
     }
   }
 
-  async function onDelete(item: Item, event: React.MouseEvent) {
-    event.preventDefault();
-    event.stopPropagation();
-    try {
-      await deleteItem(item.id);
-      trackDeleteUndo(push, item);
-      if (selectedId === item.id) {
-        setSelectedId(null);
-      }
-    } catch (err) {
-      window.alert(err instanceof Error ? err.message : "Could not delete item");
-    }
-  }
-
-  async function onAdd(event: React.FormEvent) {
-    event.preventDefault();
-    const title = query.trim();
-    if (!title) {
+  async function commitToInterval(item: Item) {
+    if (!interval) {
       return;
     }
     try {
-      const result = await createItem(title);
-      trackCreateUndo(push, result.id);
-      setQuery("");
-      navigate(`/item/${result.id}`);
+      const link = await createLink(item.id, interval.id, "scheduled_in");
+      trackCreateLinkUndo(push, link.id);
+      setError(null);
     } catch (err) {
-      window.alert(err instanceof Error ? err.message : "Could not create item");
+      setError(err instanceof Error ? err.message : "Could not commit task");
     }
   }
 
   return (
     <section>
-      <div className="mb-6 flex items-end justify-between gap-4">
-        <div>
-          <h1 className="text-4xl font-bold tracking-tight">Now</h1>
-          <p className="mt-2 text-sm text-neutral-400">Your items. Active tasks float up by default.</p>
+      <h1 className="text-4xl font-bold tracking-tight">Now</h1>
+      <p className="mt-2 max-w-xl text-sm text-neutral-400">
+        One thing to start. Appointments and already-placed work beat a longer inbox.
+      </p>
+      {error ? <p className="mt-4 text-sm text-red-400">{error}</p> : null}
+
+      {focus.primary ? (
+        <div className="mt-8">
+          <FocusCard
+            item={focus.primary.item}
+            reason={focus.primary.reason}
+            onStatusChange={setTaskStatus}
+            action={
+              interval &&
+              focus.suggestion === null &&
+              focus.primary.reason.startsWith("Highest") ? (
+                <button
+                  className="shrink-0 border border-white px-3 py-1.5 text-xs font-medium"
+                  type="button"
+                  onClick={() => void commitToInterval(focus.primary!.item)}
+                >
+                  Commit here
+                </button>
+              ) : null
+            }
+          />
         </div>
-        {!showingSearch && pendingResort ? (
-          <button className="text-xs text-neutral-400 hover:text-white" type="button" onClick={refreshOrder}>
-            Apply new order
-          </button>
-        ) : null}
-      </div>
-
-      <form className="mb-4 flex gap-3" onSubmit={(event) => void onAdd(event)}>
-        <input
-          className="min-w-0 flex-1 border border-neutral-700 bg-black px-3 py-2 text-base outline-none focus:border-white"
-          placeholder="Search or add an item…"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-        />
-        <button className="shrink-0 border border-white px-4 py-2 text-sm font-medium" type="submit">
-          Add
-        </button>
-      </form>
-
-      {showingSearch ? (
-        <p className="mb-4 text-xs text-neutral-500">Search results sorted by last updated.</p>
       ) : (
-        <>
-          <StatusBoostBar />
-          <TagToggleBar />
-        </>
+        <p className="mt-8 text-sm text-neutral-500">Nothing to do right now. Add a task on Tasks, or block time on Calendar.</p>
       )}
 
-      <ItemList
-        emptyMessage={showingSearch ? "No items match your search." : "No items yet."}
-        items={list}
-        onDelete={onDelete}
-        onStatusChange={setTaskStatus}
-      />
+      {focus.committed.length > 0 ? (
+        <div className="mt-8">
+          <h2 className="mb-3 text-xs uppercase tracking-wide text-neutral-500">Also committed</h2>
+          <ul className="space-y-3">
+            {focus.committed.map((entry) => (
+              <li key={entry.item.id}>
+                <FocusCard item={entry.item} reason={entry.reason} onStatusChange={setTaskStatus} />
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {focus.suggestion && focus.primary?.item.id !== focus.suggestion.item.id ? (
+        <div className="mt-8">
+          <h2 className="mb-3 text-xs uppercase tracking-wide text-neutral-500">If you have slack</h2>
+          <FocusCard
+            item={focus.suggestion.item}
+            reason={focus.suggestion.reason}
+            onStatusChange={setTaskStatus}
+            action={
+              interval ? (
+                <button
+                  className="shrink-0 border border-neutral-600 px-3 py-1.5 text-xs text-neutral-300 hover:border-white hover:text-white"
+                  type="button"
+                  onClick={() => void commitToInterval(focus.suggestion!.item)}
+                >
+                  Commit here
+                </button>
+              ) : null
+            }
+          />
+        </div>
+      ) : null}
     </section>
   );
 }

@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type { UndoOp } from "@shared/commands";
 import type { Item, ItemPatch, UpdateItemResult } from "@shared/item";
+import type { ItemLink } from "@shared/links";
 
 type UndoContextValue = {
   canUndo: boolean;
@@ -19,13 +20,17 @@ export function UndoProvider({
   items,
   updateItem,
   deleteItem,
-  restoreItem
+  restoreItem,
+  deleteLink,
+  restoreLink
 }: {
   children: ReactNode;
   items: Item[];
   updateItem: (id: string, patchJson: string, expectedRevision: number) => Promise<UpdateItemResult>;
   deleteItem: (id: string) => Promise<void>;
   restoreItem: (item: Item) => Promise<void>;
+  deleteLink: (id: string) => Promise<void>;
+  restoreLink: (link: ItemLink) => Promise<void>;
 }) {
   const stackRef = useRef<UndoOp[]>([]);
   const [canUndo, setCanUndo] = useState(false);
@@ -68,6 +73,26 @@ export function UndoProvider({
       return;
     }
 
+    if (op.kind === "createLink") {
+      await deleteLink(op.id);
+      return;
+    }
+
+    if (op.kind === "deleteLink") {
+      await restoreLink(op.snapshot);
+      return;
+    }
+
+    if (op.kind === "batchLinks") {
+      for (const link of op.created) {
+        await deleteLink(link.id);
+      }
+      for (const link of [...op.deleted].reverse()) {
+        await restoreLink(link);
+      }
+      return;
+    }
+
     const revision = getRevision(op.id);
     if (revision === undefined) {
       return;
@@ -81,7 +106,7 @@ export function UndoProvider({
     if (op.kind === "setTaskStatus") {
       await updateItem(op.id, JSON.stringify({ taskStatus: op.before }), revision);
     }
-  }, [deleteItem, getRevision, refresh, restoreItem, updateItem]);
+  }, [deleteItem, deleteLink, getRevision, refresh, restoreItem, restoreLink, updateItem]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -123,4 +148,16 @@ export function trackCreateUndo(push: UndoContextValue["push"], id: string) {
 
 export function trackDeleteUndo(push: UndoContextValue["push"], item: Item) {
   push({ kind: "deleteItem", snapshot: item });
+}
+
+export function trackCreateLinkUndo(push: UndoContextValue["push"], id: string) {
+  push({ kind: "createLink", id });
+}
+
+export function trackDeleteLinkUndo(push: UndoContextValue["push"], link: ItemLink) {
+  push({ kind: "deleteLink", snapshot: link });
+}
+
+export function trackBatchLinksUndo(push: UndoContextValue["push"], created: ItemLink[], deleted: ItemLink[]) {
+  push({ kind: "batchLinks", created, deleted });
 }

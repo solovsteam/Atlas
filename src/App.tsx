@@ -1,10 +1,14 @@
-import { BrowserRouter, Link, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Link, NavLink, Route, Routes } from "react-router-dom";
 import { authDisplayName, authPicture, useAuthSession } from "./hooks/useAuthSession";
 import { AtlasDataProvider, useAtlasData } from "./context/AtlasDataContext";
 import { RelevanceProvider } from "./context/RelevanceContext";
 import { UndoProvider, useUndo } from "./context/UndoContext";
 import { NowPage } from "./pages/NowPage";
 import { ItemPage } from "./pages/ItemPage";
+import { TasksPage } from "./pages/TasksPage";
+import { ItemsPage } from "./pages/ItemsPage";
+import { CalendarPage } from "./pages/CalendarPage";
+import { ArchivePage } from "./pages/ArchivePage";
 
 function AuthAvatar({ label, picture }: { label: string; picture?: string }) {
   const initial = label.trim().slice(0, 1).toUpperCase() || "?";
@@ -60,9 +64,14 @@ function LoginScreen({ onSignIn }: { onSignIn: () => void }) {
   );
 }
 
+function navClass({ isActive }: { isActive: boolean }) {
+  return isActive ? "text-white" : "hover:text-white";
+}
+
 function AppShell() {
   const { session, loading, signInWithGoogle, signOut } = useAuthSession();
-  const { items, itemsLoading, itemsError, updateItem, deleteItem, restoreItem } = useAtlasData();
+  const { items, itemsLoading, itemsError, linksError, updateItem, deleteItem, restoreItem, deleteLink, restoreLink } =
+    useAtlasData();
 
   if (loading) {
     return <main className="min-h-screen bg-black px-6 py-10 text-white">Loading…</main>;
@@ -76,7 +85,14 @@ function AppShell() {
   const picture = authPicture(session.user);
 
   return (
-    <UndoProvider items={items} updateItem={updateItem} deleteItem={deleteItem} restoreItem={restoreItem}>
+    <UndoProvider
+      items={items}
+      updateItem={updateItem}
+      deleteItem={deleteItem}
+      restoreItem={restoreItem}
+      deleteLink={deleteLink}
+      restoreLink={restoreLink}
+    >
       <RelevanceProvider items={items}>
         <main className="min-h-screen bg-black px-6 py-10 text-white" lang="de">
           <section className="mx-auto max-w-6xl">
@@ -92,15 +108,32 @@ function AppShell() {
                 </button>
               </div>
             </div>
-            <nav className="mb-8 flex gap-4 text-sm text-neutral-400">
-              <Link className="hover:text-white" to="/">
+            <nav className="mb-8 flex flex-wrap gap-4 text-sm text-neutral-400">
+              <NavLink className={navClass} to="/">
                 Now
-              </Link>
+              </NavLink>
+              <NavLink className={navClass} to="/tasks">
+                Tasks
+              </NavLink>
+              <NavLink className={navClass} to="/items">
+                Items
+              </NavLink>
+              <NavLink className={navClass} to="/calendar">
+                Calendar
+              </NavLink>
+              <NavLink className={navClass} to="/archive">
+                Archive
+              </NavLink>
             </nav>
             {itemsLoading ? <p className="text-sm text-neutral-500">Loading items…</p> : null}
             {itemsError ? <p className="mb-4 text-sm text-red-400">{itemsError}</p> : null}
+            {linksError ? <p className="mb-4 text-sm text-red-400">{linksError}</p> : null}
             <Routes>
               <Route path="/" element={<NowPage />} />
+              <Route path="/tasks" element={<TasksPage />} />
+              <Route path="/items" element={<ItemsPage />} />
+              <Route path="/calendar" element={<CalendarPage />} />
+              <Route path="/archive" element={<ArchivePage />} />
               <Route path="/item/:id" element={<ItemPage />} />
               <Route
                 path="*"

@@ -44,6 +44,12 @@ export async function listOwnedItems(client: Client, userId: string): Promise<It
 export type CreateItemOptions = {
   isTask?: boolean;
   parentTaskId?: string | null;
+  isInterval?: boolean;
+  intervalKind?: string;
+  intervalStartsAt?: string;
+  intervalEndsAt?: string;
+  intervalStatus?: string;
+  manualRelevance?: number;
 };
 
 export async function createItem(
@@ -72,7 +78,17 @@ export async function createItem(
   const insert = {
     ...newItemInsert(userId, clean),
     ...(options.isTask ? { is_task: true, task_status: "active" } : {}),
-    ...(options.parentTaskId ? { parent_task_id: options.parentTaskId } : {})
+    ...(options.parentTaskId ? { parent_task_id: options.parentTaskId } : {}),
+    ...(options.isInterval
+      ? {
+          is_interval: true,
+          interval_kind: options.intervalKind ?? "fixed",
+          interval_starts_at: options.intervalStartsAt ?? "",
+          interval_ends_at: options.intervalEndsAt ?? "",
+          interval_status: options.intervalStatus ?? "scheduled"
+        }
+      : {}),
+    ...(options.manualRelevance !== undefined ? { manual_relevance: options.manualRelevance } : {})
   };
 
   const { data, error } = await client

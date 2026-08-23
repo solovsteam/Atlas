@@ -110,6 +110,14 @@ export function collectTags(items: Item[]): string[] {
   return [...tags].sort();
 }
 
+export function isArchivedTask(item: Item): boolean {
+  return item.isTask && (item.taskStatus === "done" || item.taskStatus === "cancelled");
+}
+
+export function isLibraryItem(item: Item): boolean {
+  return !isArchivedTask(item);
+}
+
 export function searchItems(items: Item[], query: string): Item[] {
   const needle = query.trim().toLowerCase();
   if (!needle) {

@@ -10,6 +10,8 @@ import { SubtaskParentEditor } from "./SubtaskParentEditor";
 import { SubtaskQuickAdd } from "./SubtaskQuickAdd";
 import { TagsEditor } from "./TagsEditor";
 import { TaskDurationEditor } from "./TaskDurationEditor";
+import { TaskSchedulingEditor } from "./TaskSchedulingEditor";
+import { TaskIntervalLinkEditor } from "./TaskIntervalLinkEditor";
 import { TaskStatusButtons } from "./TaskStatusButtons";
 
 export function ItemEditor({
@@ -123,6 +125,7 @@ export function ItemEditor({
             <p className="mb-2 text-xs text-neutral-500">Task status</p>
             <TaskStatusButtons status={item.taskStatus ?? "active"} onChange={(status) => void patchItemSafe({ taskStatus: status })} />
             <TaskDurationEditor item={item} updateItem={updateItem} />
+            <TaskSchedulingEditor item={item} updateItem={updateItem} />
             <SubtaskParentEditor item={item} items={items} updateItem={updateItem} />
             {subtaskCount === 0 ? <SubtaskQuickAdd parentId={item.id} /> : null}
           </div>
@@ -132,6 +135,7 @@ export function ItemEditor({
       </div>
 
       {item.isInterval ? <IntervalEditor item={item} updateItem={updateItem} /> : null}
+      {item.isTask ? <TaskIntervalLinkEditor item={item} /> : null}
 
       <TagsEditor item={item} updateItem={updateItem} />
 

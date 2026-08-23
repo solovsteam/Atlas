@@ -81,6 +81,10 @@ Supabase is currently used in ~5 files; `shared/` domain logic is portable. **Do
 - [x] Task expected duration (minutes, for future calendar / auto-scheduling)
 - [x] Task subtasks (parent task link + subtask list on item detail)
 
+### Experiment branch (`experiment/scientific-atlas`)
+
+See [EXPERIMENT.md](EXPERIMENT.md). This branch additionally ships Tasks / Items / Calendar / Archive, `scheduled_in` links, due/appointment fields, a TMT + switching-cost scheduler (not earliest-fit), and Now as a focus view. Do not treat that as `main` product status.
+
 ### To port from Lakebed reference
 
 Source: `.lakebed/reference/` (read-only archive, gitignored).

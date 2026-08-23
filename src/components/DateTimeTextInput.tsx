@@ -67,3 +67,31 @@ export function EditableSlotTime({ iso, label, mode, onSave }: EditableSlotTimeP
     </label>
   );
 }
+
+export function DateTimeTextInput({
+  label,
+  mode,
+  value,
+  onChange,
+  placeholder
+}: {
+  label: string;
+  mode: "date" | "datetime";
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+}) {
+  return (
+    <label className="block text-xs text-neutral-500">
+      {label}
+      <input
+        className="mt-1 w-full border border-neutral-700 bg-black px-2 py-1 text-sm outline-none focus:border-white"
+        placeholder={placeholder ?? (mode === "date" ? DATE_PLACEHOLDER : DATE_TIME_PLACEHOLDER)}
+        spellCheck={false}
+        type="text"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </label>
+  );
+}

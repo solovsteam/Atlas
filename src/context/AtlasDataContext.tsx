@@ -1,10 +1,14 @@
 import { createContext, useCallback, useContext, useRef, type ReactNode } from "react";
 import type { CreateItemResult, Item, ItemPatch, UpdateItemResult } from "@shared/item";
 import { mergeItemPatch, parseJson } from "@shared/item";
+import type { ItemLink, LinkKind } from "@shared/links";
 import { useAuthSession } from "../hooks/useAuthSession";
+import { useItemLinks } from "../hooks/useItemLinks";
 import { useItemMutations } from "../hooks/useItemMutations";
 import { useItems } from "../hooks/useItems";
 import type { CreateItemOptions } from "../services/items";
+import { createLink as createLinkRow, deleteLink as deleteLinkRow, restoreLink as restoreLinkRow } from "../services/links";
+import { supabase } from "../lib/supabase";
 
 type AtlasDataContextValue = {
   userId: string | undefined;
@@ -12,10 +16,15 @@ type AtlasDataContextValue = {
   itemsLoading: boolean;
   itemsError: string | null;
   extendedSchema: boolean;
+  links: ItemLink[];
+  linksError: string | null;
   createItem: (title: string, options?: CreateItemOptions) => Promise<CreateItemResult>;
   updateItem: (id: string, patchJson: string, expectedRevision: number) => Promise<UpdateItemResult>;
   deleteItem: (id: string) => Promise<void>;
   restoreItem: (item: Item) => Promise<void>;
+  createLink: (fromId: string, toId: string, kind: LinkKind) => Promise<ItemLink>;
+  deleteLink: (id: string) => Promise<void>;
+  restoreLink: (link: ItemLink) => Promise<void>;
 };
 
 const AtlasDataContext = createContext<AtlasDataContextValue | null>(null);
@@ -24,6 +33,7 @@ export function AtlasDataProvider({ children }: { children: ReactNode }) {
   const { session } = useAuthSession();
   const userId = session?.user.id;
   const { items, loading, error, extendedSchema, removeItemById, upsertItem } = useItems(userId);
+  const { links, error: linksError, upsertLink, removeLinkById } = useItemLinks(userId);
   const mutations = useItemMutations(userId, extendedSchema);
   const itemsRef = useRef(items);
   itemsRef.current = items;
@@ -113,6 +123,50 @@ export function AtlasDataProvider({ children }: { children: ReactNode }) {
     [mutations.restoreItem, upsertItem]
   );
 
+  const createLink = useCallback(
+    async (fromId: string, toId: string, kind: LinkKind) => {
+      if (!userId) {
+        throw new Error("Not signed in");
+      }
+      const link = await createLinkRow(supabase, userId, fromId, toId, kind);
+      upsertLink(link);
+      return link;
+    },
+    [upsertLink, userId]
+  );
+
+  const deleteLink = useCallback(
+    async (id: string) => {
+      if (!userId) {
+        throw new Error("Not signed in");
+      }
+      const snapshot = links.find((entry) => entry.id === id);
+      if (snapshot) {
+        removeLinkById(id);
+      }
+      try {
+        await deleteLinkRow(supabase, userId, id);
+      } catch (err) {
+        if (snapshot) {
+          upsertLink(snapshot);
+        }
+        throw err;
+      }
+    },
+    [links, removeLinkById, upsertLink, userId]
+  );
+
+  const restoreLink = useCallback(
+    async (link: ItemLink) => {
+      if (!userId) {
+        throw new Error("Not signed in");
+      }
+      const restored = await restoreLinkRow(supabase, userId, link);
+      upsertLink(restored);
+    },
+    [upsertLink, userId]
+  );
+
   return (
     <AtlasDataContext.Provider
       value={{
@@ -121,10 +175,15 @@ export function AtlasDataProvider({ children }: { children: ReactNode }) {
         itemsLoading: loading,
         itemsError: error,
         extendedSchema,
+        links,
+        linksError,
         createItem: mutations.createItem,
         updateItem,
         deleteItem,
-        restoreItem
+        restoreItem,
+        createLink,
+        deleteLink,
+        restoreLink
       }}
     >
       {children}

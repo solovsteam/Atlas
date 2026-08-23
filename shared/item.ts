@@ -20,6 +20,9 @@ export type Item = {
   isInterval: boolean;
   taskStatus: TaskStatus | null;
   expectedDurationMinutes: number | null;
+  taskDueAt: string;
+  taskFixedStartsAt: string;
+  taskFixedEndsAt: string;
   parentTaskId: string;
   manualRelevance: number;
   tags: string[];
@@ -47,6 +50,9 @@ export type ItemPatch = Partial<{
   isInterval: boolean;
   taskStatus: TaskStatus | null;
   expectedDurationMinutes: number | null;
+  taskDueAt: string | null;
+  taskFixedStartsAt: string | null;
+  taskFixedEndsAt: string | null;
   parentTaskId: string | null;
   manualRelevance: number;
   tags: string[];
@@ -123,6 +129,15 @@ export function mergeItemPatch(item: Item, patch: ItemPatch): Item {
   }
   if (patch.expectedDurationMinutes !== undefined) {
     next.expectedDurationMinutes = patch.expectedDurationMinutes;
+  }
+  if (patch.taskDueAt !== undefined) {
+    next.taskDueAt = patch.taskDueAt ?? "";
+  }
+  if (patch.taskFixedStartsAt !== undefined) {
+    next.taskFixedStartsAt = patch.taskFixedStartsAt ?? "";
+  }
+  if (patch.taskFixedEndsAt !== undefined) {
+    next.taskFixedEndsAt = patch.taskFixedEndsAt ?? "";
   }
   if (patch.parentTaskId !== undefined) {
     next.parentTaskId = patch.parentTaskId ?? "";
@@ -202,6 +217,9 @@ export function itemFromDbRow(row: {
   is_interval?: boolean;
   task_status: string;
   task_expected_minutes?: number | null;
+  task_due_at?: string | null;
+  task_fixed_starts_at?: string | null;
+  task_fixed_ends_at?: string | null;
   parent_task_id?: string | null;
   manual_relevance: number;
   tags: unknown;
@@ -236,6 +254,9 @@ export function itemFromDbRow(row: {
     isInterval: Boolean(row.is_interval),
     taskStatus: parseTaskStatus(row.task_status, isTask),
     expectedDurationMinutes: parseStoredTaskDuration(row.task_expected_minutes),
+    taskDueAt: row.task_due_at ?? "",
+    taskFixedStartsAt: row.task_fixed_starts_at ?? "",
+    taskFixedEndsAt: row.task_fixed_ends_at ?? "",
     parentTaskId: row.parent_task_id ?? "",
     manualRelevance: Number(row.manual_relevance) || 0,
     tags,
@@ -268,6 +289,9 @@ export function applyPatch(
   is_interval: boolean;
   task_status: string;
   task_expected_minutes: number | null;
+  task_due_at: string | null;
+  task_fixed_starts_at: string | null;
+  task_fixed_ends_at: string | null;
   parent_task_id: string | null;
   manual_relevance: number;
   tags: string[];
@@ -290,6 +314,9 @@ export function applyPatch(
     is_interval: boolean;
     task_status: string;
     task_expected_minutes: number | null;
+    task_due_at: string | null;
+    task_fixed_starts_at: string | null;
+    task_fixed_ends_at: string | null;
     parent_task_id: string | null;
     manual_relevance: number;
     tags: string[];
@@ -334,6 +361,15 @@ export function applyPatch(
   }
   if (patch.expectedDurationMinutes !== undefined) {
     next.task_expected_minutes = patch.expectedDurationMinutes;
+  }
+  if (patch.taskDueAt !== undefined) {
+    next.task_due_at = patch.taskDueAt || null;
+  }
+  if (patch.taskFixedStartsAt !== undefined) {
+    next.task_fixed_starts_at = patch.taskFixedStartsAt || null;
+  }
+  if (patch.taskFixedEndsAt !== undefined) {
+    next.task_fixed_ends_at = patch.taskFixedEndsAt || null;
   }
   if (patch.parentTaskId !== undefined) {
     next.parent_task_id = patch.parentTaskId || null;
@@ -425,6 +461,9 @@ export function itemToDbInsert(item: Item, ownerId: string) {
     is_interval: item.isInterval,
     task_status: item.taskStatus ?? "",
     task_expected_minutes: item.expectedDurationMinutes,
+    task_due_at: item.taskDueAt || null,
+    task_fixed_starts_at: item.taskFixedStartsAt || null,
+    task_fixed_ends_at: item.taskFixedEndsAt || null,
     parent_task_id: item.parentTaskId || null,
     manual_relevance: item.manualRelevance,
     tags: item.tags,

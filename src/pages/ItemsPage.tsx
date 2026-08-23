@@ -16,6 +16,7 @@ export function ItemsPage() {
   const { createItem, updateItem, deleteItem } = useAtlasData();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [error, setError] = useState<string | null>(null);
   const resortKey = `${activeTags.join("\0")}\0${activeStatusBoosts.join("\0")}`;
   const desired = useMemo(() => inbox.filter(isLibraryItem), [inbox]);
   const { visible, pendingResort, refreshOrder } = useStableInboxOrder("items", desired, items, resortKey);
@@ -30,9 +31,10 @@ export function ItemsPage() {
       const result = await updateItem(item.id, JSON.stringify({ taskStatus: status }), item.revision);
       if ("ok" in result && result.ok) {
         trackTaskStatusUndo(push, item);
+        setError(null);
       }
     } catch (err) {
-      window.alert(err instanceof Error ? err.message : "Could not update status");
+      setError(err instanceof Error ? err.message : "Could not update status");
     }
   }
 
@@ -42,11 +44,12 @@ export function ItemsPage() {
     try {
       await deleteItem(item.id);
       trackDeleteUndo(push, item);
+      setError(null);
       if (selectedId === item.id) {
         setSelectedId(null);
       }
     } catch (err) {
-      window.alert(err instanceof Error ? err.message : "Could not delete item");
+      setError(err instanceof Error ? err.message : "Could not delete item");
     }
   }
 
@@ -60,9 +63,10 @@ export function ItemsPage() {
       const result = await createItem(title);
       trackCreateUndo(push, result.id);
       setQuery("");
+      setError(null);
       navigate(`/item/${result.id}`);
     } catch (err) {
-      window.alert(err instanceof Error ? err.message : "Could not create item");
+      setError(err instanceof Error ? err.message : "Could not create item");
     }
   }
 
@@ -71,7 +75,9 @@ export function ItemsPage() {
       <div className="mb-6 flex items-end justify-between gap-4">
         <div>
           <h1 className="text-4xl font-bold tracking-tight">Items</h1>
-          <p className="mt-2 text-sm text-neutral-400">Notes, planning, and full detail.</p>
+          <p className="mt-2 text-sm text-neutral-400">
+            Notes, planning, and later (someday) tasks. Done leaves after you refresh this list.
+          </p>
         </div>
         <button
           className={
@@ -97,6 +103,7 @@ export function ItemsPage() {
           Add
         </button>
       </form>
+      {error ? <p className="mb-4 text-sm text-red-400">{error}</p> : null}
 
       {showingSearch ? (
         <p className="mb-4 text-xs text-neutral-500">Search results sorted by last updated.</p>

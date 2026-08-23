@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import type { Item, TaskStatus } from "@shared/item";
-import { isArchivedTask } from "@shared/relevance";
+import { isArchivedTask, isParkedTask } from "@shared/relevance";
 import { ItemKindBadge } from "./ItemKindBadge";
 import { TaskStatusButtonsForItem } from "./TaskStatusButtons";
 
@@ -23,13 +23,16 @@ export function ItemList({
     <ul className="divide-y divide-neutral-800 border-y border-neutral-800">
       {items.map((entry) => {
         const archived = isArchivedTask(entry);
+        const parked = isParkedTask(entry);
         return (
           <li key={entry.id}>
-            <div className={`flex items-start gap-3 py-3 hover:bg-neutral-950 ${archived ? "opacity-60" : ""}`}>
+            <div className={`flex items-start gap-3 py-3 hover:bg-neutral-950 ${archived || parked ? "opacity-60" : ""}`}>
               {onStatusChange ? <TaskStatusButtonsForItem item={entry} onStatusChange={onStatusChange} /> : null}
               <Link className="min-w-0 flex-1" to={`/item/${entry.id}`}>
                 <div className="flex min-w-0 items-center gap-2">
-                  <span className={`truncate font-medium ${archived ? "text-neutral-400 line-through" : ""}`}>
+                  <span
+                    className={`truncate font-medium ${archived ? "text-neutral-400 line-through" : parked ? "text-amber-200/80" : ""}`}
+                  >
                     {entry.title}
                   </span>
                   <ItemKindBadge item={entry} />

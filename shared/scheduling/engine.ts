@@ -1,3 +1,4 @@
+import { isQuickDuration } from "../duration";
 import {
   appointmentOverlapMinutes,
   constraintMode,
@@ -78,6 +79,10 @@ function eligibleTasks(tasks: TaskScheduleInput[]): {
     }
     if (hasMissingInfo(task)) {
       unassigned.push({ taskId: task.id, reason: "missing_info" });
+      continue;
+    }
+    if (isQuickDuration(task.durationMinutes)) {
+      unassigned.push({ taskId: task.id, reason: "quick" });
       continue;
     }
     candidates.push(task);

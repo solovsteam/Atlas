@@ -1,6 +1,6 @@
 export type ConstraintMode = "fixed" | "deadline" | "flexible";
 
-export type UnassignedReason = "missing_info" | "no_feasible_interval" | "excluded";
+export type UnassignedReason = "missing_info" | "no_feasible_interval" | "excluded" | "quick";
 
 export type PlacementStrategy = "earliest_fit" | "delta_cost" | "delta_cost_switch";
 

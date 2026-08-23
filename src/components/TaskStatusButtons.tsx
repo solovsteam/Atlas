@@ -36,6 +36,11 @@ function buttonClass(entry: TaskStatus, selected: boolean, compact: boolean): st
         ? "rounded border border-green-500 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-green-400"
         : "rounded border border-green-500 px-3 py-1 text-xs font-medium text-green-400";
     }
+    if (entry === "later") {
+      return compact
+        ? "rounded border border-amber-500 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-400"
+        : "rounded border border-amber-500 px-3 py-1 text-xs font-medium text-amber-400";
+    }
     return compact
       ? "rounded border border-white px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide"
       : "rounded border border-white px-3 py-1 text-xs font-medium";

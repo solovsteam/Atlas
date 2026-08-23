@@ -1,11 +1,13 @@
 import { Link } from "react-router-dom";
 import { useMemo, useState } from "react";
 import type { Item, TaskStatus } from "@shared/item";
+import { formatDurationMinutes } from "@shared/duration";
 import { buildNowFocus } from "@shared/scheduling";
 import { calendarIntervalFromItem, isArchivedSlot, slotRangeEnd, slotRangeStart } from "@shared/schedule";
 import { useAtlasData } from "../context/AtlasDataContext";
 import { trackCreateLinkUndo, trackTaskStatusUndo, useUndo } from "../context/UndoContext";
 import { TaskStatusButtonsForItem } from "../components/TaskStatusButtons";
+import { WorkBlockButtons } from "../components/WorkBlockButtons";
 
 function currentInterval(items: Item[], now: Date): Item | null {
   return (
@@ -61,6 +63,25 @@ export function NowPage() {
   const [error, setError] = useState<string | null>(null);
   const focus = useMemo(() => buildNowFocus(items, links, new Date()), [items, links]);
   const interval = useMemo(() => currentInterval(items, new Date()), [items]);
+  const laterCount = useMemo(
+    () => items.filter((item) => item.isTask && item.taskStatus === "later").length,
+    [items]
+  );
+  const remainingLabel = useMemo(() => {
+    if (!interval) {
+      return null;
+    }
+    const slot = calendarIntervalFromItem(interval);
+    const end = slot ? slotRangeEnd(slot) : null;
+    if (!end) {
+      return null;
+    }
+    const minutes = Math.round((end.getTime() - Date.now()) / 60_000);
+    if (minutes <= 0) {
+      return null;
+    }
+    return formatDurationMinutes(minutes);
+  }, [interval]);
 
   async function setTaskStatus(item: Item, status: TaskStatus) {
     try {
@@ -90,8 +111,12 @@ export function NowPage() {
     <section>
       <h1 className="text-4xl font-bold tracking-tight">Now</h1>
       <p className="mt-2 max-w-xl text-sm text-neutral-400">
-        One thing to start. Appointments and already-placed work beat a longer inbox.
+        One thing. Capture lives on Tasks; this page is for starting.
+        {remainingLabel ? ` ${remainingLabel} left in ${interval?.title || "this block"}.` : ""}
       </p>
+      <div className="mt-4">
+        <WorkBlockButtons />
+      </div>
       {error ? <p className="mt-4 text-sm text-red-400">{error}</p> : null}
 
       {focus.primary ? (
@@ -116,7 +141,23 @@ export function NowPage() {
           />
         </div>
       ) : (
-        <p className="mt-8 text-sm text-neutral-500">Nothing to do right now. Add a task on Tasks, or block time on Calendar.</p>
+        <p className="mt-8 text-sm text-neutral-500">
+          Nothing is committed to this moment. Add a task on{" "}
+          <Link className="underline hover:text-white" to="/tasks">
+            Tasks
+          </Link>
+          , or block morning/afternoon so work has a place to land.
+          {laterCount > 0 ? (
+            <>
+              {" "}
+              {laterCount} parked on{" "}
+              <Link className="underline hover:text-white" to="/items">
+                Items
+              </Link>
+              .
+            </>
+          ) : null}
+        </p>
       )}
 
       {focus.committed.length > 0 ? (

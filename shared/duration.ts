@@ -1,5 +1,12 @@
 export const MAX_TASK_DURATION_MINUTES = 10_080; // 7 days
 
+/** GTD two-minute rule: do it while processing, do not put it on the calendar. */
+export const QUICK_TASK_MINUTES = 2;
+
+export function isQuickDuration(minutes: number | null): boolean {
+  return minutes !== null && minutes > 0 && minutes <= QUICK_TASK_MINUTES;
+}
+
 export function clampTaskDurationMinutes(value: number): number {
   return Math.min(MAX_TASK_DURATION_MINUTES, Math.max(1, Math.floor(value)));
 }

@@ -1,4 +1,4 @@
-export type { Assignment, IntervalInput, PlacementStrategy, SchedulerConfig, SchedulerResult, TaskScheduleInput } from "./types";
+export type { Assignment, IntervalInput, PlacementStrategy, SchedulerConfig, SchedulerResult, TaskScheduleInput, UnassignedReason } from "./types";
 export { DEFAULT_SCHEDULER_CONFIG, mergeSchedulerConfig } from "./types";
 export { runScheduler } from "./engine";
 export { nowMotivation, postponementCost, postponementCostDelta } from "./deferral";

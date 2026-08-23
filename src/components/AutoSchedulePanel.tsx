@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useAtlasData } from "../context/AtlasDataContext";
 import { trackBatchLinksUndo, useUndo } from "../context/UndoContext";
 import { planScheduleApply, proposeSchedule } from "../services/scheduling";
-import type { PlacementStrategy, SchedulerResult } from "@shared/scheduling";
+import type { PlacementStrategy, SchedulerResult, UnassignedReason } from "@shared/scheduling";
 import type { ItemLink } from "@shared/links";
 
 const STRATEGIES: { id: PlacementStrategy; label: string }[] = [
@@ -55,7 +55,7 @@ export function AutoSchedulePanel() {
     <div className="mb-8 rounded border border-neutral-800 p-4">
       <p className="mb-3 text-xs uppercase tracking-wide text-neutral-500">Auto-schedule</p>
       <p className="mb-4 text-sm text-neutral-400">
-        Places ready tasks into open intervals. Default minimizes postponement and switching, not earliest-fit.
+        Places ready tasks into open intervals. Two-minute tasks stay off the calendar. Default minimizes postponement and switching, not earliest-fit.
       </p>
       <div className="mb-4 flex flex-wrap gap-2">
         {STRATEGIES.map((entry) => (
@@ -109,7 +109,7 @@ export function AutoSchedulePanel() {
               .filter((entry) => entry.reason !== "excluded")
               .map((entry) => (
                 <li className="text-neutral-600" key={entry.taskId}>
-                  {byId.get(entry.taskId)?.title ?? entry.taskId} · {entry.reason}
+                  {byId.get(entry.taskId)?.title ?? entry.taskId} · {unassignedLabel(entry.reason)}
                 </li>
               ))}
           </ul>
@@ -117,4 +117,17 @@ export function AutoSchedulePanel() {
       ) : null}
     </div>
   );
+}
+
+function unassignedLabel(reason: UnassignedReason): string {
+  switch (reason) {
+    case "quick":
+      return "two minutes — skip calendar";
+    case "missing_info":
+      return "missing times";
+    case "no_feasible_interval":
+      return "no room";
+    case "excluded":
+      return "appointment";
+  }
 }

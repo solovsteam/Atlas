@@ -99,7 +99,9 @@ export function TaskDurationEditor({
         ) : null}
       </div>
       {error ? <p className="mt-1 text-xs text-red-400">{error}</p> : null}
-      <p className="mt-1 text-xs text-neutral-600">Plain numbers are minutes (e.g. 45). Used for calendar placement later.</p>
+      <p className="mt-1 text-xs text-neutral-600">
+        Minutes. 2m stays off the calendar (do it from Now when idle). Larger estimates get a 1.25× packing buffer.
+      </p>
     </div>
   );
 }

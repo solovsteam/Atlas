@@ -1,8 +1,8 @@
-# Scientific Atlas experiment
+# Atlas experiment: time-management practice + a novel scheduler
 
 Branch: `experiment/scientific-atlas` from `origin/main` (`35eb93c`). **Do not merge to `main`.**
 
-This branch tests how far a scientifically grounded Atlas can go without inheriting the uncommitted calendar/scheduling WIP on `main`. Product architecture still follows [ROADMAP.md](ROADMAP.md): one Item model, graph links, undo-not-confirm, `shared/` + `src/services/`.
+This branch tests how far Atlas can go by following widely established time-management advice where it is congruent, and by taking Atlas’s side where the product is deliberately new (intervals as capacity, Now as one thing). It does not inherit the uncommitted calendar/scheduling WIP on `main`. Product architecture still follows [ROADMAP.md](ROADMAP.md): one Item model, graph links, undo-not-confirm, `shared/` + `src/services/`.
 
 ## Intentional ROADMAP exception
 
@@ -18,6 +18,29 @@ Placement default is **`delta_cost_switch`**: for each interval in time order, a
 | **Tasks** (`/tasks`) | What is still open? | Working set. Done stays on screen until you refresh the list. |
 | **Items** (`/items`) | What exists? | Library of notes and open work. Done stays until you refresh this list, then it lives in Archive. |
 | **Calendar scheduler** | Where should work sit this week? | Minimize postponement cost under hard constraints; prefer contiguous same-context batches (attention residue). |
+
+## Time-management map (what Atlas follows, what it refuses)
+
+Widely repeated advice is mostly a **hybrid**, not one school. Capture and close open loops (Allen / GTD). Decide *when* in actual clock time (time blocking, “what gets scheduled gets done”). Protect one stretch of attention (Newport / Leroy). Keep the engage list tiny (MIT / The One Thing / Hick).
+
+| Advice | Congruent? | Atlas |
+|--------|------------|-------|
+| Capture everything out of your head | Yes | Tasks is the inbox. Unlimited on purpose. |
+| Someday/maybe so the working set stays honest | Yes | Status **later** — leaves Tasks/Now/scheduler; stays on Items. Not cancelled. |
+| 2-minute rule | Yes, **only when idle** | Duration ≤2 min is not auto-scheduled. Now offers it only if you are not already in a block or appointment. |
+| Time-block the day | Yes | Intervals = capacity. **Block morning/afternoon** creates today’s 09–12 / 13–17 (remaining time). |
+| Don’t put next actions on the calendar (classic GTD) | **Atlas disagrees** | GTD meant: don’t fake a due date. Atlas intervals are “I intend to work,” not a deadline. Scheduler fills capacity. That’s the hybrid the literature already recommends. |
+| Todo lists cause anxiety (Newport) | Split | Anxiety is an unbounded *engage* list. Now is one thing. Tasks can be long because it is capture, not Now. |
+| Eat the frog first thing in the morning | **Rejected** | Chronotype evidence is mixed. We rank by importance and deadlines, not clock hour. |
+| Eisenhower do/schedule/delegate/drop | Rejected as UI | Personal app has no delegate. Two axes still feed the scheduler. |
+| Pomodoro timer | Not in-app | Atlas chooses *what* and *which block*. A kitchen timer is a different tool. |
+| Limit WIP (kanban) | Split | Now WIP = 1. Tasks unbounded. **later** parks overflow without deleting it. |
+| Planning fallacy | Yes | 1.25× duration buffer on placement. |
+| Implementation intentions | Yes | `scheduled_in` is the if-then. Now prefers already-placed work. |
+| Weekly review (GTD) | Yes, compressed | Calendar **Weekly look**: overdue, unscheduled next actions, later. |
+| Hard dates only on the calendar (GTD) | Split | **Due today / this week** on Tasks are real deadlines for TMT. Intervals are capacity, not fake dues. |
+
+When Atlas and a slogan conflict, the test is: **does the slogan assume a calendar of appointments, or a list with no capacity?** Atlas has both. Capacity wins over “never calendar tasks.” Focus wins over “do the 2-minute thing in the middle of deep work.”
 
 ## Principles that change code
 
@@ -59,7 +82,8 @@ Placement uses duration × **1.25** so packing is less optimistic than the user�
 
 ## What we rejected
 
-- **Eisenhower 2×2 as UI policy** (do / schedule / delegate / drop). Two axes exist (derived urgency × importance) but Atlas is a personal system with no delegate/drop workflow yet.
+- **Eat the frog at 09:00.** Importance and due dates already pull hard work forward; morning-only bias would punish night schedules.
+- **Eisenhower 2×2 as UI policy** (do / schedule / delegate / drop). Two axes exist (derived urgency × importance) but Atlas is a personal system with no delegate/drop workflow.
 - **Linear `0.6 × urgency + 0.4 × importance` with urgency grown from `createdAt`.** Importance was double-counted on flexible tasks; age is not delay-to-reward.
 - **Earliest-fit after a global sort.** Rank decides *who* is important; the slot should still be chosen by *marginal delay cost* and fit.
 

@@ -1,9 +1,9 @@
 import { parseCompletionRule } from "./completion";
 import { parseStoredTaskDuration } from "./duration";
 
-export type TaskStatus = "active" | "done" | "cancelled";
+export type TaskStatus = "active" | "later" | "done" | "cancelled";
 
-export const TASK_STATUSES: TaskStatus[] = ["active", "done", "cancelled"];
+export const TASK_STATUSES: TaskStatus[] = ["active", "later", "done", "cancelled"];
 
 export type CompletionRule =
   | { kind: "manual" }

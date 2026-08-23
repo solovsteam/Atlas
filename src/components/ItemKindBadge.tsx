@@ -12,6 +12,12 @@ function styleForItem(item: Item): string {
     if (item.taskStatus === "done") {
       return "border-green-900 text-green-400";
     }
+    if (item.taskStatus === "later") {
+      return "border-amber-900 text-amber-400";
+    }
+    if (item.taskStatus === "cancelled") {
+      return "border-neutral-800 text-neutral-500";
+    }
     return KIND_STYLES.task;
   }
   if (item.isInterval) {

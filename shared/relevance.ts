@@ -114,6 +114,10 @@ export function isArchivedTask(item: Item): boolean {
   return item.isTask && (item.taskStatus === "done" || item.taskStatus === "cancelled");
 }
 
+export function isParkedTask(item: Item): boolean {
+  return item.isTask && item.taskStatus === "later";
+}
+
 export function isLibraryItem(item: Item): boolean {
   return !isArchivedTask(item);
 }

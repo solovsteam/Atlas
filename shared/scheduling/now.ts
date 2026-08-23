@@ -1,4 +1,5 @@
 import type { Item } from "../item";
+import { isQuickDuration } from "../duration";
 import { scheduledTaskIds, tasksScheduledIn, type ItemLink } from "../links";
 import {
   calendarIntervalFromItem,
@@ -138,12 +139,23 @@ export function buildNowFocus(items: Item[], links: ItemLink[], now: Date): NowF
     }
     return true;
   });
-  suggestionPool.sort(
+
+  const idle =
+    liveAppointments.length === 0 && current.length === 0 && todayTasks.length === 0;
+  const quickPool = idle
+    ? suggestionPool.filter((item) => isQuickDuration(item.expectedDurationMinutes))
+    : [];
+  const rankedPool = (quickPool.length > 0 ? quickPool : suggestionPool).sort(
     (a, b) => nowMotivation(itemToScheduleInput(b, items), config) - nowMotivation(itemToScheduleInput(a, items), config)
   );
-  const suggestionItem = suggestionPool[0] ?? null;
+  const suggestionItem = rankedPool[0] ?? null;
   const suggestion = suggestionItem
-    ? { item: suggestionItem, reason: "Highest start-now motivation among unscheduled work" }
+    ? {
+        item: suggestionItem,
+        reason: isQuickDuration(suggestionItem.expectedDurationMinutes)
+          ? "Two minutes or less — do it now, don’t calendar it"
+          : "Highest start-now motivation among unscheduled work"
+      }
     : null;
 
   if (todayTasks.length > 0) {

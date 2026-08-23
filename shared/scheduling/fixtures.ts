@@ -1,6 +1,10 @@
 import { runScheduler } from "./engine";
 import { nowMotivation, postponementCost } from "./deferral";
 import { mergeSchedulerConfig, type IntervalInput, type PlacementStrategy, type TaskScheduleInput } from "./types";
+import { buildNowFocus } from "./now";
+import { isOverdue } from "../due";
+import type { Item } from "../item";
+import type { ItemLink } from "../links";
 
 const NOW = new Date("2026-08-23T10:00:00.000Z");
 
@@ -218,7 +222,101 @@ export function runSchedulingFixtures(): FixtureResult[] {
     );
   }
 
+  {
+    const quick = task({ id: "email", title: "Two-minute email", durationMinutes: 2, importance: 9 });
+    const real = task({ id: "real", title: "Real work", durationMinutes: 30, importance: 4 });
+    const result = runScheduler([quick, real], [interval("am", 9, 12)], mergeSchedulerConfig(NOW));
+    results.push(
+      assert(
+        "quick-tasks-skip-calendar",
+        !result.assignments.some((entry) => entry.taskId === "email") &&
+          result.assignments.some((entry) => entry.taskId === "real") &&
+          result.unassigned.some((entry) => entry.taskId === "email" && entry.reason === "quick"),
+        JSON.stringify(result.assignments)
+      )
+    );
+  }
+
+  {
+    results.push(assert("past-due-is-overdue", isOverdue("2020-01-01T00:00:00.000Z", NOW), "expected overdue"));
+    results.push(assert("future-due-is-not-overdue", !isOverdue("2099-01-01T00:00:00.000Z", NOW), "expected not overdue"));
+  }
+
+  {
+    const quick = sampleItem({ id: "email", title: "Two-minute email", expectedDurationMinutes: 2, manualRelevance: 9 });
+    const real = sampleItem({ id: "real", title: "Real work", expectedDurationMinutes: 30, manualRelevance: 4 });
+    const idle = buildNowFocus([quick, real], [], NOW);
+    results.push(
+      assert(
+        "now-idle-prefers-two-minute",
+        idle.primary?.item.id === "email",
+        idle.primary?.item.id ?? "none"
+      )
+    );
+
+    const block = sampleItem({
+      id: "am",
+      title: "Morning",
+      isTask: false,
+      isInterval: true,
+      intervalKind: "fixed",
+      intervalStartsAt: "2026-08-23T09:00:00.000Z",
+      intervalEndsAt: "2026-08-23T12:00:00.000Z",
+      intervalStatus: "scheduled"
+    });
+    const link: ItemLink = {
+      id: "l1",
+      ownerId: "u",
+      fromId: "real",
+      toId: "am",
+      kind: "scheduled_in",
+      createdAt: NOW.toISOString(),
+      updatedAt: NOW.toISOString()
+    };
+    const busy = buildNowFocus([quick, real, block], [link], NOW);
+    results.push(
+      assert(
+        "now-in-block-ignores-two-minute",
+        busy.primary?.item.id === "real",
+        busy.primary?.item.id ?? "none"
+      )
+    );
+  }
+
   return results;
+}
+
+function sampleItem(partial: Partial<Item> & Pick<Item, "id" | "title">): Item {
+  return {
+    ownerId: "u",
+    body: "",
+    isTask: true,
+    isDocumentation: false,
+    isInterval: false,
+    taskStatus: "active",
+    expectedDurationMinutes: 30,
+    taskDueAt: "",
+    taskFixedStartsAt: "",
+    taskFixedEndsAt: "",
+    parentTaskId: "",
+    manualRelevance: 5,
+    tags: [],
+    completionRule: null,
+    documentationSchema: null,
+    documentationData: null,
+    recurrenceRule: null,
+    generatedFromId: "",
+    occurrenceKey: "",
+    overriddenFields: [],
+    intervalKind: "",
+    intervalStartsAt: "",
+    intervalEndsAt: "",
+    intervalStatus: "",
+    revision: 1,
+    createdAt: NOW.toISOString(),
+    updatedAt: NOW.toISOString(),
+    ...partial
+  };
 }
 
 export function schedulingFixtureSummary(results = runSchedulingFixtures()): {

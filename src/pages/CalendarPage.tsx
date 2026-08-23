@@ -18,6 +18,8 @@ import { anchorForToday, headerLabel, navigateAnchor, nextLabel, prevLabel, type
 import { useAtlasData } from "../context/AtlasDataContext";
 import { trackCreateUndo, useUndo } from "../context/UndoContext";
 import { AutoSchedulePanel } from "../components/AutoSchedulePanel";
+import { ReviewPanel } from "../components/ReviewPanel";
+import { WorkBlockButtons } from "../components/WorkBlockButtons";
 import { CalendarDayView, CalendarMonthView, CalendarWeekView } from "../components/calendar/CalendarViews";
 import { DateTimeTextInput } from "../components/DateTimeTextInput";
 
@@ -85,7 +87,7 @@ export function CalendarPage() {
         <div>
           <h1 className="text-4xl font-bold tracking-tight">Calendar</h1>
           <p className="mt-2 text-sm text-neutral-400">
-            Intervals are time containers. Tasks appear via scheduled_in or a fixed appointment.
+            Intervals are work capacity, not fake deadlines. Block morning/afternoon, then auto-schedule into them.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -127,6 +129,12 @@ export function CalendarPage() {
         </div>
       </div>
       <p className="mb-4 text-sm text-neutral-300">{headerLabel(view, view === "month" ? monthStart : view === "week" ? weekStart : anchor)}</p>
+
+      <div className="mb-6">
+        <WorkBlockButtons />
+      </div>
+
+      <ReviewPanel />
 
       <AutoSchedulePanel />
 

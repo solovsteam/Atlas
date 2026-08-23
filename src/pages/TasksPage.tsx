@@ -1,15 +1,16 @@
 import { Link } from "react-router-dom";
 import { useMemo, useState } from "react";
 import type { Item, TaskStatus } from "@shared/item";
-import { isArchivedTask } from "@shared/relevance";
+import { isArchivedTask, isParkedTask } from "@shared/relevance";
 import { scheduledTaskIds } from "@shared/links";
 import { itemToScheduleInput, readinessLabel, taskReadiness } from "@shared/scheduling";
 import { useAtlasData } from "../context/AtlasDataContext";
 import { trackCreateUndo, trackItemPatchUndo, trackTaskStatusUndo, useUndo } from "../context/UndoContext";
 import { useStableInboxOrder } from "../hooks/useStableInboxOrder";
+import { TaskDueChips } from "../components/TaskDueChips";
 import { TaskStatusButtonsForItem } from "../components/TaskStatusButtons";
 
-const DURATION_PRESETS = [15, 30, 60, 90];
+const DURATION_PRESETS = [2, 15, 30, 60, 90];
 
 export function TasksPage() {
   const { items, links, createItem, updateItem } = useAtlasData();
@@ -52,11 +53,16 @@ export function TasksPage() {
     }
   }
 
-  async function patch(item: Item, next: { manualRelevance?: number; expectedDurationMinutes?: number | null }) {
+  async function patch(
+    item: Item,
+    next: { manualRelevance?: number; expectedDurationMinutes?: number | null; taskDueAt?: string | null }
+  ) {
     const before =
       next.manualRelevance !== undefined
         ? { manualRelevance: item.manualRelevance }
-        : { expectedDurationMinutes: item.expectedDurationMinutes };
+        : next.expectedDurationMinutes !== undefined
+          ? { expectedDurationMinutes: item.expectedDurationMinutes }
+          : { taskDueAt: item.taskDueAt || null };
     try {
       const result = await updateItem(item.id, JSON.stringify(next), item.revision);
       if ("ok" in result && result.ok) {
@@ -72,7 +78,9 @@ export function TasksPage() {
       <div className="mb-2 flex items-end justify-between gap-4">
         <div>
           <h1 className="text-4xl font-bold tracking-tight">Tasks</h1>
-          <p className="mt-2 text-sm text-neutral-400">Fast capture. Importance and duration are enough to schedule.</p>
+          <p className="mt-2 text-sm text-neutral-400">
+            Fast capture. {desired.length} open. Park with later — those wait on Items, not here.
+          </p>
         </div>
         <button
           className={pendingResort ? "text-xs text-white" : "text-xs text-neutral-500 hover:text-white"}
@@ -104,13 +112,14 @@ export function TasksPage() {
             const input = itemToScheduleInput(item, items);
             const ready = taskReadiness(input, scheduled.has(item.id));
             const archived = isArchivedTask(item);
+            const parked = isParkedTask(item);
             return (
-              <li className={`py-4 ${archived ? "opacity-60" : ""}`} key={item.id}>
+              <li className={`py-4 ${archived || parked ? "opacity-60" : ""}`} key={item.id}>
                 <div className="flex items-start gap-3">
                   <TaskStatusButtonsForItem item={item} onStatusChange={setTaskStatus} />
                   <div className="min-w-0 flex-1">
                     <Link
-                      className={`font-medium hover:underline ${archived ? "text-neutral-400 line-through" : ""}`}
+                      className={`font-medium hover:underline ${archived ? "text-neutral-400 line-through" : parked ? "text-amber-200/80" : ""}`}
                       to={`/item/${item.id}`}
                     >
                       {item.title || "Untitled"}
@@ -144,6 +153,7 @@ export function TasksPage() {
                         </button>
                       ))}
                     </div>
+                    <TaskDueChips item={item} onChange={(dueAt) => void patch(item, { taskDueAt: dueAt })} />
                   </div>
                 </div>
               </li>

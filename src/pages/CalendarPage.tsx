@@ -20,6 +20,7 @@ import { trackCreateUndo, useUndo } from "../context/UndoContext";
 import { AutoSchedulePanel } from "../components/AutoSchedulePanel";
 import { ReviewPanel } from "../components/ReviewPanel";
 import { WorkBlockButtons } from "../components/WorkBlockButtons";
+import { CalendarIcsButton } from "../components/CalendarIcsButton";
 import { CalendarDayView, CalendarMonthView, CalendarWeekView } from "../components/calendar/CalendarViews";
 import { DateTimeTextInput } from "../components/DateTimeTextInput";
 
@@ -130,8 +131,9 @@ export function CalendarPage() {
       </div>
       <p className="mb-4 text-sm text-neutral-300">{headerLabel(view, view === "month" ? monthStart : view === "week" ? weekStart : anchor)}</p>
 
-      <div className="mb-6">
+      <div className="mb-6 flex flex-wrap items-center gap-2">
         <WorkBlockButtons />
+        <CalendarIcsButton />
       </div>
 
       <ReviewPanel />

@@ -9,34 +9,35 @@ export type WorkBlockSpec = {
   endsAt: Date;
 };
 
+/** Unclamped 09–12 / 13–17 local, for overlap checks and empty-morning nudges. */
+export function nominalWorkWindow(now: Date, kind: WorkBlockKind): { startsAt: Date; endsAt: Date } {
+  const day = startOfDay(now);
+  if (kind === "morning") {
+    const startsAt = new Date(day);
+    startsAt.setHours(9, 0, 0, 0);
+    const endsAt = new Date(day);
+    endsAt.setHours(12, 0, 0, 0);
+    return { startsAt, endsAt };
+  }
+  const startsAt = new Date(day);
+  startsAt.setHours(13, 0, 0, 0);
+  const endsAt = new Date(day);
+  endsAt.setHours(17, 0, 0, 0);
+  return { startsAt, endsAt };
+}
+
 function clampStart(nominal: Date, now: Date): Date {
   return new Date(Math.max(nominal.getTime(), now.getTime()));
 }
 
 /** Remaining morning (09–12) or afternoon (13–17) local time, or null if that window is already over. */
 export function workBlockForNow(now: Date, kind: WorkBlockKind): WorkBlockSpec | null {
-  const day = startOfDay(now);
-  if (kind === "morning") {
-    const nominal = new Date(day);
-    nominal.setHours(9, 0, 0, 0);
-    const endsAt = new Date(day);
-    endsAt.setHours(12, 0, 0, 0);
-    const startsAt = clampStart(nominal, now);
-    if (endsAt.getTime() - startsAt.getTime() < 20 * 60_000) {
-      return null;
-    }
-    return { kind, label: "Morning", startsAt, endsAt };
-  }
-
-  const nominal = new Date(day);
-  nominal.setHours(13, 0, 0, 0);
-  const endsAt = new Date(day);
-  endsAt.setHours(17, 0, 0, 0);
-  const startsAt = clampStart(nominal, now);
-  if (endsAt.getTime() - startsAt.getTime() < 20 * 60_000) {
+  const window = nominalWorkWindow(now, kind);
+  const startsAt = clampStart(window.startsAt, now);
+  if (window.endsAt.getTime() - startsAt.getTime() < 20 * 60_000) {
     return null;
   }
-  return { kind, label: "Afternoon", startsAt, endsAt };
+  return { kind, label: kind === "morning" ? "Morning" : "Afternoon", startsAt, endsAt: window.endsAt };
 }
 
 export function workBlockOverlapsExisting(spec: WorkBlockSpec, slots: ScheduleSlot[]): boolean {

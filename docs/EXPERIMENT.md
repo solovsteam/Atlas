@@ -42,6 +42,20 @@ Widely repeated advice is mostly a **hybrid**, not one school. Capture and close
 
 When Atlas and a slogan conflict, the test is: **does the slogan assume a calendar of appointments, or a list with no capacity?** Atlas has both. Capacity wins over “never calendar tasks.” Focus wins over “do the 2-minute thing in the middle of deep work.”
 
+## The open-the-app problem
+
+A ranking engine cannot make you open Atlas. Opening the app is itself a task: low expectancy (“I’ll just feel guilty”), delayed value, easy to skip. That is why a phone Reminders list dies — it is **pull-only**, and opening it is aversive.
+
+What actually works for time-true events is the OS calendar: it interrupts you. Atlas now does three things that borrow that, and refuses the thing that makes Reminders worse:
+
+1. **Clock-true pings** (opt-in): 10 minutes before an appointment or work block, at the start, and once at 08:50 if today has no morning block. Never “you have 12 tasks.”
+2. **`.ics` export** on Calendar: put the next 7 days into Apple/Google Calendar so the phone you already glance at does the interrupting.
+3. **Capture in the header** so a visit can dump a thought without navigating.
+
+**Hard wall:** if the browser is fully quit, the laptop is asleep, or iOS has not installed the PWA *and* Atlas is not open, a web app cannot wake you. That needs server web push (ROADMAP v2) plus you allowing it. No task app can create the *value* of the underlying work; if looking at obligations is itself the aversive thing, notifications get disabled and we are done. The app can only fail less at “I forgot this exists” and “opening this is punishment.”
+
+Pin the tab or add Atlas to the dock/Home Screen, turn on pings, or import the calendar file. Those are the realistic habits. A prettier inbox is not.
+
 ## Principles that change code
 
 ### Temporal Motivation Theory (Steel & König, 2006)
@@ -111,4 +125,4 @@ Metrics from `npm run test:scheduling` (after last-chance deadline bonus): see f
 
 ## Out of scope
 
-Circadian energy, LLM enricher, web push, local-first sync, documentation items, recurrence materialization, assignment-lock UI.
+Circadian energy, LLM enricher, **server** web push (app fully closed / iPhone without a worker), local-first sync, documentation items, recurrence materialization, assignment-lock UI.

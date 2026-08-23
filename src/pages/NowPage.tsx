@@ -8,6 +8,7 @@ import { useAtlasData } from "../context/AtlasDataContext";
 import { trackCreateLinkUndo, trackTaskStatusUndo, useUndo } from "../context/UndoContext";
 import { TaskStatusButtonsForItem } from "../components/TaskStatusButtons";
 import { WorkBlockButtons } from "../components/WorkBlockButtons";
+import { NudgeToggle } from "../components/NudgeToggle";
 
 function currentInterval(items: Item[], now: Date): Item | null {
   return (
@@ -114,8 +115,9 @@ export function NowPage() {
         One thing. Capture lives on Tasks; this page is for starting.
         {remainingLabel ? ` ${remainingLabel} left in ${interval?.title || "this block"}.` : ""}
       </p>
-      <div className="mt-4">
+      <div className="mt-4 flex flex-wrap items-center gap-3">
         <WorkBlockButtons />
+        <NudgeToggle />
       </div>
       {error ? <p className="mt-4 text-sm text-red-400">{error}</p> : null}
 

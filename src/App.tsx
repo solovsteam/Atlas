@@ -3,6 +3,8 @@ import { authDisplayName, authPicture, useAuthSession } from "./hooks/useAuthSes
 import { AtlasDataProvider, useAtlasData } from "./context/AtlasDataContext";
 import { RelevanceProvider } from "./context/RelevanceContext";
 import { UndoProvider, useUndo } from "./context/UndoContext";
+import { NudgeProvider } from "./context/NudgeContext";
+import { CaptureBar } from "./components/CaptureBar";
 import { NowPage } from "./pages/NowPage";
 import { ItemPage } from "./pages/ItemPage";
 import { TasksPage } from "./pages/TasksPage";
@@ -94,6 +96,7 @@ function AppShell() {
       restoreLink={restoreLink}
     >
       <RelevanceProvider items={items}>
+        <NudgeProvider>
         <main className="min-h-screen bg-black px-6 py-10 text-white" lang="de">
           <section className="mx-auto max-w-6xl">
             <div className="mb-3 flex items-center justify-between gap-3">
@@ -108,7 +111,7 @@ function AppShell() {
                 </button>
               </div>
             </div>
-            <nav className="mb-8 flex flex-wrap gap-4 text-sm text-neutral-400">
+            <nav className="mb-4 flex flex-wrap gap-4 text-sm text-neutral-400">
               <NavLink className={navClass} to="/">
                 Now
               </NavLink>
@@ -125,6 +128,7 @@ function AppShell() {
                 Archive
               </NavLink>
             </nav>
+            <CaptureBar />
             {itemsLoading ? <p className="text-sm text-neutral-500">Loading items…</p> : null}
             {itemsError ? <p className="mb-4 text-sm text-red-400">{itemsError}</p> : null}
             {linksError ? <p className="mb-4 text-sm text-red-400">{linksError}</p> : null}
@@ -149,6 +153,7 @@ function AppShell() {
             </Routes>
           </section>
         </main>
+        </NudgeProvider>
       </RelevanceProvider>
     </UndoProvider>
   );

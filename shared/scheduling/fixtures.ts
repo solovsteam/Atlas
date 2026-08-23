@@ -3,6 +3,8 @@ import { nowMotivation, postponementCost } from "./deferral";
 import { mergeSchedulerConfig, type IntervalInput, type PlacementStrategy, type TaskScheduleInput } from "./types";
 import { buildNowFocus } from "./now";
 import { isOverdue } from "../due";
+import { buildNudges } from "../nudges";
+import { calendarIcs } from "../ics";
 import type { Item } from "../item";
 import type { ItemLink } from "../links";
 
@@ -280,6 +282,44 @@ export function runSchedulingFixtures(): FixtureResult[] {
         busy.primary?.item.id === "real",
         busy.primary?.item.id ?? "none"
       )
+    );
+  }
+
+  {
+    const now = new Date(2026, 7, 23, 8, 55, 0);
+    const empty = buildNudges([], [], now);
+    results.push(
+      assert(
+        "empty-morning-when-unblocked",
+        empty.some((nudge) => nudge.kind === "empty_morning"),
+        empty.map((nudge) => nudge.kind).join(",") || "none"
+      )
+    );
+
+    const start = new Date(2026, 7, 23, 9, 0, 0);
+    const end = new Date(2026, 7, 23, 12, 0, 0);
+    const block = sampleItem({
+      id: "am-nudge",
+      title: "Morning",
+      isTask: false,
+      isInterval: true,
+      intervalKind: "fixed",
+      intervalStartsAt: start.toISOString(),
+      intervalEndsAt: end.toISOString(),
+      intervalStatus: "scheduled"
+    });
+    const blocked = buildNudges([block], [], now);
+    results.push(
+      assert(
+        "blocked-morning-skips-empty-nudge",
+        !blocked.some((nudge) => nudge.kind === "empty_morning") && blocked.some((nudge) => nudge.kind === "block_soon"),
+        blocked.map((nudge) => nudge.kind).join(",")
+      )
+    );
+
+    const ics = calendarIcs([block], [], now);
+    results.push(
+      assert("ics-contains-interval", ics.includes("BEGIN:VEVENT") && ics.includes("Morning"), ics.slice(0, 120))
     );
   }
 

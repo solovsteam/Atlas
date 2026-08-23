@@ -1,10 +1,15 @@
 import { createContext, useCallback, useContext, useRef, type ReactNode } from "react";
 import type { CreateItemResult, Item, ItemPatch, UpdateItemResult } from "@shared/item";
+import type { ItemLink } from "@shared/links";
+import type { ScheduleLinkChange } from "@shared/scheduling";
 import { mergeItemPatch, parseJson } from "@shared/item";
 import { useAuthSession } from "../hooks/useAuthSession";
 import { useItemMutations } from "../hooks/useItemMutations";
+import { useItemLinks } from "../hooks/useItemLinks";
 import { useItems } from "../hooks/useItems";
 import type { CreateItemOptions } from "../services/items";
+import { applyScheduleLinkChanges, revertScheduleLinkChanges } from "../services/scheduling";
+import { supabase } from "../lib/supabase";
 
 type AtlasDataContextValue = {
   userId: string | undefined;
@@ -12,6 +17,11 @@ type AtlasDataContextValue = {
   itemsLoading: boolean;
   itemsError: string | null;
   extendedSchema: boolean;
+  itemLinks: ItemLink[];
+  itemLinksAvailable: boolean;
+  setItemLinks: (links: ItemLink[]) => void;
+  applyScheduleLinkChanges: (changes: ScheduleLinkChange[]) => Promise<ItemLink[]>;
+  revertScheduleLinkChanges: (changes: ScheduleLinkChange[]) => Promise<ItemLink[]>;
   createItem: (title: string, options?: CreateItemOptions) => Promise<CreateItemResult>;
   updateItem: (id: string, patchJson: string, expectedRevision: number) => Promise<UpdateItemResult>;
   deleteItem: (id: string) => Promise<void>;
@@ -24,9 +34,12 @@ export function AtlasDataProvider({ children }: { children: ReactNode }) {
   const { session } = useAuthSession();
   const userId = session?.user.id;
   const { items, loading, error, extendedSchema, removeItemById, upsertItem } = useItems(userId);
+  const { links: itemLinks, available: itemLinksAvailable, upsertLinks: setItemLinks } = useItemLinks(userId);
   const mutations = useItemMutations(userId, extendedSchema);
   const itemsRef = useRef(items);
   itemsRef.current = items;
+  const itemLinksRef = useRef(itemLinks);
+  itemLinksRef.current = itemLinks;
   const updateChainsRef = useRef(new Map<string, Promise<UpdateItemResult>>());
 
   const updateItem = useCallback(
@@ -113,6 +126,40 @@ export function AtlasDataProvider({ children }: { children: ReactNode }) {
     [mutations.restoreItem, upsertItem]
   );
 
+  const applyScheduleLinks = useCallback(
+    async (changes: ScheduleLinkChange[]) => {
+      if (!userId || changes.length === 0) {
+        return itemLinksRef.current;
+      }
+      const nextLinks = await applyScheduleLinkChanges(
+        supabase,
+        userId,
+        changes,
+        itemLinksRef.current
+      );
+      setItemLinks(nextLinks);
+      return nextLinks;
+    },
+    [setItemLinks, userId]
+  );
+
+  const revertScheduleLinks = useCallback(
+    async (changes: ScheduleLinkChange[]) => {
+      if (!userId || changes.length === 0) {
+        return itemLinksRef.current;
+      }
+      const nextLinks = await revertScheduleLinkChanges(
+        supabase,
+        userId,
+        changes,
+        itemLinksRef.current
+      );
+      setItemLinks(nextLinks);
+      return nextLinks;
+    },
+    [setItemLinks, userId]
+  );
+
   return (
     <AtlasDataContext.Provider
       value={{
@@ -121,6 +168,11 @@ export function AtlasDataProvider({ children }: { children: ReactNode }) {
         itemsLoading: loading,
         itemsError: error,
         extendedSchema,
+        itemLinks,
+        itemLinksAvailable,
+        setItemLinks,
+        applyScheduleLinkChanges: applyScheduleLinks,
+        revertScheduleLinkChanges: revertScheduleLinks,
         createItem: mutations.createItem,
         updateItem,
         deleteItem,

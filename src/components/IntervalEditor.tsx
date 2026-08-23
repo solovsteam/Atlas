@@ -53,18 +53,18 @@ export function IntervalEditor({
       </div>
 
       <div className="space-y-2 text-sm">
-        {slot.kind !== "due" ? (
-          <EditableSlotTime
-            iso={slot.startsAt}
-            label={slot.kind === "allDay" ? "Date" : "Starts"}
-            mode={slot.kind === "allDay" ? "date" : "datetime"}
-            onSave={(iso) => void patchItem({ intervalStartsAt: iso || null })}
-          />
-        ) : null}
+        <EditableSlotTime
+          iso={slot.startsAt}
+          key={`${item.id}-starts-${slot.startsAt ?? ""}`}
+          label={slot.kind === "allDay" ? "Date" : "Starts"}
+          mode={slot.kind === "allDay" ? "date" : "datetime"}
+          onSave={(iso) => void patchItem({ intervalStartsAt: iso || null })}
+        />
         {slot.kind !== "allDay" ? (
           <EditableSlotTime
             iso={slot.endsAt}
-            label={slot.kind === "due" ? "Due" : "Ends"}
+            key={`${item.id}-ends-${slot.endsAt ?? ""}`}
+            label="Ends"
             mode="datetime"
             onSave={(iso) => void patchItem({ intervalEndsAt: iso || null })}
           />

@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type { UndoOp } from "@shared/commands";
+import type { ScheduleLinkChange } from "@shared/scheduling";
 import type { Item, ItemPatch, UpdateItemResult } from "@shared/item";
 
 type UndoContextValue = {
@@ -19,13 +20,15 @@ export function UndoProvider({
   items,
   updateItem,
   deleteItem,
-  restoreItem
+  restoreItem,
+  revertScheduleLinks
 }: {
   children: ReactNode;
   items: Item[];
   updateItem: (id: string, patchJson: string, expectedRevision: number) => Promise<UpdateItemResult>;
   deleteItem: (id: string) => Promise<void>;
   restoreItem: (item: Item) => Promise<void>;
+  revertScheduleLinks?: (changes: ScheduleLinkChange[]) => Promise<void>;
 }) {
   const stackRef = useRef<UndoOp[]>([]);
   const [canUndo, setCanUndo] = useState(false);
@@ -68,6 +71,13 @@ export function UndoProvider({
       return;
     }
 
+    if (op.kind === "scheduleLinks") {
+      if (revertScheduleLinks) {
+        await revertScheduleLinks(op.changes);
+      }
+      return;
+    }
+
     const revision = getRevision(op.id);
     if (revision === undefined) {
       return;
@@ -81,7 +91,7 @@ export function UndoProvider({
     if (op.kind === "setTaskStatus") {
       await updateItem(op.id, JSON.stringify({ taskStatus: op.before }), revision);
     }
-  }, [deleteItem, getRevision, refresh, restoreItem, updateItem]);
+  }, [deleteItem, getRevision, refresh, restoreItem, revertScheduleLinks, updateItem]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -123,4 +133,14 @@ export function trackCreateUndo(push: UndoContextValue["push"], id: string) {
 
 export function trackDeleteUndo(push: UndoContextValue["push"], item: Item) {
   push({ kind: "deleteItem", snapshot: item });
+}
+
+export function trackScheduleLinksUndo(
+  push: UndoContextValue["push"],
+  changes: ScheduleLinkChange[]
+) {
+  if (changes.length === 0) {
+    return;
+  }
+  push({ kind: "scheduleLinks", changes });
 }

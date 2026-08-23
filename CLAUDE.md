@@ -2,7 +2,22 @@
 
 Atlas is a **Vite + React + Supabase** app in this directory. The old Lakebed capsule is deprecated; archived reference code lives in `.lakebed/reference/`.
 
-**Read [`docs/ROADMAP.md`](docs/ROADMAP.md) before feature work** — it covers architecture, phased features, and notifications.
+## Documentation map
+
+| File | Role |
+|------|------|
+| [`docs/ROADMAP.md`](docs/ROADMAP.md) | **Product source of truth** — vision, shipped vs planned features, architecture, phased porting, notifications |
+| This file (`CLAUDE.md`) | How agents work in this repo — stack rules, UX conventions, conflict handling (mirror of `AGENTS.md`) |
+| [`docs/LESSONS.md`](docs/LESSONS.md) | Mistakes and migration notes worth remembering |
+| [`README.md`](README.md) | Human quick start and setup (keep feature lists aligned with ROADMAP) |
+
+**Read [`docs/ROADMAP.md`](docs/ROADMAP.md) before feature work.**
+
+### When a request clashes with ROADMAP
+
+If the user's request conflicts with product direction documented in ROADMAP (or other docs above) — for example undo vs confirmation dialogs, the item/link model, phased scope, or architecture choices — **call it out explicitly** before implementing. Offer options: follow the doc, update the doc first, or treat the request as an intentional exception.
+
+Do not silently ignore documented direction.
 
 ## Hard rules
 
@@ -79,6 +94,11 @@ When implementing Phase 2+ features:
 
 ## Current limits
 
-- Extended item fields (intervals, documentation, recurrence) are partially ported; item links and notifications are not shipped yet.
-- No notification system shipped; follow roadmap in `docs/ROADMAP.md` when adding.
+See **Feature status** in [`docs/ROADMAP.md`](docs/ROADMAP.md) for the up-to-date shipped vs planned list. In brief:
+
+- **Now** (`/`) is a stub pointing to Tasks and Items.
+- **Tasks** (`/tasks`) is the fast path for active tasks; **Items** (`/items`) is for planning notes and full scheduling detail.
+- Calendar, archive, intervals, task scheduling, and `scheduled_in` links are in progress or recently added — documentation items, full link kinds (`context`, `documentation`, `generates`), recurrence/materialization UI are not shipped.
+- **Auto-schedule v1** is on Calendar (manual preview/apply); quick/planning modes, locks, and LLM enricher are not shipped yet.
+- No notification system; follow the notifications section in ROADMAP when adding.
 - Local dev uses HTTP; production should use HTTPS (e.g. Vercel).

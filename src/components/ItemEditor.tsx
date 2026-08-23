@@ -10,6 +10,8 @@ import { SubtaskParentEditor } from "./SubtaskParentEditor";
 import { SubtaskQuickAdd } from "./SubtaskQuickAdd";
 import { TagsEditor } from "./TagsEditor";
 import { TaskDurationEditor } from "./TaskDurationEditor";
+import { TaskIntervalLinkEditor } from "./TaskIntervalLinkEditor";
+import { TaskSchedulingEditor } from "./TaskSchedulingEditor";
 import { TaskStatusButtons } from "./TaskStatusButtons";
 
 export function ItemEditor({
@@ -20,7 +22,7 @@ export function ItemEditor({
   updateItem: (id: string, patchJson: string, expectedRevision: number) => Promise<UpdateItemResult>;
 }) {
   const { push } = useUndo();
-  const { extendedSchema, items } = useAtlasData();
+  const { extendedSchema, items, itemLinks, itemLinksAvailable, setItemLinks } = useAtlasData();
   const subtaskCount = useMemo(() => subtasksOf(item.id, items).length, [item.id, items]);
   const autosave = useAutosaveItem(item, updateItem, (before) => {
     trackItemPatchUndo(push, item.id, before);
@@ -123,6 +125,10 @@ export function ItemEditor({
             <p className="mb-2 text-xs text-neutral-500">Task status</p>
             <TaskStatusButtons status={item.taskStatus ?? "active"} onChange={(status) => void patchItemSafe({ taskStatus: status })} />
             <TaskDurationEditor item={item} updateItem={updateItem} />
+            <TaskSchedulingEditor item={item} updateItem={updateItem} />
+            {itemLinksAvailable ? (
+              <TaskIntervalLinkEditor item={item} links={itemLinks} onLinksChange={setItemLinks} />
+            ) : null}
             <SubtaskParentEditor item={item} items={items} updateItem={updateItem} />
             {subtaskCount === 0 ? <SubtaskQuickAdd parentId={item.id} /> : null}
           </div>

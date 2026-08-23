@@ -1,14 +1,14 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
-import type { Item, TaskStatus } from "@shared/item";
-import { buildInboxEntries, collectTags, type InboxEntry } from "@shared/relevance";
+import type { Item } from "@shared/item";
+import { buildInboxEntries, collectTags, isLibraryItem, type InboxEntry, type PropertyFilter } from "@shared/relevance";
 
 type RelevanceState = {
   items: Item[];
   activeTags: string[];
   toggleTag: (tag: string) => void;
   allTags: string[];
-  activeStatusBoosts: TaskStatus[];
-  toggleStatusBoost: (status: TaskStatus) => void;
+  activePropertyFilter: PropertyFilter | null;
+  togglePropertyFilter: (filter: PropertyFilter) => void;
   inbox: InboxEntry[];
 };
 
@@ -17,34 +17,33 @@ const RelevanceContext = createContext<RelevanceState>({
   activeTags: [],
   toggleTag: () => undefined,
   allTags: [],
-  activeStatusBoosts: [],
-  toggleStatusBoost: () => undefined,
+  activePropertyFilter: null,
+  togglePropertyFilter: () => undefined,
   inbox: []
 });
 
 export function RelevanceProvider({ items, children }: { items: Item[]; children: ReactNode }) {
   const [activeTags, setActiveTags] = useState<string[]>([]);
-  const [activeStatusBoosts, setActiveStatusBoosts] = useState<TaskStatus[]>([]);
+  const [activePropertyFilter, setActivePropertyFilter] = useState<PropertyFilter | null>(null);
 
-  const allTags = useMemo(() => collectTags(items), [items]);
+  const libraryItems = useMemo(() => items.filter(isLibraryItem), [items]);
+  const allTags = useMemo(() => collectTags(libraryItems), [libraryItems]);
   const inbox = useMemo(
     () =>
       buildInboxEntries(items, {
         now: new Date(),
         activeTags,
-        activeStatusBoosts
+        activePropertyFilter
       }),
-    [items, activeTags, activeStatusBoosts]
+    [items, activeTags, activePropertyFilter]
   );
 
   function toggleTag(tag: string) {
     setActiveTags((current) => (current.includes(tag) ? current.filter((entry) => entry !== tag) : [...current, tag]));
   }
 
-  function toggleStatusBoost(status: TaskStatus) {
-    setActiveStatusBoosts((current) =>
-      current.includes(status) ? current.filter((entry) => entry !== status) : [...current, status]
-    );
+  function togglePropertyFilter(filter: PropertyFilter) {
+    setActivePropertyFilter((current) => (current === filter ? null : filter));
   }
 
   return (
@@ -54,8 +53,8 @@ export function RelevanceProvider({ items, children }: { items: Item[]; children
         activeTags,
         toggleTag,
         allTags,
-        activeStatusBoosts,
-        toggleStatusBoost,
+        activePropertyFilter,
+        togglePropertyFilter,
         inbox
       }}
     >

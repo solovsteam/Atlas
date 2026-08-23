@@ -4,14 +4,19 @@ This document is the source of truth for product direction, architecture decisio
 
 Atlas is a unified notes, tasks, and calendar app. The active codebase is **Vite + React + Supabase** in this directory. The former Lakebed implementation is archived under `.lakebed/reference/` for porting only — do not extend it.
 
+**Working copy:** develop against the **local directory** first. GitHub is a backup/deploy mirror — it may lag behind local work until pushed.
+
 ---
 
 ## Product vision
 
 - **One model:** everything is an **Item** (notes, tasks, intervals, documentation).
 - **Graph, not folders:** relationships via **item links** (`context`, `documentation`, `generates`, `scheduled_in`).
-- **Now inbox:** relevance-ranked list with tags, status boosts, stable ordering.
-- **Calendar:** intervals as items; tasks linked via `scheduled_in`.
+- **Now:** focus view — current interval tasks or today's list (stub at `/`).
+- **Tasks:** quick throwaway tasks — fast add, check off, inline importance/duration (`/tasks`).
+- **Items:** library and planning — notes, generators, full scheduling detail (`/items`).
+- **Calendar:** day / week / month views for intervals; tasks via `scheduled_in` links or fixed appointment times.
+- **Archive:** done and cancelled tasks (`/archive`); hidden from Items by default.
 - **Long-term values:** user-owned data, optional local-first, sync when online (especially for notifications and multi-device).
 - **Undo-first interaction:** destructive actions run immediately; **undo** is the safety net — no confirmation dialogs (see below).
 
@@ -74,12 +79,62 @@ Supabase is currently used in ~5 files; `shared/` domain logic is portable. **Do
 - [x] Google sign-in (Supabase Auth)
 - [x] Items: create, edit title/body, delete
 - [x] Task toggle + status (active / done / cancelled)
-- [x] Now inbox: relevance, tag filters, search
+- [x] Items library: browse notes and active tasks with tag/property filters and search
+- [x] Archive page for done and cancelled tasks
+- [x] Calendar page: day / week / month views with scaled interval blocks
+- [x] Item links (`scheduled_in`): assign tasks to intervals; shown on calendar
 - [x] Item detail: autosave, revision conflicts
 - [x] Undo (Cmd/Ctrl+Z and button)
 - [x] Realtime item list (Supabase Realtime)
 - [x] Task expected duration (minutes, for future calendar / auto-scheduling)
 - [x] Task subtasks (parent task link + subtask list on item detail)
+- [x] Task scheduling fields: optional due date, optional fixed appointment times; constraint helpers in `shared/scheduling/`
+- [x] Intervals are time containers only (`fixed`, `allDay`) — due dates live on tasks, not intervals
+- [x] Auto-schedule v1: relevance scoring (urgency + importance) + greedy interval placement; Calendar preview/apply with undo
+- [x] **Tasks page** (`/tasks`): quick task add, inline done toggle, importance slider, duration presets, schedule readiness badges
+- [x] Scheduling readiness model: necessary vs optional fields, `missing_info` vs `no_feasible_interval`, subtask inheritance (`shared/scheduling/readiness.ts`)
+
+### Surface split: Tasks vs Items vs Now
+
+| Route | Purpose |
+|-------|---------|
+| `/tasks` | Speed — throwaway tasks, check off, glance at schedule status |
+| `/items` | Specificity — notes, generators, deadlines, appointments, full editor |
+| `/` Now | Future focus — current interval + today's committed list (stub) |
+
+**UX principles for frequent actions:** primary controls at the top; prefer sliders/chips over typed fields; one-tap done on Tasks; tap title for optional detail page.
+
+### Scheduling readiness
+
+Tasks are schedulable only when required fields are complete. Optional fields use safe defaults (duration 30 min, importance 0, flexible deferral curve).
+
+| Readiness | Meaning |
+|-----------|---------|
+| `ready` | Eligible for auto-schedule |
+| `missing_info` | Incomplete constraint (e.g. partial fixed appointment) — **not** the same as no calendar room |
+| `no_feasible_interval` | Info complete but no interval fits |
+| `scheduled` | Has `scheduled_in` link |
+| `excluded` | Done, cancelled, or fixed appointment |
+
+**Necessary (v1):** partial fixed appointment must have both start and end, or neither. **Quick tasks** (Tasks page origin) require title only. **Subtasks** inherit parent's scheduling fields when unset.
+
+**Deferred:** `task_scheduling_mode` DB column, auto-schedule on quick create, Items-only generators/notes restriction, ItemEditor split.
+
+### Auto-scheduling (in progress)
+
+Architecture: **algorithm-first, LLM as optional enricher** — hard constraints stay deterministic in `shared/scheduling/`; future LLM plugins implement `TaskEnricher` and never write links directly.
+
+| Layer | Location | v1 | Next |
+|-------|----------|-----|------|
+| Enrichers | `shared/scheduling/deferralCost.ts` (+ future LLM) | Infer `deadline_step` / `linear_continuous` curves from task fields | Custom curves (e.g. non-linear continuous) via `TaskScheduleInput.deferralCost` |
+| Engine | `shared/scheduling/engine.ts` | Greedy assign by decreasing relevance | Locks, quick/planning modes |
+| Apply | `src/services/scheduling.ts` | Manual Auto-schedule on Calendar; batch undo | Quick-mode on create; incremental replan |
+
+**v1 shipped:** score active non-fixed tasks; assign to earliest feasible interval within horizon; respect deadline, duration, interval capacity; preview + apply on Calendar.
+
+**Deferred:** 4th task status (planning/unscheduled), quick vs planning scheduling modes, assignment locks, automatic replan on mutation, LLM enricher, location/startable window constraints.
+
+**Compute (personal scale, ~100 tasks + ~50 intervals):** pure algorithm runs in **&lt;50 ms** client-side, **$0**, offline. Full LLM scheduling is **not recommended** (latency, non-determinism); optional LLM enricher calls are **&lt;$0.01/run** if used sparingly.
 
 ### To port from Lakebed reference
 
@@ -94,6 +149,26 @@ Source: `.lakebed/reference/` (read-only archive, gitignored).
 | **—** | Lakebed → Supabase data import | Design when schema catches up |
 
 When porting: extend Supabase migrations first, then `shared/`, then `src/services/`, then UI. Merge full item fields from reference `shared/item.ts` incrementally.
+
+---
+
+## Task scheduling constraints
+
+The auto-scheduler treats tasks differently by **constraint mode**, derived from task fields in `shared/scheduling/constraints.ts`:
+
+| Mode | Task fields | Scheduler behavior |
+|------|-------------|-------------------|
+| **Fixed (appointment)** | `fixedStartsAt` + `fixedEndsAt` | Excluded from auto-schedule; shown on calendar directly; surfaces on Now when clock is in range |
+| **Deadline** | optional `dueAt` | Flexible placement before due; urgency increases as due approaches |
+| **Flexible (default)** | neither set; optional `expectedDurationMinutes` | Open-ended work; one duration-sized block per run (default 30 min if unset) |
+
+**Intervals are not constraints.** An interval item is a calendar time block (`fixed` or `allDay`). Tasks are placed into intervals via `scheduled_in` links. Due dates belong on tasks (`task_due_at`), not on intervals.
+
+Key modules in `shared/scheduling/`: `constraints.ts` (hard rules, capacity), `deferralCost.ts` (postponement cost curves — `deadline_step` and `linear_continuous` for now; LLM may override later), `relevance.ts` (combines deferral cost + importance into scores), `engine.ts` (`runScheduler`), `types.ts` (enricher interface).
+
+**Deferral cost curves:** cost of leaving a task undone grows over time. Shape is task-dependent — deadline tasks use a step (with optional pre-deadline shoulder); open-ended tasks use linear growth from creation. Future enrichers can supply custom curves via `TaskScheduleInput.deferralCost`.
+
+**Now page (future):** show fixed/appointment tasks for the current moment first; then today's committed list; use `postponementCost` / `postponementCostDelta` for ranking.
 
 ---
 

@@ -8,6 +8,9 @@ export type DbItemRow = {
   is_interval: boolean;
   task_status: string;
   task_expected_minutes: number | null;
+  task_due_at: string;
+  task_fixed_starts_at: string;
+  task_fixed_ends_at: string;
   parent_task_id: string | null;
   manual_relevance: number;
   tags: unknown;
@@ -37,6 +40,9 @@ export type DbItemInsert = {
   is_interval?: boolean;
   task_status?: string;
   task_expected_minutes?: number | null;
+  task_due_at?: string;
+  task_fixed_starts_at?: string;
+  task_fixed_ends_at?: string;
   parent_task_id?: string | null;
   manual_relevance?: number;
   tags?: unknown;
@@ -58,6 +64,24 @@ export type DbItemInsert = {
 
 export type DbItemUpdate = Partial<Omit<DbItemRow, "id" | "owner_id" | "created_at">>;
 
+export type DbItemLinkRow = {
+  id: string;
+  owner_id: string;
+  from_id: string;
+  to_id: string;
+  kind: string;
+  created_at: string;
+};
+
+export type DbItemLinkInsert = {
+  id?: string;
+  owner_id: string;
+  from_id: string;
+  to_id: string;
+  kind: string;
+  created_at?: string;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -65,6 +89,12 @@ export type Database = {
         Row: DbItemRow;
         Insert: DbItemInsert;
         Update: DbItemUpdate;
+        Relationships: [];
+      };
+      item_links: {
+        Row: DbItemLinkRow;
+        Insert: DbItemLinkInsert;
+        Update: Partial<Omit<DbItemLinkRow, "id" | "owner_id" | "created_at">>;
         Relationships: [];
       };
     };

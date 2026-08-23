@@ -1,15 +1,20 @@
-import { TASK_STATUSES } from "@shared/item";
+import type { PropertyFilter } from "@shared/relevance";
 import { useRelevance } from "../context/RelevanceContext";
 
+const PROPERTY_FILTERS: { value: PropertyFilter; label: string }[] = [
+  { value: "notes", label: "notes" },
+  { value: "active", label: "active" }
+];
+
 export function StatusBoostBar() {
-  const { activeStatusBoosts, toggleStatusBoost } = useRelevance();
+  const { activePropertyFilter, togglePropertyFilter } = useRelevance();
 
   return (
     <div className="mb-4">
-      <p className="mb-2 text-xs uppercase tracking-wide text-neutral-500">Boost task status</p>
+      <p className="mb-2 text-xs uppercase tracking-wide text-neutral-500">Property</p>
       <div className="flex flex-wrap gap-2">
-        {TASK_STATUSES.map((status) => {
-          const active = activeStatusBoosts.includes(status);
+        {PROPERTY_FILTERS.map(({ value, label }) => {
+          const active = activePropertyFilter === value;
           return (
             <button
               className={
@@ -17,11 +22,11 @@ export function StatusBoostBar() {
                   ? "rounded-full border border-white bg-white px-3 py-1 text-xs font-medium text-black"
                   : "rounded-full border border-neutral-700 px-3 py-1 text-xs text-neutral-300 hover:border-neutral-400"
               }
-              key={status}
+              key={value}
               type="button"
-              onClick={() => toggleStatusBoost(status)}
+              onClick={() => togglePropertyFilter(value)}
             >
-              {status}
+              {label}
             </button>
           );
         })}

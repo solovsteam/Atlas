@@ -1,10 +1,15 @@
-import { BrowserRouter, Link, Route, Routes } from "react-router-dom";
+import { BrowserRouter, NavLink, Route, Routes } from "react-router-dom";
 import { authDisplayName, authPicture, useAuthSession } from "./hooks/useAuthSession";
 import { AtlasDataProvider, useAtlasData } from "./context/AtlasDataContext";
 import { RelevanceProvider } from "./context/RelevanceContext";
 import { UndoProvider, useUndo } from "./context/UndoContext";
-import { NowPage } from "./pages/NowPage";
+import { ArchivePage } from "./pages/ArchivePage";
+import { CalendarPage } from "./pages/CalendarPage";
+import { ItemsPage } from "./pages/ItemsPage";
 import { ItemPage } from "./pages/ItemPage";
+import { NowPage } from "./pages/NowPage";
+import { TasksPage } from "./pages/TasksPage";
+import { SettingsPage } from "./pages/SettingsPage";
 
 function AuthAvatar({ label, picture }: { label: string; picture?: string }) {
   const initial = label.trim().slice(0, 1).toUpperCase() || "?";
@@ -42,6 +47,35 @@ function UndoButton() {
   );
 }
 
+function navLinkClass({ isActive }: { isActive: boolean }) {
+  return isActive ? "text-white" : "text-neutral-400 hover:text-white";
+}
+
+function AppNav() {
+  return (
+    <nav className="mb-8 flex flex-wrap gap-4 text-sm">
+      <NavLink className={navLinkClass} end to="/">
+        Now
+      </NavLink>
+      <NavLink className={navLinkClass} to="/tasks">
+        Tasks
+      </NavLink>
+      <NavLink className={navLinkClass} to="/items">
+        Items
+      </NavLink>
+      <NavLink className={navLinkClass} to="/calendar">
+        Calendar
+      </NavLink>
+      <NavLink className={navLinkClass} to="/archive">
+        Archive
+      </NavLink>
+      <NavLink className={navLinkClass} to="/settings">
+        Settings
+      </NavLink>
+    </nav>
+  );
+}
+
 function LoginScreen({ onSignIn }: { onSignIn: () => void }) {
   return (
     <main className="flex min-h-screen items-center justify-center bg-black px-6 text-white">
@@ -62,7 +96,8 @@ function LoginScreen({ onSignIn }: { onSignIn: () => void }) {
 
 function AppShell() {
   const { session, loading, signInWithGoogle, signOut } = useAuthSession();
-  const { items, itemsLoading, itemsError, updateItem, deleteItem, restoreItem } = useAtlasData();
+  const { items, itemsLoading, itemsError, updateItem, deleteItem, restoreItem, revertScheduleLinkChanges } =
+    useAtlasData();
 
   if (loading) {
     return <main className="min-h-screen bg-black px-6 py-10 text-white">Loading…</main>;
@@ -76,7 +111,13 @@ function AppShell() {
   const picture = authPicture(session.user);
 
   return (
-    <UndoProvider items={items} updateItem={updateItem} deleteItem={deleteItem} restoreItem={restoreItem}>
+    <UndoProvider
+      items={items}
+      updateItem={updateItem}
+      deleteItem={deleteItem}
+      restoreItem={restoreItem}
+      revertScheduleLinks={(changes) => revertScheduleLinkChanges(changes).then(() => undefined)}
+    >
       <RelevanceProvider items={items}>
         <main className="min-h-screen bg-black px-6 py-10 text-white" lang="de">
           <section className="mx-auto max-w-6xl">
@@ -92,24 +133,25 @@ function AppShell() {
                 </button>
               </div>
             </div>
-            <nav className="mb-8 flex gap-4 text-sm text-neutral-400">
-              <Link className="hover:text-white" to="/">
-                Now
-              </Link>
-            </nav>
+            <AppNav />
             {itemsLoading ? <p className="text-sm text-neutral-500">Loading items…</p> : null}
             {itemsError ? <p className="mb-4 text-sm text-red-400">{itemsError}</p> : null}
             <Routes>
               <Route path="/" element={<NowPage />} />
+              <Route path="/tasks" element={<TasksPage />} />
+              <Route path="/items" element={<ItemsPage />} />
+              <Route path="/calendar" element={<CalendarPage />} />
+              <Route path="/archive" element={<ArchivePage />} />
+              <Route path="/settings" element={<SettingsPage />} />
               <Route path="/item/:id" element={<ItemPage />} />
               <Route
                 path="*"
                 element={
                   <section>
                     <h1 className="mb-4 text-4xl font-bold">Not found</h1>
-                    <Link className="text-neutral-300 hover:text-white" to="/">
+                    <NavLink className="text-neutral-300 hover:text-white" to="/">
                       Back to Now
-                    </Link>
+                    </NavLink>
                   </section>
                 }
               />

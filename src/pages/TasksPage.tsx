@@ -1,10 +1,12 @@
 import { Link } from "react-router-dom";
 import { useMemo, useState } from "react";
 import type { Item, TaskStatus } from "@shared/item";
+import { isArchivedTask } from "@shared/relevance";
 import { scheduledTaskIds } from "@shared/links";
 import { itemToScheduleInput, readinessLabel, taskReadiness } from "@shared/scheduling";
 import { useAtlasData } from "../context/AtlasDataContext";
 import { trackCreateUndo, trackItemPatchUndo, trackTaskStatusUndo, useUndo } from "../context/UndoContext";
+import { useStableInboxOrder } from "../hooks/useStableInboxOrder";
 import { TaskStatusButtonsForItem } from "../components/TaskStatusButtons";
 
 const DURATION_PRESETS = [15, 30, 60, 90];
@@ -16,10 +18,12 @@ export function TasksPage() {
   const [error, setError] = useState<string | null>(null);
   const scheduled = useMemo(() => scheduledTaskIds(links), [links]);
 
-  const tasks = useMemo(
+  const desired = useMemo(
     () => items.filter((item) => item.isTask && item.taskStatus === "active"),
     [items]
   );
+  const taskCatalog = useMemo(() => items.filter((item) => item.isTask), [items]);
+  const { visible: tasks, pendingResort, refreshOrder } = useStableInboxOrder("tasks", desired, taskCatalog);
 
   async function onAdd(event: React.FormEvent) {
     event.preventDefault();
@@ -65,8 +69,19 @@ export function TasksPage() {
 
   return (
     <section>
-      <h1 className="text-4xl font-bold tracking-tight">Tasks</h1>
-      <p className="mt-2 text-sm text-neutral-400">Fast capture. Importance and duration are enough to schedule.</p>
+      <div className="mb-2 flex items-end justify-between gap-4">
+        <div>
+          <h1 className="text-4xl font-bold tracking-tight">Tasks</h1>
+          <p className="mt-2 text-sm text-neutral-400">Fast capture. Importance and duration are enough to schedule.</p>
+        </div>
+        <button
+          className={pendingResort ? "text-xs text-white" : "text-xs text-neutral-500 hover:text-white"}
+          type="button"
+          onClick={refreshOrder}
+        >
+          Refresh list
+        </button>
+      </div>
 
       <form className="mt-6 flex gap-3" onSubmit={(event) => void onAdd(event)}>
         <input
@@ -88,12 +103,16 @@ export function TasksPage() {
           {tasks.map((item) => {
             const input = itemToScheduleInput(item, items);
             const ready = taskReadiness(input, scheduled.has(item.id));
+            const archived = isArchivedTask(item);
             return (
-              <li className="py-4" key={item.id}>
+              <li className={`py-4 ${archived ? "opacity-60" : ""}`} key={item.id}>
                 <div className="flex items-start gap-3">
                   <TaskStatusButtonsForItem item={item} onStatusChange={setTaskStatus} />
                   <div className="min-w-0 flex-1">
-                    <Link className="font-medium hover:underline" to={`/item/${item.id}`}>
+                    <Link
+                      className={`font-medium hover:underline ${archived ? "text-neutral-400 line-through" : ""}`}
+                      to={`/item/${item.id}`}
+                    >
                       {item.title || "Untitled"}
                     </Link>
                     <p className="mt-1 text-[11px] uppercase tracking-wide text-neutral-600">{readinessLabel(ready)}</p>

@@ -34,7 +34,7 @@ export function ArchivePage() {
   return (
     <section>
       <h1 className="text-4xl font-bold tracking-tight">Archive</h1>
-      <p className="mt-2 text-sm text-neutral-400">Done and cancelled, in one place. They also remain on Items.</p>
+      <p className="mt-2 text-sm text-neutral-400">Done and cancelled tasks.</p>
       <div className="my-6 flex gap-2">
         {(["all", "done", "cancelled"] as const).map((entry) => (
           <button

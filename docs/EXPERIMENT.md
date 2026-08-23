@@ -15,8 +15,8 @@ Placement default is **`delta_cost_switch`**: for each interval in time order, a
 | Surface | Question | Objective |
 |---------|----------|-----------|
 | **Now** (`/`) | What should I start in this moment? | Tiny choice set (Hick). Appointments and already-committed work beat equally “important” unplaced work (implementation intentions). |
-| **Tasks** (`/tasks`) | What is still open? | Working set only. Done leaves immediately. |
-| **Items** (`/items`) | What exists? | Catalog. Notes and tasks stay, including done/cancelled. Archive is a filter, not a hide. |
+| **Tasks** (`/tasks`) | What is still open? | Working set. Done stays on screen until you refresh the list. |
+| **Items** (`/items`) | What exists? | Library of notes and open work. Done stays until you refresh this list, then it lives in Archive. |
 | **Calendar scheduler** | Where should work sit this week? | Minimize postponement cost under hard constraints; prefer contiguous same-context batches (attention residue). |
 
 ## Principles that change code

@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { useMemo, useState } from "react";
 import type { Item, TaskStatus } from "@shared/item";
-import { searchItems } from "@shared/relevance";
+import { isLibraryItem, searchItems } from "@shared/relevance";
 import { useAtlasData } from "../context/AtlasDataContext";
 import { useRelevance } from "../context/RelevanceContext";
 import { trackCreateUndo, trackDeleteUndo, trackTaskStatusUndo, useUndo } from "../context/UndoContext";
@@ -17,7 +17,8 @@ export function ItemsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const resortKey = `${activeTags.join("\0")}\0${activeStatusBoosts.join("\0")}`;
-  const { visible, pendingResort, refreshOrder } = useStableInboxOrder(inbox, selectedId, resortKey);
+  const desired = useMemo(() => inbox.filter(isLibraryItem), [inbox]);
+  const { visible, pendingResort, refreshOrder } = useStableInboxOrder("items", desired, items, resortKey);
   const { push } = useUndo();
 
   const searchResults = useMemo(() => searchItems(items, query), [items, query]);
@@ -70,15 +71,19 @@ export function ItemsPage() {
       <div className="mb-6 flex items-end justify-between gap-4">
         <div>
           <h1 className="text-4xl font-bold tracking-tight">Items</h1>
-          <p className="mt-2 text-sm text-neutral-400">
-            The catalog — notes and tasks stay here, including done. Archive is just a filter.
-          </p>
+          <p className="mt-2 text-sm text-neutral-400">Notes, planning, and full detail.</p>
         </div>
-        {!showingSearch && pendingResort ? (
-          <button className="text-xs text-neutral-400 hover:text-white" type="button" onClick={refreshOrder}>
-            Apply new order
-          </button>
-        ) : null}
+        <button
+          className={
+            pendingResort && !showingSearch
+              ? "text-xs text-white"
+              : "text-xs text-neutral-500 hover:text-white"
+          }
+          type="button"
+          onClick={refreshOrder}
+        >
+          Refresh list
+        </button>
       </div>
 
       <form className="mb-4 flex gap-3" onSubmit={(event) => void onAdd(event)}>

@@ -15,19 +15,23 @@ create index if not exists item_links_owner_kind_idx on public.item_links (owner
 
 alter table public.item_links enable row level security;
 
+drop policy if exists "item_links_select_own" on public.item_links;
 create policy "item_links_select_own"
   on public.item_links for select
   using (auth.uid() = owner_id);
 
+drop policy if exists "item_links_insert_own" on public.item_links;
 create policy "item_links_insert_own"
   on public.item_links for insert
   with check (auth.uid() = owner_id);
 
+drop policy if exists "item_links_update_own" on public.item_links;
 create policy "item_links_update_own"
   on public.item_links for update
   using (auth.uid() = owner_id)
   with check (auth.uid() = owner_id);
 
+drop policy if exists "item_links_delete_own" on public.item_links;
 create policy "item_links_delete_own"
   on public.item_links for delete
   using (auth.uid() = owner_id);
@@ -42,11 +46,22 @@ begin
 end;
 $$;
 
-drop trigger if exists item_links_updated_at on public.item_links;
-create trigger item_links_updated_at
+create or replace trigger item_links_updated_at
   before update on public.item_links
   for each row
   execute function public.set_item_links_updated_at();
 
 alter table public.item_links replica identity full;
-alter publication supabase_realtime add table public.item_links;
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'item_links'
+  ) then
+    alter publication supabase_realtime add table public.item_links;
+  end if;
+end $$;

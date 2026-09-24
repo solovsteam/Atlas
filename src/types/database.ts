@@ -84,6 +84,30 @@ export type DbItemLinkInsert = {
   updated_at?: string;
 };
 
+export type DbSchemaScheduleRunRow = {
+  id: string;
+  owner_id: string;
+  schema_run_id: string;
+  plan_digest: string;
+  plan: unknown;
+  baseline: unknown;
+  status: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type DbSchemaScheduleRunInsert = {
+  id?: string;
+  owner_id: string;
+  schema_run_id: string;
+  plan_digest: string;
+  plan: unknown;
+  baseline?: unknown;
+  status?: string;
+  created_at?: string;
+  updated_at?: string;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -97,6 +121,12 @@ export type Database = {
         Row: DbItemLinkRow;
         Insert: DbItemLinkInsert;
         Update: Partial<Omit<DbItemLinkRow, "id" | "owner_id" | "created_at">>;
+        Relationships: [];
+      };
+      schema_schedule_runs: {
+        Row: DbSchemaScheduleRunRow;
+        Insert: DbSchemaScheduleRunInsert;
+        Update: Partial<Omit<DbSchemaScheduleRunRow, "id" | "owner_id" | "created_at">>;
         Relationships: [];
       };
     };

@@ -8,6 +8,7 @@ import {
   type PlacementStrategy,
   type SchedulerResult
 } from "@shared/scheduling";
+import { bufferedMinutes } from "@shared/scheduling/math";
 import type { IntervalInput } from "@shared/scheduling/types";
 
 export function intervalsFromItems(items: Item[]): IntervalInput[] {
@@ -32,9 +33,30 @@ export function intervalsFromItems(items: Item[]): IntervalInput[] {
 export function proposeSchedule(
   items: Item[],
   now = new Date(),
-  strategy: PlacementStrategy = "delta_cost_switch"
+  strategy: PlacementStrategy = "delta_cost_switch",
+  options: { links?: ItemLink[]; taskIds?: string[]; horizonDays?: number } = {}
 ): SchedulerResult {
-  return runScheduler(itemsToScheduleInputs(items), intervalsFromItems(items), mergeSchedulerConfig(now, { strategy }));
+  const config = mergeSchedulerConfig(now, { strategy, ...(options.horizonDays !== undefined ? { horizonDays: options.horizonDays } : {}) });
+  const allTasks = itemsToScheduleInputs(items);
+  const taskById = new Map(allTasks.map((task) => [task.id, task]));
+  const scheduledLinks = (options.links ?? []).filter((link) => link.kind === "scheduled_in");
+  const scheduledIds = new Set(scheduledLinks.map((link) => link.fromId));
+  const reserved = new Map<string, number>();
+  for (const link of scheduledLinks) {
+    const task = taskById.get(link.fromId);
+    if (!task || (task.fixedStartsAt && task.fixedEndsAt)) continue;
+    const duration = task.durationMinutes && task.durationMinutes > 0 ? task.durationMinutes : config.defaultDurationMinutes;
+    reserved.set(link.toId, (reserved.get(link.toId) ?? 0) + bufferedMinutes(duration, config));
+  }
+
+  const allowed = options.taskIds ? new Set(options.taskIds) : null;
+  const candidates = allTasks.filter((task) =>
+    (task.fixedStartsAt && task.fixedEndsAt) ||
+    (!scheduledIds.has(task.id) && (!allowed || allowed.has(task.id)))
+  );
+  // Existing `scheduled_in` links reserve interval capacity; fixed appointments
+  // remain in the input so the engine can subtract their overlaps precisely.
+  return runScheduler(candidates, intervalsFromItems(items), config, reserved);
 }
 
 export type ApplySchedulePlan = {

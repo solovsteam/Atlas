@@ -54,10 +54,15 @@ function openIntervals(intervals: IntervalInput[], config: SchedulerConfig): Int
     });
 }
 
-function remainingFor(interval: IntervalInput, appointments: TaskScheduleInput[], assignedDurations: number): number {
+function remainingFor(
+  interval: IntervalInput,
+  appointments: TaskScheduleInput[],
+  assignedDurations: number,
+  reservedMinutesByInterval: Map<string, number>
+): number {
   return Math.max(
     0,
-    intervalCapacityMinutes(interval) - appointmentOverlapMinutes(interval, appointments) - assignedDurations
+    intervalCapacityMinutes(interval) - appointmentOverlapMinutes(interval, appointments) - assignedDurations - (reservedMinutesByInterval.get(interval.id) ?? 0)
   );
 }
 
@@ -159,11 +164,12 @@ function runEarliestFit(
   candidates: TaskScheduleInput[],
   intervals: IntervalInput[],
   appointments: TaskScheduleInput[],
-  config: SchedulerConfig
+  config: SchedulerConfig,
+  reservedMinutesByInterval: Map<string, number>
 ): { assignments: Assignment[]; leftover: TaskScheduleInput[] } {
   const remaining = new Map<string, number>();
   for (const interval of intervals) {
-    remaining.set(interval.id, remainingFor(interval, appointments, 0));
+    remaining.set(interval.id, remainingFor(interval, appointments, 0, reservedMinutesByInterval));
   }
   const ordered = [...candidates].sort((a, b) => nowMotivation(b, config) - nowMotivation(a, config));
   const assignments: Assignment[] = [];
@@ -194,11 +200,12 @@ function runDeltaCost(
   candidates: TaskScheduleInput[],
   intervals: IntervalInput[],
   appointments: TaskScheduleInput[],
-  config: SchedulerConfig
+  config: SchedulerConfig,
+  reservedMinutesByInterval: Map<string, number>
 ): { assignments: Assignment[]; leftover: TaskScheduleInput[] } {
   const remaining = new Map<string, number>();
   for (const interval of intervals) {
-    remaining.set(interval.id, remainingFor(interval, appointments, 0));
+    remaining.set(interval.id, remainingFor(interval, appointments, 0, reservedMinutesByInterval));
   }
   const open = new Set(candidates.map((task) => task.id));
   const byId = new Map(candidates.map((task) => [task.id, task]));
@@ -243,14 +250,15 @@ function runDeltaCost(
 export function runScheduler(
   tasks: TaskScheduleInput[],
   intervals: IntervalInput[],
-  config: SchedulerConfig
+  config: SchedulerConfig,
+  reservedMinutesByInterval: Map<string, number> = new Map()
 ): SchedulerResult {
   const { candidates, unassigned, appointments } = eligibleTasks(tasks);
   const intervalsOpen = openIntervals(intervals, config);
   const packed =
     config.strategy === "earliest_fit"
-      ? runEarliestFit(candidates, intervalsOpen, appointments, config)
-      : runDeltaCost(candidates, intervalsOpen, appointments, config);
+      ? runEarliestFit(candidates, intervalsOpen, appointments, config, reservedMinutesByInterval)
+      : runDeltaCost(candidates, intervalsOpen, appointments, config, reservedMinutesByInterval);
 
   const leftoverUnassigned: UnassignedTask[] = packed.leftover.map((task) => ({
     taskId: task.id,

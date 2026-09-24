@@ -14,6 +14,8 @@ export type WebHandoff = {
   proposal?: {
     origin: "agent";
     policy: "one-action-existing-block-v1";
+    actionId?: string;
+    schemaRunId?: string;
     title: string;
     durationMinutes: number;
     reason: string;
@@ -68,9 +70,17 @@ export function parseWebHandoff(value: unknown): WebHandoff {
     if (!Array.isArray(raw.schemaIds) || raw.schemaIds.length < 1 || raw.schemaIds.length > 4 || !raw.schemaIds.every((id) => typeof id === "string" && /^J-[a-f0-9]{8}$/.test(id))) {
       throw new Error("Proposal must cite 1–4 agent schema IDs.");
     }
+    if (raw.actionId !== undefined && (typeof raw.actionId !== "string" || !/^A-[A-Za-z0-9-]{1,70}$/.test(raw.actionId))) {
+      throw new Error("Invalid action ID.");
+    }
+    if (raw.schemaRunId !== undefined && (typeof raw.schemaRunId !== "string" || !/^R-[a-f0-9]{32}$/.test(raw.schemaRunId))) {
+      throw new Error("Invalid schema run ID.");
+    }
     proposal = {
       origin: "agent",
       policy: "one-action-existing-block-v1",
+      ...(typeof raw.actionId === "string" ? { actionId: raw.actionId } : {}),
+      ...(typeof raw.schemaRunId === "string" ? { schemaRunId: raw.schemaRunId } : {}),
       title: text(raw.title, "Proposed task", 240),
       durationMinutes: raw.durationMinutes,
       reason: text(raw.reason, "Proposal reason", 1000),

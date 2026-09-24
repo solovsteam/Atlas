@@ -18,6 +18,7 @@ import { anchorForToday, headerLabel, navigateAnchor, nextLabel, prevLabel, type
 import { useAtlasData } from "../context/AtlasDataContext";
 import { trackCreateUndo, useUndo } from "../context/UndoContext";
 import { AutoSchedulePanel } from "../components/AutoSchedulePanel";
+import { WebScheduleBridge } from "../components/WebScheduleBridge";
 import { ReviewPanel } from "../components/ReviewPanel";
 import { WorkBlockButtons } from "../components/WorkBlockButtons";
 import { CalendarIcsButton } from "../components/CalendarIcsButton";
@@ -137,6 +138,8 @@ export function CalendarPage() {
       </div>
 
       <ReviewPanel />
+
+      <WebScheduleBridge />
 
       <AutoSchedulePanel />
 

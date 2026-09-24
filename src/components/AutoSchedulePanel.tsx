@@ -21,7 +21,7 @@ export function AutoSchedulePanel() {
   const [busy, setBusy] = useState(false);
 
   function runPreview() {
-    setPreview(proposeSchedule(items, new Date(), strategy));
+    setPreview(proposeSchedule(items, new Date(), strategy, { links }));
     setError(null);
   }
 

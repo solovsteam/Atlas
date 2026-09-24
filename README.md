@@ -18,11 +18,11 @@ Unified notes, tasks, and calendar app — **Vite + React + Supabase**.
 
 On `main`, calendar, intervals, documentation items, item links, notifications, and optional local-first sync are planned. The checked-out `experiment/scientific-atlas` branch already includes Tasks, Calendar, intervals, task placement, auto-scheduling, and `.ics` export; see [`docs/EXPERIMENT.md`](docs/EXPERIMENT.md). These experiment features have not been merged to `main`.
 
-## Web of schemas handoff (experiment branch)
+## Schema-driven schedule loop (experiment branch)
 
-In the web of schemas viewer, select an active human intention and choose **Export to Atlas**. In Atlas, open **Tasks → Import an intention from the web**, choose the downloaded JSON file, write a concrete task, optionally select an interval, and apply. Atlas keeps the task and schedule; the web handoff supplies the intention and its reason, not an inferred deadline or priority. Importing the same intention again finds the same Atlas task instead of creating a duplicate. Reimporting does not rewrite that task.
+In Codex, run the `schedule-set` schema for the intentions and constraints you select. Import its finite plan JSON from **Calendar → Schema generated schedule**. Atlas creates only those tasks, places them into existing work blocks, and stores an idempotent schedule run. Inspect and edit the schedule in Atlas, then export its feedback receipt and attach it in Codex with your explanation. The `schedule-feedback-review` schema can also accept words-only feedback. It treats edits as observations and does not infer standing preferences without your explanation.
 
-Atlas needs its Supabase project active for sign-in and saving. If the project is paused, resume it from the [Supabase Dashboard](https://supabase.com/dashboard). The handoff uses the existing Items and `scheduled_in` link model and adds no migration. Calendar placement requires the experiment branch's migrations through `008_item_links.sql` to be applied.
+Atlas needs its Supabase project active for sign-in and saving. If the project is paused, resume it from the [Supabase Dashboard](https://supabase.com/dashboard). Calendar placement requires migrations through `008_item_links.sql`; durable schema schedule runs and feedback require [`009_schema_schedule_runs.sql`](supabase/migrations/009_schema_schedule_runs.sql). Apply pending migrations before using the run-history feature.
 
 ## Prerequisites
 

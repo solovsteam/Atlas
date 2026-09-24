@@ -127,7 +127,15 @@ Metrics from `npm run test:scheduling` (after last-chance deadline bonus): see f
 
 Circadian energy, LLM enricher, **server** web push (app fully closed / iPhone without a worker), local-first sync, documentation items, recurrence materialization, assignment-lock UI.
 
-## Web intention handoff
+## Web schema schedule loop
+
+The separate schema web can export a finite `schema-atlas.schedule-plan` JSON file from a Codex `schedule-set` run. Calendar imports plans containing 1–8 actions. Each action has a stable ID, source intention, editable task title/duration, reason, and agent schema citations. An explicit 1–90 day horizon can accompany the plan; Atlas labels its built-in 21-day horizon when none was specified. Atlas's signed-in session creates tasks idempotently and runs the existing deterministic scheduler only on those new action tasks. Existing scheduled tasks reserve their work-block capacity; appointments remain hard conflicts. No block, deadline, or importance is inferred. The human starts this step in Codex and explicitly imports/applies the plan in Atlas; there is no background or unattended generation.
+
+Atlas records the plan digest, schema run ID, generated action/task IDs, original placements, task duration/status, and work-block snapshot in `schema_schedule_runs`. Reimporting the same schema run does not duplicate its tasks, and a changed plan under the same run ID is rejected. The `009_schema_schedule_runs.sql` migration adds a user-owned RLS-protected run table. The calendar exports a versioned JSON receipt comparing the applied plan with current task and interval state, including manual moves, removals, status/duration edits, edited work blocks, and tasks added after the run. New tasks are reported as observations only; Atlas does not claim they belong to the schema run.
+
+Bring the receipt to Codex and explain what was wrong. The feedback schema can also review words alone. It separates Atlas facts from exact human testimony and agent hypotheses, asks when the cause is unclear, and may propose changes only to agent-origin scheduling schemas. No feedback is sent automatically from Atlas to Codex, and no human corpus or standing preference is changed by a manual schedule edit.
+
+The old one-intention import remains available under Tasks as a simpler review handoff:
 
 The separate web of schemas can export an active human intention as a small JSON file. Atlas Tasks imports it into a review panel: the human writes a concrete task and optionally chooses an interval before applying. The intention ID and creation time yield a stable Atlas task UUID, so downloading the same intention again does not create a second task. The task body records the source text and provenance. Atlas performs the actual Item and `scheduled_in` writes through the signed-in user's session; the web has no Supabase credentials. This is a manual one-way handoff, not synchronization or automatic scheduling policy. Reimporting does not overwrite an existing task or report its completion back to the web.
 

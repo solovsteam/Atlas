@@ -126,3 +126,7 @@ Metrics from `npm run test:scheduling` (after last-chance deadline bonus): see f
 ## Out of scope
 
 Circadian energy, LLM enricher, **server** web push (app fully closed / iPhone without a worker), local-first sync, documentation items, recurrence materialization, assignment-lock UI.
+
+## Web intention handoff
+
+The separate web of schemas can export an active human intention as a small JSON file. Atlas Tasks imports it into a review panel: the human writes a concrete task and optionally chooses an interval before applying. The intention ID and creation time yield a stable Atlas task UUID, so downloading the same intention again does not create a second task. The task body records the source text and provenance. Atlas performs the actual Item and `scheduled_in` writes through the signed-in user's session; the web has no Supabase credentials. This is a manual one-way handoff, not synchronization or automatic scheduling policy. Reimporting does not overwrite an existing task or report its completion back to the web.

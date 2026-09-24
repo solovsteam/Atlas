@@ -9,6 +9,7 @@ import { trackCreateUndo, trackItemPatchUndo, trackTaskStatusUndo, useUndo } fro
 import { useStableInboxOrder } from "../hooks/useStableInboxOrder";
 import { TaskDueChips } from "../components/TaskDueChips";
 import { TaskStatusButtonsForItem } from "../components/TaskStatusButtons";
+import { WebHandoffImport } from "../components/WebHandoffImport";
 
 const DURATION_PRESETS = [2, 15, 30, 60, 90];
 
@@ -103,6 +104,8 @@ export function TasksPage() {
         </button>
       </form>
       {error ? <p className="mt-3 text-sm text-red-400">{error}</p> : null}
+
+      <WebHandoffImport />
 
       {tasks.length === 0 ? (
         <p className="mt-8 text-sm text-neutral-500">No active tasks.</p>

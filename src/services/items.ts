@@ -42,6 +42,8 @@ export async function listOwnedItems(client: Client, userId: string): Promise<It
 }
 
 export type CreateItemOptions = {
+  id?: string;
+  body?: string;
   isTask?: boolean;
   parentTaskId?: string | null;
   isInterval?: boolean;
@@ -77,6 +79,8 @@ export async function createItem(
 
   const insert = {
     ...newItemInsert(userId, clean),
+    ...(options.id ? { id: options.id } : {}),
+    ...(options.body !== undefined ? { body: options.body } : {}),
     ...(options.isTask ? { is_task: true, task_status: "active" } : {}),
     ...(options.parentTaskId ? { parent_task_id: options.parentTaskId } : {}),
     ...(options.isInterval

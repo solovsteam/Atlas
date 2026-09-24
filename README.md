@@ -16,7 +16,13 @@ Unified notes, tasks, and calendar app — **Vite + React + Supabase**.
 
 ## Planned (see roadmap)
 
-Calendar, intervals, documentation items, item links, notifications, optional local-first sync — porting from archived Lakebed reference in `.lakebed/reference/` (local, gitignored).
+On `main`, calendar, intervals, documentation items, item links, notifications, and optional local-first sync are planned. The checked-out `experiment/scientific-atlas` branch already includes Tasks, Calendar, intervals, task placement, auto-scheduling, and `.ics` export; see [`docs/EXPERIMENT.md`](docs/EXPERIMENT.md). These experiment features have not been merged to `main`.
+
+## Web of schemas handoff (experiment branch)
+
+In the web of schemas viewer, select an active human intention and choose **Export to Atlas**. In Atlas, open **Tasks → Import an intention from the web**, choose the downloaded JSON file, write a concrete task, optionally select an interval, and apply. Atlas keeps the task and schedule; the web handoff supplies the intention and its reason, not an inferred deadline or priority. Importing the same intention again finds the same Atlas task instead of creating a duplicate. Reimporting does not rewrite that task.
+
+Atlas needs its Supabase project active for sign-in and saving. If the project is paused, resume it from the [Supabase Dashboard](https://supabase.com/dashboard). The handoff uses the existing Items and `scheduled_in` link model and adds no migration. Calendar placement requires the experiment branch's migrations through `008_item_links.sql` to be applied.
 
 ## Prerequisites
 

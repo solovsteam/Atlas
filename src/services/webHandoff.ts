@@ -17,6 +17,11 @@ export function atlasTaskBody(handoff: WebHandoff): string {
     `Web intention ${handoff.source.id}`,
     `Intention: ${handoff.source.text}`,
     `Decision source: ${handoff.source.provenance}`,
-    `Exported: ${handoff.exportedAt}`
+    `Exported: ${handoff.exportedAt}`,
+    ...(handoff.proposal ? [
+      `Agent suggestion (${handoff.proposal.policy}): ${handoff.proposal.title} (${handoff.proposal.durationMinutes} min)`,
+      `Suggestion reason: ${handoff.proposal.reason}`,
+      `Proposal schemas: ${handoff.proposal.schemaIds.join(", ")}`
+    ] : [])
   ].join("\n\n");
 }

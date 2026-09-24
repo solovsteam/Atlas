@@ -52,6 +52,7 @@ export type CreateItemOptions = {
   intervalEndsAt?: string;
   intervalStatus?: string;
   manualRelevance?: number;
+  expectedDurationMinutes?: number;
 };
 
 export async function createItem(
@@ -92,7 +93,8 @@ export async function createItem(
           interval_status: options.intervalStatus ?? "scheduled"
         }
       : {}),
-    ...(options.manualRelevance !== undefined ? { manual_relevance: options.manualRelevance } : {})
+    ...(options.manualRelevance !== undefined ? { manual_relevance: options.manualRelevance } : {}),
+    ...(options.expectedDurationMinutes !== undefined ? { task_expected_minutes: options.expectedDurationMinutes } : {})
   };
 
   const { data, error } = await client

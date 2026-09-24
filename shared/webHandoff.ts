@@ -11,6 +11,14 @@ export type WebHandoff = {
     provenance: string;
   };
   exportedAt: string;
+  proposal?: {
+    origin: "agent";
+    policy: "one-action-existing-block-v1";
+    title: string;
+    durationMinutes: number;
+    reason: string;
+    schemaIds: string[];
+  };
 };
 
 function record(value: unknown): Record<string, unknown> {
@@ -48,6 +56,27 @@ export function parseWebHandoff(value: unknown): WebHandoff {
   if (!/^I-[a-f0-9]{8}$/.test(id)) {
     throw new Error("Invalid intention ID.");
   }
+  let proposal: WebHandoff["proposal"];
+  if (handoff.proposal !== undefined) {
+    const raw = record(handoff.proposal);
+    if (raw.origin !== "agent" || raw.policy !== "one-action-existing-block-v1") {
+      throw new Error("Unsupported action proposal.");
+    }
+    if (typeof raw.durationMinutes !== "number" || !Number.isInteger(raw.durationMinutes) || raw.durationMinutes < 3 || raw.durationMinutes > 240) {
+      throw new Error("Proposed duration must be 3–240 minutes.");
+    }
+    if (!Array.isArray(raw.schemaIds) || raw.schemaIds.length < 1 || raw.schemaIds.length > 4 || !raw.schemaIds.every((id) => typeof id === "string" && /^J-[a-f0-9]{8}$/.test(id))) {
+      throw new Error("Proposal must cite 1–4 agent schema IDs.");
+    }
+    proposal = {
+      origin: "agent",
+      policy: "one-action-existing-block-v1",
+      title: text(raw.title, "Proposed task", 240),
+      durationMinutes: raw.durationMinutes,
+      reason: text(raw.reason, "Proposal reason", 1000),
+      schemaIds: raw.schemaIds as string[]
+    };
+  }
   return {
     format: "schema-web.atlas-handoff",
     version: 1,
@@ -60,6 +89,7 @@ export function parseWebHandoff(value: unknown): WebHandoff {
       text: text(source.text, "Intention", 2000),
       provenance: text(source.provenance, "Intention source", 1000)
     },
-    exportedAt: timestamp(handoff.exportedAt, "Export time")
+    exportedAt: timestamp(handoff.exportedAt, "Export time"),
+    ...(proposal ? { proposal } : {})
   };
 }

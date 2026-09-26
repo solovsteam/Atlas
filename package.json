@@ -8,15 +8,21 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "test:scheduling": "npx --yes tsx scripts/run-scheduling-fixtures.ts"
+    "test:scheduling": "npx --yes tsx scripts/run-scheduling-fixtures.ts",
+    "test:brain-mcp": "tsx --tsconfig tsconfig.brain-mcp.json scripts/brain-atlas-mcp.test.ts",
+    "typecheck:brain-mcp": "tsc -p tsconfig.brain-mcp.json",
+    "atlas:brain": "tsx --tsconfig tsconfig.brain-mcp.json scripts/brain-atlas-mcp.ts"
   },
   "dependencies": {
+    "@modelcontextprotocol/server": "^2.1.0",
     "@supabase/supabase-js": "^2.110.3",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
-    "react-router-dom": "^7.18.1"
+    "react-router-dom": "^7.18.1",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@modelcontextprotocol/client": "^2.1.0",
     "@tailwindcss/vite": "^4.3.2",
     "@types/node": "^24.13.2",
     "@types/react": "^19.2.17",
@@ -24,6 +30,7 @@
     "@vitejs/plugin-react": "^6.0.3",
     "oxlint": "^1.71.0",
     "tailwindcss": "^4.3.2",
+    "tsx": "^4.23.15",
     "typescript": "~6.0.2",
     "vite": "^8.1.1"
   }

@@ -14,15 +14,17 @@ Unified notes, tasks, and calendar app — **Vite + React + Supabase**.
 - Undo (Cmd/Ctrl+Z and button)
 - Realtime item updates
 
-## Planned (see roadmap)
+## Calendar and scheduling
 
-On `main`, calendar, intervals, documentation items, item links, notifications, and optional local-first sync are planned. The checked-out `experiment/scientific-atlas` branch already includes Tasks, Calendar, intervals, task placement, auto-scheduling, and `.ics` export; see [`docs/EXPERIMENT.md`](docs/EXPERIMENT.md). These experiment features have not been merged to `main`.
+The calendar and scheduling implementation was developed on `experiment/scientific-atlas` and is now being promoted to `main`. It includes Tasks, Items, Calendar, Archive, work intervals, task placement, automatic scheduling, and `.ics` export. See [`docs/EXPERIMENT.md`](docs/EXPERIMENT.md) for the design and current limits.
 
-## Schema-driven schedule loop (experiment branch)
+## Schema-driven schedule loop
 
 In Codex, run the `schedule-set` schema for the intentions and constraints you select. Import its finite plan JSON from **Calendar → Schema generated schedule**. Atlas creates only those tasks, places them into existing work blocks, and stores an idempotent schedule run. Inspect and edit the schedule in Atlas, then export its feedback receipt and attach it in Codex with your explanation. The `schedule-feedback-review` schema can also accept words-only feedback. It treats edits as observations and does not infer standing preferences without your explanation.
 
 Atlas needs its Supabase project active for sign-in and saving. If the project is paused, resume it from the [Supabase Dashboard](https://supabase.com/dashboard). Calendar placement requires migrations through `008_item_links.sql`; durable schema schedule runs and feedback require [`009_schema_schedule_runs.sql`](supabase/migrations/009_schema_schedule_runs.sql). Apply pending migrations before using the run-history feature.
+
+Brain's local MCP connection to Atlas is documented in [`docs/BRAIN_MCP.md`](docs/BRAIN_MCP.md).
 
 ## Prerequisites
 

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import type { SchemaScheduleFeedback, SchemaSchedulePlan, SchemaScheduleRun, ScheduleRunBaseline } from "@shared/schemaSchedule";
+import type { SchemaSchedulePlan, SchemaScheduleRun, ScheduleRunBaseline } from "@shared/schemaSchedule";
 import { parseSchemaSchedulePlan } from "@shared/schemaSchedule";
 import { useAtlasData } from "../context/AtlasDataContext";
 import { trackCreateLinkUndo, trackCreateUndo, useUndo } from "../context/UndoContext";
@@ -10,6 +10,7 @@ import { fetchOwnedLinks } from "../services/links";
 import { proposeSchedule } from "../services/scheduling";
 import { atlasTaskIdForAction } from "../services/webHandoff";
 import { createSchemaScheduleRun, fetchSchemaScheduleRuns, findSchemaScheduleRun, updateSchemaScheduleRun } from "../services/schemaScheduleRuns";
+import { buildAtlasScheduleFeedback } from "../services/brainTools";
 
 async function digest(value: unknown): Promise<string> {
   const bytes = new TextEncoder().encode(JSON.stringify(value));
@@ -153,79 +154,7 @@ export function WebScheduleBridge() {
   }
 
   function exportFeedback(run: SchemaScheduleRun) {
-    const changes: SchemaScheduleFeedback["changes"] = run.baseline.actions.map((baseline) => {
-      const task = items.find((item) => item.id === baseline.taskId);
-      const currentIntervalIds = links.filter((link) => link.kind === "scheduled_in" && link.fromId === baseline.taskId).map((link) => link.toId).sort();
-      const currentIntervalId = currentIntervalIds[0] ?? null;
-      const interval = currentIntervalId ? items.find((item) => item.id === currentIntervalId && item.isInterval) : undefined;
-      const currentInterval = interval ? {
-        id: interval.id,
-        title: interval.title,
-        kind: interval.intervalKind,
-        status: interval.intervalStatus,
-        startsAt: interval.intervalStartsAt,
-        endsAt: interval.intervalEndsAt,
-        revision: interval.revision
-      } : null;
-      let kind: SchemaScheduleFeedback["changes"][number]["kind"] = "unchanged";
-      if (!task) kind = "removed";
-      else if (JSON.stringify(currentIntervalIds) !== JSON.stringify(baseline.plannedIntervalId ? [baseline.plannedIntervalId] : [])) kind = currentIntervalIds.length ? "moved" : "unscheduled";
-      else if (task.title !== baseline.title || task.body !== baseline.body || task.expectedDurationMinutes !== baseline.durationMinutes || task.manualRelevance !== baseline.manualRelevance || task.taskDueAt !== baseline.dueAt || task.taskFixedStartsAt !== baseline.fixedStartsAt || task.taskFixedEndsAt !== baseline.fixedEndsAt) kind = "task-changed";
-      else if (task.taskStatus !== baseline.taskStatus) kind = "task-status-changed";
-      else if (JSON.stringify(currentInterval) !== JSON.stringify(baseline.plannedInterval)) kind = "interval-changed";
-      return {
-        actionId: baseline.actionId,
-        taskId: baseline.taskId,
-        kind,
-        plannedIntervalId: baseline.plannedIntervalId,
-        currentIntervalId,
-        currentIntervalIds,
-        plannedInterval: baseline.plannedInterval,
-        currentInterval,
-        title: task?.title ?? null,
-        body: task?.body ?? null,
-        durationMinutes: task?.expectedDurationMinutes ?? null,
-        manualRelevance: task?.manualRelevance ?? null,
-        dueAt: task?.taskDueAt ?? null,
-        fixedStartsAt: task?.taskFixedStartsAt ?? null,
-        fixedEndsAt: task?.taskFixedEndsAt ?? null,
-        taskStatus: task?.taskStatus ?? null,
-        taskRevision: task?.revision ?? null
-      };
-    });
-    changes.push(...items.filter((item) => item.isTask && Date.parse(item.createdAt) > Date.parse(run.baseline.appliedAt)).map((item) => {
-      const currentIntervalIds = links.filter((entry) => entry.kind === "scheduled_in" && entry.fromId === item.id).map((entry) => entry.toId).sort();
-      const currentIntervalId = currentIntervalIds[0] ?? null;
-      const interval = currentIntervalId ? items.find((entry) => entry.id === currentIntervalId && entry.isInterval) : undefined;
-      return {
-        actionId: null,
-        taskId: item.id,
-        kind: "added-after-run" as const,
-        plannedIntervalId: null,
-        currentIntervalId,
-        currentIntervalIds,
-        plannedInterval: null,
-        currentInterval: interval ? { id: interval.id, title: interval.title, kind: interval.intervalKind, status: interval.intervalStatus, startsAt: interval.intervalStartsAt, endsAt: interval.intervalEndsAt, revision: interval.revision } : null,
-        title: item.title,
-        body: item.body,
-        durationMinutes: item.expectedDurationMinutes,
-        manualRelevance: item.manualRelevance,
-        dueAt: item.taskDueAt,
-        fixedStartsAt: item.taskFixedStartsAt,
-        fixedEndsAt: item.taskFixedEndsAt,
-        taskStatus: item.taskStatus,
-        taskRevision: item.revision
-      };
-    }));
-    const feedback: SchemaScheduleFeedback = {
-      format: "schema-atlas.schedule-feedback",
-      version: 1,
-      runId: run.id,
-      schemaRunId: run.schemaRunId,
-      planDigest: run.planDigest,
-      exportedAt: new Date().toISOString(),
-      changes
-    };
+    const feedback = buildAtlasScheduleFeedback(run, items, links);
     const url = URL.createObjectURL(new Blob([JSON.stringify(feedback, null, 2)], { type: "application/json" }));
     const link = document.createElement("a");
     link.href = url;

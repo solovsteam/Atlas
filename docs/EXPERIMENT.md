@@ -1,6 +1,6 @@
 # Atlas experiment: time-management practice + a novel scheduler
 
-Originally developed on `experiment/scientific-atlas` from `origin/main` (`35eb93c`), this implementation is being promoted to `main` at the user's request on 2026-09-26. The experiment branch remains in Git history as a recovery point.
+Originally developed on `experiment/scientific-atlas` from `origin/main` (`35eb93c`), this implementation was promoted to `main` at the user's request on 2026-09-26. The experiment branch remains in Git history as a recovery point.
 
 This implementation tests how far Atlas can go by following widely established time-management advice where it is congruent, and by taking Atlas’s side where the product is deliberately new (intervals as capacity, Now as one thing). Product architecture still follows [ROADMAP.md](ROADMAP.md): one Item model, graph links, undo-not-confirm, `shared/` + `src/services/`.
 

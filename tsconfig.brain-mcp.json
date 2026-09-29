@@ -5,5 +5,5 @@
     "composite": false,
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.brain-mcp.tsbuildinfo"
   },
-  "include": ["scripts/brain-atlas-mcp.ts", "scripts/brain-atlas-mcp.test.ts", "src/services/brainTools.ts"]
+  "include": ["scripts/brain-atlas-mcp.ts", "scripts/brain-atlas-mcp.test.ts", "scripts/brain-contract.test.ts", "src/services/brainTools.ts"]
 }

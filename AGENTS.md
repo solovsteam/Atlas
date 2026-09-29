@@ -52,6 +52,12 @@ npm run lint
 
 Supabase CLI (optional): `supabase link`, `supabase db push` from this directory.
 
+## Checks and handoff
+
+- `npm run check` (lint, build, Brain tool typecheck, all tests) before claiming a change works. Say which evidence you used; documentation is not evidence.
+- Start from [`HANDOFF.md`](HANDOFF.md). Before stopping, including mid-task or near a usage limit, update it: goal, verified state, next step, questions for the user.
+- Brain (`../Brain`) calls Atlas code directly: its action-pulse adapter imports `src/services/` and `shared/schemaSchedule.ts` by path. `scripts/brain-contract.test.ts` pins that surface. When it fails, change Brain's `scripts/atlas-action-pulse.mjs` in the same step.
+
 ## Supabase conventions
 
 - One row per item in `public.items`; extend via migrations for new fields/tables.

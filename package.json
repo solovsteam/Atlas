@@ -11,7 +11,10 @@
     "test:scheduling": "npx --yes tsx scripts/run-scheduling-fixtures.ts",
     "test:brain-mcp": "tsx --tsconfig tsconfig.brain-mcp.json scripts/brain-atlas-mcp.test.ts",
     "typecheck:brain-mcp": "tsc -p tsconfig.brain-mcp.json",
-    "atlas:brain": "tsx --tsconfig tsconfig.brain-mcp.json scripts/brain-atlas-mcp.ts"
+    "atlas:brain": "tsx --tsconfig tsconfig.brain-mcp.json scripts/brain-atlas-mcp.ts",
+    "test:brain-contract": "tsx --tsconfig tsconfig.brain-mcp.json scripts/brain-contract.test.ts",
+    "test": "npm run test:scheduling && npm run test:brain-mcp && npm run test:brain-contract && tsx --test scripts/decision-schedule.test.ts && node --test scripts/web-handoff.test.mjs",
+    "check": "npm run lint && npm run build && npm run typecheck:brain-mcp && npm test"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "^2.1.0",

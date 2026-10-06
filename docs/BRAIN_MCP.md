@@ -22,9 +22,11 @@ Atlas provides a local MCP server so Brain agents running in Codex can read Atla
 - atlas_list_items and atlas_get_item read notes, tasks, intervals and documentation items.
 - atlas_get_schedule_context reads active/later tasks, calendar intervals and scheduled_in links.
 - atlas_preview_schema_schedule runs the existing Atlas scheduler against a Brain schedule plan without writing data.
-- atlas_apply_schedule_preview creates only the plan's deterministic tasks and their scheduled_in links after the human explicitly approves that exact preview in the Codex conversation. Existing tasks and placements are not moved or deleted.
+- atlas_apply_schedule_preview creates only the plan's deterministic tasks and their scheduled_in links when the human requests that change in the current conversation: preview, then apply without a second confirmation (humanApproved records the request). Existing tasks and placements are not moved or deleted.
 - atlas_list_schedule_runs and atlas_get_schedule_feedback read saved run receipts and compare them with the current schedule.
 
 Schedule previews last ten minutes and are held in the local MCP process. A changed schedule or a Codex/MCP restart requires a new preview. A partially completed apply can be retried from a fresh preview; deterministic task IDs prevent duplicate tasks. If Atlas reports that schema_schedule_runs is missing from its schema cache, apply migration 009 in the Supabase project and retry.
 
 The tools are intentionally bounded: there is no arbitrary SQL, unrestricted item mutation or service-role access. The current schedule apply operation only creates new plan tasks and placements. Use Atlas itself to edit or remove existing calendar data.
+
+The tool's create-only, fresh-preview and own-account rules are Brain's Atlas effect layer (Tonio, 5 Oct). Background hosts receive no Atlas effect tools; they stage a Brain action pulse for one-click human issuance. Shell credential isolation remains undecided.

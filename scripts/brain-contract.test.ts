@@ -3,6 +3,9 @@
 // another repository, so without this file an Atlas rename or signature change
 // would break Brain's "Schedule in Atlas" button without failing any Atlas check.
 // Change Brain's adapter in the same step as anything this file pins.
+// Conversation MCP applies a fresh requested preview, create-only. This separate
+// action-pulse adapter is human-admin issuance/undo: it may create its own blocks
+// and delete unchanged generated output, never edit the human's existing items.
 import assert from "node:assert/strict";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import * as items from "../src/services/items";

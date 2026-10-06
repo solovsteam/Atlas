@@ -226,7 +226,7 @@ function scheduleTableHelp(error: unknown): Error {
 export function createServer(client: SupabaseClient<Database>): McpServer {
   const server = new McpServer(
     { name: "atlas-cloud", version: "0.1.0" },
-    { instructions: "These tools read the signed-in user's Atlas account through its normal Supabase session and row-level security. Read items or schedule context as needed. For a Brain schedule plan, create a preview, explain its placements and unassigned actions to the human, and call atlas_apply_schedule_preview only after the human explicitly approves that exact preview. The approval flag is a record of the conversation decision, not a substitute for asking. Applying creates only the plan's deterministic tasks and scheduled_in links; it does not move existing tasks or change unrelated Atlas data. A preview expires after ten minutes and is tied to the schedule snapshot; if Atlas changes, preview again. Never request, expose, or use a service-role key." }
+    { instructions: "These tools read the signed-in user's Atlas account through its normal Supabase session and row-level security. Read items or schedule context as needed. The Atlas tool's code-enforced rules are the effect layer. When the human requests a schedule change in this conversation, that request is approval: create a fresh preview of the requested plan, then call atlas_apply_schedule_preview without asking for a second confirmation. Explain the placements, unassigned actions and receipt. Set humanApproved to true to record that request; an intention alone is not a request. Background workers have no effect tools and stage a one-click Brain action-pulse flag instead. Applying creates only the plan's deterministic tasks and scheduled_in links; it does not move existing tasks or change unrelated Atlas data. A preview expires after ten minutes and is tied to the schedule snapshot; if Atlas changes, preview again. Never request, expose, or use a service-role key." }
   );
   const previews = new Map<string, { ownerId: string; preview: AtlasSchedulePreview; expiresAt: number }>();
 
@@ -310,15 +310,15 @@ export function createServer(client: SupabaseClient<Database>): McpServer {
   });
 
   server.registerTool("atlas_apply_schedule_preview", {
-    title: "Apply an approved schedule preview",
-    description: "Create the previewed tasks and scheduled_in links in Atlas. Only call after the human explicitly approves this exact preview in the Codex conversation; set humanApproved to true only then. Does not move or edit existing tasks.",
+    title: "Apply a requested schedule preview",
+    description: "Create the previewed tasks and scheduled_in links in Atlas. The human's request for this change in the current conversation is approval: preview the requested plan, then apply without asking again, setting humanApproved to true to record the request. Apply only a fresh preview from the same account. Never move, edit or delete existing items.",
     inputSchema: z.object({
       previewId: z.string().uuid(),
       humanApproved: z.boolean()
     }),
     annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false }
   }, async ({ previewId, humanApproved }) => {
-    if (!humanApproved) throw new Error("The human has not approved this schedule preview.");
+    if (!humanApproved) throw new Error("The human has not requested this schedule change in the conversation.");
     const user = await requireUser(client);
     const entry = previews.get(previewId);
     if (!entry || entry.expiresAt <= Date.now()) {

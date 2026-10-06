@@ -1,18 +1,19 @@
 # Handoff
 
-The current state of work, for whichever agent or session comes next. Overwrite sections as they change; history lives in Git. Last updated 2026-09-29.
+Last updated 2026-10-06.
 
 ## State
 
-- Branch `experiment/scientific-atlas`, 11 commits ahead of `main`, is the one with the Brain tools and schema schedule runs. The Git workflow above says to work on `main`; which branch is deployed and whether to merge is the user's decision.
-- `npm run check` passes: 3 lint warnings (`react-hooks/exhaustive-deps` in `AtlasDataContext.tsx`, `useAutosaveItem.ts`), build, all tests.
-- Brain's action pulse created a real 30-minute run in a new block on Sat 3 Oct 2026 11:00–12:00 (task `dfe01b3a-…`, interval `99c6f843-…`). It is a demonstration; Brain can undo it.
-- "Current limits" above may be stale: `008_item_links.sql` and link services exist.
+- Main now includes the already-promoted scientific Atlas and Brain surface contract (d17545b). The checkout started clean on `experiment/scientific-atlas`; `origin/main` already held the promotion (46628ec), and local main was fast-forwarded to the existing experiment tip before this work.
+- Tonio's 5 Oct effect-layer decision implemented: his request for a schedule change in the current conversation authorizes fresh preview then apply, without a second confirmation. `humanApproved` records the request. Create-only task/link writes, own-account binding, ten-minute expiry and changed-snapshot refusal remain enforced.
+- `npm run check` passes: lint (existing warnings), build, Brain MCP typecheck and all tests. New tests exercise actual MCP handlers and services with inert data: unchanged existing items/links, only task/scheduled_in creation, foreign/expired/lost/stale-preview refusal before writes, exact saved plan and duplicate-free retry. No live calendar writes made in this task.
+- `scripts/brain-contract.test.ts` and Brain's companion adapter comments distinguish human-admin action-pulse issuance/undo from the conversational MCP path. Brain companion work: `/Users/tonio/.t3/worktrees/Brain/effect-layer`, branch `feature/effect-layer`.
+- The 29 Sep real action-pulse demonstration remains historical; no replay or deletion performed.
 
 ## Next step
 
-None in progress. Parked by the user: publishing interval-specific task lists to Fantastical through Todoist.
+Commit and push the effect-layer contract/tests on main per Atlas rules. Brain integrates/deploys its companion tests and docs separately. Reload an existing Atlas MCP process to receive the new conversational contract.
 
 ## Decisions for the user
 
-- `origin` is a public repository.
+Atlas credential isolation from shell-capable hosts is undecided and was not built. `origin` is public; no personal data or credentials added.

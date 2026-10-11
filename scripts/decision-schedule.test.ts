@@ -15,7 +15,7 @@ import { indexTaskCountsByInterval } from "../shared/intervalTaskCounts";
 import { byDueThenTitle } from "../shared/review";
 import { dueAtForPreset, isDueSameLocalDay, isDueThisWeek, isOverdue } from "../shared/due";
 import { nominalWorkWindow, workBlockForNow, workBlockOverlapsExisting } from "../shared/workBlocks";
-import { boxDisplayLabel, boxesForDay, layoutBoxesOnDay, slotsInRange, type ScheduleSlot } from "../shared/schedule";
+import { boxDisplayLabel, boxesForDay, daysInMonthGrid, layoutBoxesOnDay, slotsInRange, startOfWeek, type ScheduleSlot } from "../shared/schedule";
 import {
   DATE_PLACEHOLDER, DATE_TIME_PLACEHOLDER, formatEuropeanDate, formatEuropeanDateTime,
   europeanDateFromIso, europeanDateTimeFromIso, formatDate, formatDateTime, formatDayLabel, formatIsoDateTime, pad2,
@@ -1253,6 +1253,61 @@ test("VEVENT serialization folds long UTF-8 lines and unfolds to the original co
     "BEGIN:VALARM", "TRIGGER:-PT10M", "ACTION:DISPLAY",
     `DESCRIPTION:${event.summary}`, "END:VALARM", "END:VEVENT"
   ]);
+});
+
+test("month grids enumerate 42 unique civil days for every leap and nonleap month; week starts support Monday and Sunday", () => {
+  const previousTimezone = process.env.TZ;
+  const civilParts = (date: Date) => [date.getFullYear(), date.getMonth() + 1, date.getDate()];
+  const dayMs = 86_400_000;
+  try {
+    for (const timezone of ["UTC", "Europe/Berlin"]) {
+      process.env.TZ = timezone;
+      for (const year of [2024, 2026]) {
+        const monthLengths = [31, year === 2024 ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+        for (let month = 0; month < 12; month += 1) {
+          const label = `${timezone} ${year}-${month + 1}`;
+          const input = new Date(year, month, 1, 15, 34, 56, 789);
+          const before = input.getTime();
+          // UTC is only an independent Gregorian date oracle. Enumerate fixed
+          // UTC days, then compare local civil fields, never elapsed local days.
+          const first = Date.UTC(year, month, 1);
+          const weekday = new Date(first).getUTCDay();
+          for (const monday of [true, false]) {
+            const precedingDays = monday ? (weekday + 6) % 7 : weekday;
+            const expected = new Date(first - precedingDays * dayMs);
+            const actual = startOfWeek(input, monday);
+            assert.deepEqual(civilParts(actual), [expected.getUTCFullYear(), expected.getUTCMonth() + 1, expected.getUTCDate()], `${label} Monday=${monday}`);
+            assert.equal(actual.getDay(), monday ? 1 : 0);
+            assert.deepEqual([actual.getHours(), actual.getMinutes(), actual.getSeconds(), actual.getMilliseconds()], [0, 0, 0, 0]);
+            if (monday) assert.deepEqual(startOfWeek(input), actual, `${label} default week start`);
+          }
+          const grid = daysInMonthGrid(input);
+          const expectedDates = Array.from({ length: 42 }, (_, index) => {
+            const date = new Date(first + (index - (weekday + 6) % 7) * dayMs);
+            return [date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate()];
+          });
+          assert.equal(grid.length, 42, label);
+          assert.deepEqual(grid.map(civilParts), expectedDates, `${label} ordered civil continuity`);
+          assert.equal(new Set(grid.map(date => civilParts(date).join("-"))).size, 42, label);
+          assert.equal(grid[0]!.getDay(), 1, `${label} grid starts Monday`);
+          for (const date of grid) {
+            assert.deepEqual([date.getHours(), date.getMinutes(), date.getSeconds(), date.getMilliseconds()], [0, 0, 0, 0], label);
+          }
+          assert.deepEqual(grid.filter(date => date.getFullYear() === year && date.getMonth() === month).map(date => date.getDate()),
+            Array.from({ length: monthLengths[month]! }, (_, index) => index + 1), `${label} every requested date exactly once`);
+          const elapsedHours = grid.slice(1).map((date, index) => (date.getTime() - grid[index]!.getTime()) / 3_600_000);
+          const transitionHours = timezone === "Europe/Berlin" && month === 2 ? 23
+            : timezone === "Europe/Berlin" && month === 9 ? 25 : null;
+          assert.equal(elapsedHours.filter(hours => hours !== 24).length, transitionHours === null ? 0 : 1, `${label} DST transition count`);
+          if (transitionHours !== null) assert.ok(elapsedHours.includes(transitionHours), `${label} DST elapsed hours`);
+          assert.equal(input.getTime(), before, `${label} input preserved`);
+        }
+      }
+    }
+  } finally {
+    if (previousTimezone === undefined) delete process.env.TZ;
+    else process.env.TZ = previousTimezone;
+  }
 });
 
 // Explicit civil dates are the oracle: no shared date arithmetic computes expectations.

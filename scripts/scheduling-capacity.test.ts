@@ -328,6 +328,62 @@ test("scheduler result fixtures preserve metrics across strategies, intervals, a
   }
 });
 
+test("ordinary postponement accounting separates assigned, leftover, and ineligible tasks", () => {
+  const config = mergeSchedulerConfig(new Date("2026-09-22T10:00:00Z"), {
+    gamma: 1,
+    horizonDays: 7,
+    durationBuffer: 1,
+    strategy: "earliest_fit"
+  });
+  const tasks: TaskScheduleInput[] = [
+    {
+      id: "assigned-30", title: "Assigned 30 minutes", createdAt: "2026-09-20T10:00:00Z",
+      importance: 6, durationMinutes: 30, dueAt: null, fixedStartsAt: null, fixedEndsAt: null,
+      parentTaskId: "", tags: []
+    },
+    {
+      id: "leftover-90", title: "Leftover 90 minutes", createdAt: "2026-09-20T10:00:00Z",
+      importance: 6, durationMinutes: 90, dueAt: null, fixedStartsAt: null, fixedEndsAt: null,
+      parentTaskId: "", tags: []
+    },
+    {
+      id: "quick-2", title: "Two-minute task", createdAt: "2026-09-20T10:00:00Z",
+      importance: 6, durationMinutes: 2, dueAt: null, fixedStartsAt: null, fixedEndsAt: null,
+      parentTaskId: "", tags: []
+    },
+    {
+      id: "missing-end", title: "Task missing an end", createdAt: "2026-09-20T10:00:00Z",
+      importance: 6, durationMinutes: 30, dueAt: null, fixedStartsAt: "2026-09-24T10:00:00Z", fixedEndsAt: null,
+      parentTaskId: "", tags: []
+    },
+    {
+      id: "fixed-excluded", title: "Fixed task outside the block", createdAt: "2026-09-20T10:00:00Z",
+      importance: 6, durationMinutes: 30, dueAt: null, fixedStartsAt: "2026-09-25T10:00:00Z", fixedEndsAt: "2026-09-25T11:00:00Z",
+      parentTaskId: "", tags: []
+    }
+  ];
+  const block: IntervalInput = {
+    id: "work-block", title: "Work block", kind: "fixed",
+    startsAt: "2026-09-24T10:00:00Z", endsAt: "2026-09-24T11:00:00Z", archived: false
+  };
+
+  assert.deepEqual(runScheduler(tasks, [block], config), {
+    assignments: [{ taskId: "assigned-30", intervalId: "work-block" }],
+    unassigned: [
+      { taskId: "quick-2", reason: "quick" },
+      { taskId: "missing-end", reason: "missing_info" },
+      { taskId: "fixed-excluded", reason: "excluded" },
+      { taskId: "leftover-90", reason: "no_feasible_interval" }
+    ],
+    metrics: {
+      totalPostponement: 60 * (1 - 1 / (1 + 2 / 7)) + 60 * (1 - 1 / (1 + 7 / 7)),
+      contextSwitches: 0,
+      assignedCount: 1,
+      unassignedCount: 4
+    }
+  });
+});
+
 test("eligible task classification preserves fixed and missing-info precedence", () => {
   const fixedDue = { ...task("fixed-due", 30, date("09:00"), date("10:00")), dueAt: date("11:00") };
   const halfFixed = task("half-fixed", 30, date("09:00"));

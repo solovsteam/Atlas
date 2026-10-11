@@ -2056,6 +2056,71 @@ test("scheduler A/B/A calls isolate config and reservations on reused immutable 
   }
 });
 
+for (const strategy of ["earliest_fit", "delta_cost", "delta_cost_switch"] as const) {
+  test(`${strategy}: mutable scheduler inputs remain unchanged across repeated capacity allocations`, () => {
+    const tasks = [
+      task("overflow", 40),
+      { ...task("work", 20), tags: ["focus"], dueAt: date("12:00") },
+      task("appointment-b", 60, date("10:00"), date("11:00")),
+      task("appointment-a", 60, date("09:30"), date("10:30"))
+    ];
+    const intervals = [
+      interval("beyond-horizon", date("12:00"), date("13:00")),
+      interval("clipped", date("09:00"), date("12:00"))
+    ];
+    const config = mergeSchedulerConfig(new Date(date("09:30")), { strategy, horizonDays: 0.1 });
+    const reservations = new Map([["unused", 17], ["clipped", 5]]);
+    const inputs = { tasks, intervals, config, reservations };
+    const before = structuredClone(inputs);
+    // 09:30–11:54 is 144 minutes; appointment union uses 90 and the
+    // reservation uses 5. The remaining 49 fits buffered 25, but not 50.
+    const first = runScheduler(tasks, intervals, config, reservations);
+    const expected = structuredClone(first);
+    assert.deepEqual(first.assignments, [{ taskId: "work", intervalId: "clipped" }]);
+    assert.deepEqual(first.unassigned, [
+      { taskId: "appointment-b", reason: "excluded" },
+      { taskId: "appointment-a", reason: "excluded" },
+      { taskId: "overflow", reason: "no_feasible_interval" }
+    ]);
+    assert.deepEqual(inputs, before, "first call preserves nested values, array order, Date and Map");
+    assert.deepEqual([...reservations], [...before.reservations], "reservation entry order is preserved");
+    for (let repeat = 0; repeat < 2; repeat += 1) {
+      assert.deepEqual(runScheduler(tasks, intervals, config, reservations), expected, "complete repeated result");
+      assert.deepEqual(first, expected, "later calls leave the earlier result unchanged");
+      assert.deepEqual(inputs, before, "repeated calls preserve every mutable input");
+      assert.deepEqual([...reservations], [...before.reservations]);
+    }
+  });
+}
+
+test("mutable decision inputs remain unchanged across repeated feasible and full-capacity calls", () => {
+  const items = [
+    workBlock("later", date("11:00"), date("12:00")),
+    workBlock("full", date("09:00"), date("09:30")),
+    workBlock("exact", date("10:00"), date("10:47")),
+    { ...scheduledTask("reserved", 10), tags: ["focus"] },
+    { ...scheduledTask("released", 60), taskStatus: "done" as const },
+    { ...scheduledTask("appointment", 15), taskFixedStartsAt: date("10:00"), taskFixedEndsAt: date("10:15") },
+    scheduledTask("full-reservation", 20)
+  ];
+  const links = [
+    link("reserved", "reserved", "exact"), link("duplicate", "reserved", "exact"),
+    link("released", "released", "exact"), link("appointment", "appointment", "exact"),
+    link("full", "full-reservation", "full")
+  ];
+  const at = new Date(date("08:00"));
+  const inputs = { items, links, at };
+  const before = structuredClone(inputs);
+  // Full has 30 - 25 = 5 minutes. Exact has 47 - 15 - ceil(10*1.25)
+  // = 19, exactly ceil(15*1.25); duplicate/done/appointment links add no reservation.
+  for (let repeat = 0; repeat < 3; repeat += 1) {
+    assert.equal(firstFeasibleWorkBlock(items, links, 15, at), "exact");
+    assert.deepEqual(inputs, before, "successful call preserves items, nested tags, links, order and Date");
+    assert.equal(firstFeasibleWorkBlock(items, links, 60, at), null);
+    assert.deepEqual(inputs, before, "failed fit also preserves all mutable inputs");
+  }
+});
+
 test("equal-start fixed intervals retain encounter order outside the permutation premise", () => {
   const first = interval("first", "2026-09-24T10:00:00+02:00", "2026-09-24T11:00:00+02:00");
   const second = interval("second", date("08:00"), date("09:00"));

@@ -210,6 +210,64 @@ test("Now preserves encounter order for equal motivation and exact suggestion me
   });
 });
 
+test("Now gives idle quick work precedence over long work with complete output", () => {
+  const quick = task("idle-quick", 2);
+  const long = task("idle-long", 90);
+
+  assert.deepEqual(buildNowFocus([long, quick], [], now), {
+    primary: { item: quick, reason: "Two minutes or less — do it now, don’t calendar it" },
+    committed: [],
+    suggestion: null
+  });
+});
+
+test("Now excludes already scheduled and half-fixed quick tasks from idle suggestions", () => {
+  const tomorrow = block("tomorrow", "2026-09-25T09:00:00Z", "2026-09-25T10:00:00Z");
+  const scheduledQuick = task("scheduled-quick", 2);
+  const halfFixedQuick = { ...task("half-fixed-quick", 2), taskFixedStartsAt: "2026-09-24T10:00:00Z" };
+  const long = task("available-long", 60);
+  const links = [
+    { kind: "scheduled_in", fromId: scheduledQuick.id, toId: tomorrow.id }
+  ] as ItemLink[];
+
+  assert.deepEqual(buildNowFocus([scheduledQuick, halfFixedQuick, long, tomorrow], links, now), {
+    primary: { item: long, reason: "Highest start-now motivation among unscheduled work" },
+    committed: [],
+    suggestion: null
+  });
+  assert.deepEqual(buildNowFocus([halfFixedQuick], [], now), {
+    primary: null,
+    committed: [],
+    suggestion: null
+  });
+});
+
+test("Now does not apply idle quick precedence in an empty current interval", () => {
+  const emptyCurrent = block("empty-current", "2026-09-24T07:30:00Z", "2026-09-24T08:30:00Z");
+  const quick = { ...task("quick", 2), manualRelevance: 1 };
+  const long = { ...task("long", 60), manualRelevance: 10 };
+
+  assert.deepEqual(buildNowFocus([emptyCurrent, quick, long], [], now), {
+    primary: { item: long, reason: "Highest start-now motivation among unscheduled work" },
+    committed: [],
+    suggestion: null
+  });
+});
+
+test("Now keeps today commitments primary and provides a ranked non-idle suggestion", () => {
+  const todayBlock = block("later-today", "2026-09-24T10:00:00Z", "2026-09-24T11:00:00Z");
+  const committed = task("committed-today", 30);
+  const quick = { ...task("quick", 2), manualRelevance: 1 };
+  const long = { ...task("long", 60), manualRelevance: 10 };
+  const links = [{ kind: "scheduled_in", fromId: committed.id, toId: todayBlock.id }] as ItemLink[];
+
+  assert.deepEqual(buildNowFocus([todayBlock, committed, quick, long], links, now), {
+    primary: { item: committed, reason: "Committed today" },
+    committed: [],
+    suggestion: { item: long, reason: "Highest start-now motivation among unscheduled work" }
+  });
+});
+
 test("calendar event selection includes scheduled intervals and active appointments, excluding archived and out-of-range items", () => {
   const workBlock = { ...block("work", "2026-09-24T09:00:00Z", "2026-09-24T10:00:00Z"), title: "Focus" };
   const archived = { ...workBlock, id: "archived", intervalStatus: "archived" };

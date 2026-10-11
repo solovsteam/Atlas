@@ -242,6 +242,20 @@ test("calendar exports are empty for invalid enumeration inputs", () => {
   assert.equal(calendarIcs(items, [], new Date(Number.NaN)), emptyCalendar);
 });
 
+test("calendar exports use the supplied timestamp consistently and deterministically", () => {
+  const items = [
+    block("first-export-block", "2026-09-24T09:00:00Z", "2026-09-24T10:00:00Z"),
+    block("second-export-block", "2026-09-24T10:00:00Z", "2026-09-24T11:00:00Z")
+  ];
+  const firstExport = calendarIcs(items, [], now);
+  const secondExport = calendarIcs(items, [], now);
+
+  assert.equal(firstExport, secondExport);
+  assert.equal((firstExport.match(/DTSTAMP:20260924T080000Z/g) ?? []).length, 2);
+  assert.match(firstExport, /UID:atlas-interval-first-export-block@atlas/);
+  assert.match(firstExport, /UID:atlas-interval-second-export-block@atlas/);
+});
+
 test("calendar interval descriptions preserve scheduled link order, duplicates, and orphan filtering", () => {
   const firstBlock = block("first-calendar-block", "2026-09-24T09:00:00Z", "2026-09-24T10:00:00Z");
   const secondBlock = block("second-calendar-block", "2026-09-24T10:00:00Z", "2026-09-24T11:00:00Z");

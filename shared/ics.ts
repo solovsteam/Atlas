@@ -66,7 +66,7 @@ export function serializeVevent(event: CalendarEvent, timestamp: Date): string {
 /** OS calendars already interrupt people. This is how Atlas borrows that, without Atlas staying open. */
 export function calendarIcs(items: Item[], links: ItemLink[], now: Date, dayCount = 7): string {
   const events = selectCalendarEvents(items, links, now, dayCount);
-  const serializedEvents = events.map((event) => serializeVevent(event, new Date()));
+  const serializedEvents = events.map((event) => serializeVevent(event, now));
   return ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Atlas//EN", "CALSCALE:GREGORIAN", ...serializedEvents, "END:VCALENDAR"].join(
     "\r\n"
   );

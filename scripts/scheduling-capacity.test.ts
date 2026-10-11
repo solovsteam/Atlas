@@ -40,6 +40,25 @@ test("relevance sort matches direct comparator ordering without changing items o
   assert.ok(sorted.indexOf(items[3]) < sorted.indexOf(items[4]));
 });
 
+test("relevance sort membership handles duplicate tags, statuses, null status, and separate contexts", () => {
+  const items = [
+    { id: "tagged", isTask: false, taskStatus: null, tags: ["focus", "focus"], manualRelevance: 0, updatedAt: "2026-09-24T09:00:00Z" },
+    { id: "boosted", isTask: true, taskStatus: "later", tags: [], manualRelevance: 0, updatedAt: "2026-09-24T08:00:00Z" },
+    { id: "null-status", isTask: true, taskStatus: null, tags: [], manualRelevance: 0, updatedAt: "2026-09-24T07:00:00Z" }
+  ].map((item) => item as unknown as Item);
+  const originalItems = structuredClone(items);
+  const context: RelevanceContext = { now, activeTags: ["focus", "focus"], activeStatusBoosts: ["later", "later"] };
+  const originalContext = structuredClone(context);
+  const first = sortItemsByRelevance(items, context);
+
+  assert.deepEqual(first, [...items].sort((a, b) => compareItems(a, b, context)));
+  assert.deepEqual(first.map(({ id }) => id), ["tagged", "boosted", "null-status"]);
+  assert.deepEqual(sortItemsByRelevance(items, { ...context, activeTags: [], activeStatusBoosts: [] }).map(({ id }) => id), ["null-status", "tagged", "boosted"]);
+  assert.deepEqual(sortItemsByRelevance(items, context), first);
+  assert.deepEqual(items, originalItems);
+  assert.deepEqual(context, originalContext);
+});
+
 function task(id: string, minutes = 30, fixedStart?: string, fixedEnd?: string): TaskScheduleInput {
   return {
     id, title: id, createdAt: now.toISOString(), importance: 5, durationMinutes: minutes,

@@ -10,7 +10,7 @@ import { indexTaskCountsByInterval } from "../shared/intervalTaskCounts";
 import { byDueThenTitle } from "../shared/review";
 import { dueAtForPreset, isDueSameLocalDay, isDueThisWeek, isOverdue } from "../shared/due";
 import { nominalWorkWindow, workBlockForNow, workBlockOverlapsExisting } from "../shared/workBlocks";
-import { boxDisplayLabel, type ScheduleSlot } from "../shared/schedule";
+import { boxDisplayLabel, layoutBoxesOnDay, type ScheduleSlot } from "../shared/schedule";
 import {
   DATE_PLACEHOLDER, DATE_TIME_PLACEHOLDER, formatEuropeanDate, formatEuropeanDateTime,
   isoFromEuropeanDate, isoFromEuropeanDateTime, normalizeEuropeanDate, normalizeEuropeanDateTime,
@@ -85,6 +85,64 @@ test("locale parsing refactor preserves the frozen parser across a seeded corpus
 });
 
 const now = new Date("2026-09-24T08:00:00Z");
+
+test("UTC fixed-slot layout clips grid and midnight boundaries with stable ties and minute rounding", () => {
+  const originalTimezone = process.env.TZ;
+  try {
+    process.env.TZ = "UTC";
+    // Independently specified visible offsets/durations in minutes from 06:00.
+    // The 16-hour grid is 960 minutes; fractional timestamps round to nearest minute.
+    const fixtures: [string, string, string, number, number][] = [
+      ["cross-end", "2026-09-24T21:00:00Z", "2026-09-24T23:00:00Z", 900, 60],
+      ["z-equal-start", "2026-09-24T09:00:00Z", "2026-09-24T10:00:00Z", 180, 60],
+      ["cross-start", "2026-09-24T05:00:00Z", "2026-09-24T07:00:00Z", 0, 60],
+      ["a-equal-start", "2026-09-24T09:00:00Z", "2026-09-24T09:15:00Z", 180, 15],
+      ["from-midnight", "2026-09-23T23:00:00Z", "2026-09-24T08:00:00Z", 0, 120],
+      ["through-midnight", "2026-09-24T20:00:00Z", "2026-09-25T01:00:00Z", 840, 120],
+      ["whole-grid", "2026-09-23T23:00:00Z", "2026-09-25T01:00:00Z", 0, 960],
+      ["starts-at-six", "2026-09-24T06:00:00Z", "2026-09-24T06:30:00Z", 0, 30],
+      ["ends-at-twenty-two", "2026-09-24T21:30:00Z", "2026-09-24T22:00:00Z", 930, 30],
+      ["below-half", "2026-09-24T10:00:29.999Z", "2026-09-24T10:01:29.999Z", 240, 1],
+      ["at-half", "2026-09-24T10:00:30.000Z", "2026-09-24T10:01:30.000Z", 241, 1],
+      ["above-half", "2026-09-24T10:00:30.001Z", "2026-09-24T10:02:30.001Z", 241, 2],
+      ["ends-at-six", "2026-09-24T05:00:00Z", "2026-09-24T06:00:00Z", 0, 0],
+      ["starts-at-twenty-two", "2026-09-24T22:00:00Z", "2026-09-24T23:00:00Z", 0, 0],
+      ["ends-at-midnight", "2026-09-23T23:00:00Z", "2026-09-24T00:00:00Z", 0, 0],
+      ["next-midnight", "2026-09-25T00:00:00Z", "2026-09-25T07:00:00Z", 0, 0],
+      ["rounded-empty", "2026-09-24T21:59:30.000Z", "2026-09-24T22:00:00Z", 0, 0]
+    ];
+    const slots: ScheduleSlot[] = fixtures.map(([id, startsAt, endsAt]) => ({
+      id, startsAt, endsAt, ownerId: "owner", kind: "fixed", slotStatus: "scheduled",
+      label: id, createdAt: now.toISOString(), updatedAt: now.toISOString()
+    }));
+    const before = structuredClone(slots);
+    const entries = layoutBoxesOnDay(slots, new Date("2026-09-24T12:00:00Z"));
+    assert.deepEqual(entries.map(({ slot }) => slot.id), [
+      "cross-start", "from-midnight", "whole-grid", "starts-at-six",
+      "z-equal-start", "a-equal-start", "below-half", "at-half", "above-half",
+      "through-midnight", "cross-end", "ends-at-twenty-two"
+    ]);
+    for (const [index, [id, , , offsetMinutes, visibleMinutes]] of fixtures.entries()) {
+      const entry = entries.find(({ slot }) => slot.id === id);
+      if (visibleMinutes === 0) {
+        assert.equal(entry, undefined, id);
+        continue;
+      }
+      assert.ok(entry, id);
+      assert.strictEqual(entry.slot, slots[index], `${id}: original slot identity`);
+      assert.ok(Math.abs(entry.topPct - offsetMinutes * 100 / 960) < 1e-12, `${id}: top`);
+      assert.ok(Math.abs(entry.heightPct - visibleMinutes * 100 / 960) < 1e-12, `${id}: height`);
+      assert.ok(Number.isFinite(entry.topPct) && entry.topPct >= 0, `${id}: finite nonnegative top`);
+      assert.ok(Number.isFinite(entry.heightPct) && entry.heightPct > 0, `${id}: finite positive height`);
+      assert.ok(entry.topPct + entry.heightPct <= 100 + 1e-12, `${id}: clipped to grid`);
+      assert.equal(entry.lane, 0, `${id}: existing lane policy`);
+    }
+    assert.deepEqual(slots, before, "layout must preserve input values and order");
+  } finally {
+    if (originalTimezone === undefined) delete process.env.TZ;
+    else process.env.TZ = originalTimezone;
+  }
+});
 
 test("due presets and membership use local midnight and Monday weeks, including DST and leap day", () => {
   const originalTimezone = process.env.TZ;

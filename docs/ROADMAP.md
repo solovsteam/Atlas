@@ -87,15 +87,17 @@ The implementation was developed on `experiment/scientific-atlas` and has been p
 
 Scheduling-capacity corrections verified on `atlas-scheduling-20261011` (11 Oct), pending the experimental batch: exclude elapsed time and time beyond the horizon; merge overlapping appointments; reserve each active task once per block; release completed work; use chronological UTC-offset ordering in the decision handoff; count unassigned work accurately; measure all-day capacity across daylight-saving transitions. Behavioral evidence: [`scripts/scheduling-capacity.test.ts`](../scripts/scheduling-capacity.test.ts) and `npm run check`. This remains allocation to existing intervals; recurring generation and exact task start/end placement are not built.
 
-### To port from Lakebed reference
+### Port status from Lakebed reference
 
 Source: `.lakebed/reference/` (read-only archive, gitignored).
+
+The original phase table below is historical planning, not a current backlog. Phase 4's calendar, interval, and task-placement foundations were promoted to `main` on 2026-09-26 (see [EXPERIMENT.md](EXPERIMENT.md)); the shipped scope is listed above. Remaining Phase 4 work is recurring block generation and placing tasks at exact start/end times. The scheduling-capacity corrections listed above were verified on `atlas-scheduling-20261011` and are experimental follow-up work, not part of the promoted `main` snapshot. Do not read superseded Phase 4 entries in the historical table as unshipped status.
 
 | Phase | Features | Reference paths |
 |-------|----------|-----------------|
 | **2** | Item links, associations panel, breadcrumbs | `shared/links.ts`, `client/components/AssociationsPanel.tsx`, `server/links.ts` |
 | **3** | Documentation items, completion rules, recurrence | `shared/documentation.ts`, `completion.ts`, `recurrence.ts`, related client components |
-| **4** | Intervals as items, calendar (day/week/month), task placement, schedule tab | `shared/interval.ts`, `schedule.ts`, `client/pages/CalendarPage.tsx`, `server/intervals.ts` |
+| **4 — promoted, partial** | Shipped on `main`: intervals as items, day/week/month calendar, task placement into existing intervals, and scheduling UI. Still to build: recurring block generation and exact task start/end placement. The experimental scheduling-capacity corrections above are not in the promoted `main` snapshot. | `shared/interval.ts`, `schedule.ts`, `client/pages/CalendarPage.tsx`, `server/intervals.ts` |
 | **5** | Relevance metadata UI (location, startable window), fuzzy dates | `shared/startable.ts`, `locale.ts`, `client/components/*` |
 | **—** | Lakebed → Supabase data import | Design when schema catches up |
 

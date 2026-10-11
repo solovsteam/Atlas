@@ -537,6 +537,46 @@ for (const strategy of ["earliest_fit", "delta_cost", "delta_cost_switch"] as co
   });
 }
 
+test("elapsed-time translations preserve fixed-interval scheduler decisions across Berlin DST", () => {
+  const baseNow = new Date("2026-03-28T00:30:00.000Z");
+  const elapsedOffsets = [0, 24 * 60 * 60_000, 7 * 24 * 60 * 60_000];
+  const baseTasks: TaskScheduleInput[] = [
+    { ...task("deadline", 30), dueAt: "2026-03-29T08:00:00.000Z", importance: 8 },
+    task("appointment", 45, "2026-03-29T09:00:00.000Z", "2026-03-29T09:45:00.000Z"),
+    { ...task("flex-a", 45), importance: 6, tags: ["shared"] },
+    { ...task("flex-b", 45), importance: 5, tags: ["shared"] },
+    { ...task("too-long", 150), importance: 2 }
+  ];
+  const baseIntervals = [
+    interval("morning", "2026-03-29T07:00:00.000Z", "2026-03-29T10:00:00.000Z"),
+    interval("afternoon", "2026-03-29T11:00:00.000Z", "2026-03-29T13:00:00.000Z")
+  ];
+  const shiftTimestamp = (timestamp: string | null, elapsedMs: number) =>
+    timestamp === null ? null : new Date(Date.parse(timestamp) + elapsedMs).toISOString();
+
+  for (const strategy of ["earliest_fit", "delta_cost", "delta_cost_switch"] as const) {
+    const baseline = runScheduler(baseTasks, baseIntervals, mergeSchedulerConfig(baseNow, { strategy }));
+    for (const elapsedMs of elapsedOffsets.slice(1)) {
+      const translatedTasks = baseTasks.map((entry) => ({
+        ...entry,
+        createdAt: shiftTimestamp(entry.createdAt, elapsedMs)!,
+        dueAt: shiftTimestamp(entry.dueAt, elapsedMs),
+        fixedStartsAt: shiftTimestamp(entry.fixedStartsAt, elapsedMs),
+        fixedEndsAt: shiftTimestamp(entry.fixedEndsAt, elapsedMs)
+      }));
+      const translatedIntervals = baseIntervals.map((entry) => ({
+        ...entry,
+        startsAt: shiftTimestamp(entry.startsAt, elapsedMs)!,
+        endsAt: shiftTimestamp(entry.endsAt, elapsedMs)!
+      }));
+      const translatedNow = new Date(baseNow.getTime() + elapsedMs);
+      const translated = runScheduler(translatedTasks, translatedIntervals,
+        mergeSchedulerConfig(translatedNow, { strategy }));
+      assert.deepEqual(translated, baseline, `${strategy} after ${elapsedMs}ms elapsed translation`);
+    }
+  }
+});
+
 for (const strategy of ["earliest_fit", "delta_cost"] as const) {
   test(`${strategy}: full scheduler result preserves clipped, occupied, and reserved capacity`, () => {
     const tasks = [

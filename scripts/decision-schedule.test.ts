@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { anchorForToday, headerLabel, navigateAnchor, nextLabel, prevLabel } from "../shared/calendar";
+import {
+  cleanFieldKey, defaultDocumentationData, isDocumentationFieldComplete,
+  mergeDocumentationData, parseDocumentationSchema, schemaFieldLabels, type DocumentationSchema
+} from "../shared/documentation";
 import { firstFeasibleWorkBlock } from "../shared/decisionSchedule";
 import { buildNowFocus } from "../shared/scheduling/now";
 import { calendarIcs, selectCalendarEvents, serializeVevent } from "../shared/ics";
@@ -515,33 +520,37 @@ test("work windows preserve nominal hours and input dates at remaining-time boun
   for (const [kind, label, startHour, endHour] of [
     ["morning", "Morning", 9, 12], ["afternoon", "Afternoon", 13, 17]
   ] as const) {
-    const start = new Date(2026, 8, 24, startHour);
-    const end = new Date(2026, 8, 24, endHour);
-    const threshold = end.getTime() - 20 * 60_000;
-    for (const [timestamp, expectedStart] of [
-      [start.getTime() - 1, start.getTime()],
-      [start.getTime(), start.getTime()],
-      [start.getTime() + 1, start.getTime() + 1],
-      [threshold, threshold],
-      [threshold + 1, null],
-      [end.getTime(), null],
-      [end.getTime() + 1, null]
-    ] as const) {
-      const input = new Date(timestamp);
-      const context = `${kind} at ${input.toISOString()}`;
-      assert.deepEqual(nominalWorkWindow(input, kind), { startsAt: start, endsAt: end }, context);
-      assert.equal(input.getTime(), timestamp, context);
-      const spec = workBlockForNow(input, kind);
-      assert.deepEqual(spec, expectedStart === null ? null : {
-        kind, label, startsAt: new Date(expectedStart), endsAt: end
-      }, context);
-      assert.equal(input.getTime(), timestamp, context);
-      if (spec) assert.notStrictEqual(spec.startsAt, input);
+    for (const [month, day] of [[8, 24], [2, 29], [9, 25]]) {
+      const start = new Date(2026, month, day, startHour);
+      const end = new Date(2026, month, day, endHour);
+      const threshold = end.getTime() - 20 * 60_000;
+      for (const [timestamp, expectedStart] of [
+        [start.getTime() - 1, start.getTime()],
+        [start.getTime(), start.getTime()],
+        [start.getTime() + 1, start.getTime() + 1],
+        [threshold - 60_000, threshold - 60_000], // 21 minutes
+        [threshold, threshold], // 20 minutes
+        [threshold + 60_000, null], // 19 minutes
+        [threshold + 1, null],
+        [end.getTime(), null],
+        [end.getTime() + 1, null]
+      ] as const) {
+        const input = new Date(timestamp);
+        const context = `${kind} at ${input.toISOString()}`;
+        assert.deepEqual(nominalWorkWindow(input, kind), { startsAt: start, endsAt: end }, context);
+        assert.equal(input.getTime(), timestamp, context);
+        const spec = workBlockForNow(input, kind);
+        assert.deepEqual(spec, expectedStart === null ? null : {
+          kind, label, startsAt: new Date(expectedStart), endsAt: end
+        }, context);
+        assert.equal(input.getTime(), timestamp, context);
+        if (spec) assert.notStrictEqual(spec.startsAt, input);
+      }
     }
   }
 });
 
-test("work block overlap preserves asymmetric touching boundaries and ignores archived slots", () => {
+test("current behavior: work block overlap includes touching at start but excludes touching at end", () => {
   const spec = {
     kind: "morning" as const, label: "Morning",
     startsAt: new Date("2026-09-24T09:00:00Z"), endsAt: new Date("2026-09-24T12:00:00Z")
@@ -556,7 +565,8 @@ test("work block overlap preserves asymmetric touching boundaries and ignores ar
     ["overlaps end by 1ms", "11:59:59.999", "13:00:00.000", true],
     ["identical", "09:00:00.000", "12:00:00.000", true],
     ["contained", "10:00:00.000", "11:00:00.000", true],
-    ["enclosing", "08:00:00.000", "13:00:00.000", true]
+    ["enclosing", "08:00:00.000", "13:00:00.000", true],
+    ["starts 1ms after end", "12:00:00.001", "13:00:00.000", false]
   ] as const;
   assert.equal(workBlockOverlapsExisting(spec, []), false);
   const activeSlots: ScheduleSlot[] = [];
@@ -1242,4 +1252,164 @@ test("VEVENT serialization folds long UTF-8 lines and unfolds to the original co
     "BEGIN:VALARM", "TRIGGER:-PT10M", "ACTION:DISPLAY",
     `DESCRIPTION:${event.summary}`, "END:VALARM", "END:VEVENT"
   ]);
+});
+
+// Explicit civil dates are the oracle: no shared date arithmetic computes expectations.
+test("calendar day and week navigation preserves local time across boundaries and DST", () => {
+  const fixtures: [number[], number, number[], number[]][] = [
+    [[2026, 1, 29], 1, [2026, 1, 30], [2026, 2, 5]],
+    [[2026, 1, 30], 2, [2026, 2, 1], [2026, 2, 13]],
+    [[2026, 1, 31], -1, [2026, 1, 30], [2026, 1, 24]],
+    [[2026, 1, 31], 2, [2026, 2, 2], [2026, 2, 14]],
+    [[2024, 2, 29], 1, [2024, 3, 1], [2024, 3, 7]],
+    [[2024, 3, 1], -1, [2024, 2, 29], [2024, 2, 23]],
+    [[2026, 12, 31], 2, [2027, 1, 2], [2027, 1, 14]],
+    [[2026, 1, 1], -2, [2025, 12, 30], [2025, 12, 18]],
+    [[2026, 3, 28], 1, [2026, 3, 29], [2026, 4, 4]],
+    [[2026, 3, 29], -1, [2026, 3, 28], [2026, 3, 22]],
+    [[2026, 10, 24], 1, [2026, 10, 25], [2026, 10, 31]],
+    [[2026, 10, 25], -1, [2026, 10, 24], [2026, 10, 18]]
+  ];
+  for (const [source, delta, day, week] of fixtures) {
+    const anchor = new Date(source[0], source[1] - 1, source[2], 12, 34, 56, 789);
+    const before = anchor.getTime();
+    for (const [view, expected] of [["day", day], ["week", week]] as const) {
+      assert.deepEqual(navigateAnchor(view, anchor, delta), new Date(expected[0], expected[1] - 1, expected[2], 12, 34, 56, 789));
+      assert.deepEqual(navigateAnchor(view, anchor, 0), anchor);
+    }
+    assert.equal(anchor.getTime(), before);
+  }
+});
+
+test("current behavior: calendar month navigation overflows short months and resets time even at zero delta", () => {
+  const fixtures: [number[], number, number[]][] = [
+    [[2026, 1, 29], 1, [2026, 3, 1]],
+    [[2026, 1, 30], 1, [2026, 3, 2]],
+    [[2026, 1, 31], 1, [2026, 3, 3]],
+    [[2026, 3, 29], -1, [2026, 3, 1]],
+    [[2026, 3, 30], -1, [2026, 3, 2]],
+    [[2026, 3, 31], -1, [2026, 3, 3]],
+    [[2024, 1, 31], 1, [2024, 3, 2]],
+    [[2024, 2, 29], 12, [2025, 3, 1]],
+    [[2026, 12, 31], 2, [2027, 3, 3]],
+    [[2026, 1, 31], -2, [2025, 12, 1]],
+    [[2026, 3, 29], 2, [2026, 5, 29]],
+    [[2026, 10, 25], -2, [2026, 8, 25]]
+  ];
+  for (const [source, delta, expected] of fixtures) {
+    const anchor = new Date(source[0], source[1] - 1, source[2], 12, 34, 56, 789);
+    const before = anchor.getTime();
+    assert.deepEqual(navigateAnchor("month", anchor, delta), new Date(expected[0], expected[1] - 1, expected[2]));
+    assert.deepEqual(navigateAnchor("month", anchor, 0), new Date(source[0], source[1] - 1, source[2]));
+    assert.equal(anchor.getTime(), before);
+  }
+});
+
+test("calendar today anchors use midnight, Monday and month start", (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: new Date(2026, 2, 29, 15).getTime() });
+  assert.deepEqual(anchorForToday("day"), new Date(2026, 2, 29));
+  assert.deepEqual(anchorForToday("week"), new Date(2026, 2, 23));
+  assert.deepEqual(anchorForToday("month"), new Date(2026, 2, 1));
+  t.mock.timers.setTime(new Date(2026, 9, 25, 15).getTime());
+  assert.deepEqual(anchorForToday("day"), new Date(2026, 9, 25));
+  assert.deepEqual(anchorForToday("week"), new Date(2026, 9, 19));
+  assert.deepEqual(anchorForToday("month"), new Date(2026, 9, 1));
+  t.mock.timers.setTime(new Date(2026, 11, 28, 15).getTime());
+  assert.deepEqual(anchorForToday("week"), new Date(2026, 11, 28));
+});
+
+test("calendar headers and navigation labels describe each view", () => {
+  const anchor = new Date(2026, 11, 28, 15);
+  assert.equal(headerLabel("day", anchor), "Mo, 28.12.2026");
+  assert.equal(headerLabel("week", anchor), "Mo, 28.12.2026 – So, 03.01.2027");
+  assert.equal(headerLabel("month", anchor), anchor.toLocaleDateString(undefined, { month: "long", year: "numeric" }));
+  for (const view of ["day", "week", "month"] as const) {
+    assert.equal(prevLabel(view), `← Prev ${view}`);
+    assert.equal(nextLabel(view), `Next ${view} →`);
+  }
+});
+
+test("documentation keys normalize case, punctuation, underscores and the length cap", () => {
+  for (const [input, expected] of [
+    ["  Mixed CASE  ", "mixed_case"], ["one... /--two", "one_two"],
+    ["___Alpha__Beta___", "alpha__beta"], ["Café 東京", "caf"],
+    ["東京", ""], ["!!! ___", ""], ["", ""], ["A".repeat(45), "a".repeat(40)]
+  ]) assert.equal(cleanFieldKey(input), expected);
+});
+
+test("current behavior: documentation key truncation can leave a trailing underscore", () => {
+  assert.equal(cleanFieldKey("a".repeat(39) + "!b"), "a".repeat(39) + "_");
+});
+
+test("documentation schema filters entries, cleans duplicate keys and normalizes labels and types", () => {
+  for (const value of [null, undefined, {}, "fields", 42]) assert.deepEqual(parseDocumentationSchema(value), []);
+  assert.deepEqual(parseDocumentationSchema([
+    null, undefined, false, 42, "field", [], {},
+    { label: "Fallback Label", type: "boolean" },
+    { key: "DUP---key", label: "First", type: "number" },
+    { key: "dup key", label: "Ignored duplicate", type: "text" },
+    { key: "unknown", type: "date" },
+    { key: "long", label: "  " + "L".repeat(90) + "  ", type: "text" },
+    { key: "empty-label", label: "   ", type: "text" },
+    { key: "!!!", label: "Invalid explicit key" }
+  ]), [
+    { key: "fallback_label", label: "Fallback Label", type: "boolean" },
+    { key: "dup_key", label: "First", type: "number" },
+    { key: "unknown", label: "unknown", type: "text" },
+    { key: "long", label: "L".repeat(80), type: "text" },
+    { key: "empty_label", label: "empty_label", type: "text" }
+  ]);
+});
+
+test("current behavior: documentation schema falls back only for nullish keys and stringifies values", () => {
+  assert.deepEqual(parseDocumentationSchema([
+    { key: "", label: "Ignored" }, { key: null, label: "Used" },
+    { key: 123, label: false }, { key: true }
+  ]), [
+    { key: "used", label: "Used", type: "text" },
+    { key: "123", label: "false", type: "text" },
+    { key: "true", label: "true", type: "text" }
+  ]);
+});
+
+const regressionDocSchema: DocumentationSchema = [
+  { key: "checked", label: "Checked", type: "boolean" },
+  { key: "amount", label: "Amount", type: "number" },
+  { key: "notes", label: "Notes", type: "text" }
+];
+
+test("documentation defaults and merge enforce types, reject nonfinite numbers and leave inputs intact", () => {
+  const defaults = { checked: false, amount: null, notes: "" };
+  assert.deepEqual(defaultDocumentationData(regressionDocSchema), defaults);
+  assert.deepEqual(mergeDocumentationData(regressionDocSchema, null), defaults);
+  assert.deepEqual(defaultDocumentationData([]), {});
+  for (const existing of [
+    { checked: "true", amount: "0", notes: 42, unknown: "drop" },
+    { checked: 1, amount: NaN, notes: false },
+    { checked: null, amount: Infinity, notes: null },
+    { checked: undefined, amount: -Infinity, notes: undefined }
+  ]) {
+    const before = structuredClone(existing);
+    assert.deepEqual(mergeDocumentationData(regressionDocSchema, existing), defaults);
+    assert.deepEqual(existing, before);
+  }
+  const existing = Object.freeze({ checked: true, amount: 0, notes: "  kept  ", extra: "drop" });
+  assert.deepEqual(mergeDocumentationData(regressionDocSchema, existing), { checked: true, amount: 0, notes: "  kept  " });
+  assert.deepEqual(existing, { checked: true, amount: 0, notes: "  kept  ", extra: "drop" });
+  assert.deepEqual(mergeDocumentationData(regressionDocSchema, { checked: false, amount: -1.5, notes: "" }), { checked: false, amount: -1.5, notes: "" });
+});
+
+test("documentation completion and label lookup distinguish false, blank text and zero", () => {
+  const [boolean, number, text] = regressionDocSchema;
+  for (const [field, value, expected] of [
+    [boolean, false, false], [boolean, true, true], [boolean, 1, false],
+    [number, 0, true], [number, -1.5, true], [number, NaN, false],
+    [number, Infinity, false], [number, "0", false], [number, null, false],
+    [text, " \t\n", false], [text, " hello ", true], [text, 0, false]
+  ] as const) assert.equal(isDocumentationFieldComplete(field, { [field.key]: value }), expected);
+  for (const field of regressionDocSchema) assert.equal(isDocumentationFieldComplete(field, {}), false);
+  assert.deepEqual(schemaFieldLabels(regressionDocSchema), new Map([
+    ["checked", "Checked"], ["amount", "Amount"], ["notes", "Notes"]
+  ]));
+  assert.deepEqual(schemaFieldLabels([]), new Map());
 });

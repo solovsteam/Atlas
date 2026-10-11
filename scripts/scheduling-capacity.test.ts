@@ -771,6 +771,83 @@ test("delta scoring reevaluates last chance when later capacity changes", () => 
   assert.equal(withoutLaterFit - withLaterFit, 80);
 });
 
+for (const strategy of ["delta_cost", "delta_cost_switch"] as const) {
+  for (const scenario of [
+    { name: "later block has room", due: "11:40", later: true, reserved: 0, deadlineBonus: 0, flexibleBonus: 0 },
+    { name: "later room consumed by reservations", due: "11:40", later: true, reserved: 5, deadlineBonus: 500, flexibleBonus: 80 },
+    { name: "later block ends after due", due: "11:39", later: true, reserved: 0, deadlineBonus: 500, flexibleBonus: 0 },
+    { name: "no later block", due: "11:40", later: false, reserved: 0, deadlineBonus: 500, flexibleBonus: 80 }
+  ]) {
+    test(`${strategy}: last-chance bonuses when ${scenario.name}`, () => {
+      const config = mergeSchedulerConfig(now, { strategy });
+      const early = interval("early", date("09:00"), date("09:40"));
+      const late = interval("late", date("11:00"), date("11:40"));
+      const later = scenario.later ? [late] : [];
+      const deadline = { ...task("deadline", 30), importance: 2, dueAt: date(scenario.due) };
+      const flexible = { ...task("flexible", 30), importance: 10 };
+
+      // Independent arithmetic for the documented defaults: 30 * 1.25 rounds
+      // up to 38 minutes, so only one task fits early. The deadline's value
+      // term cancels; flexible waiting costs 75% of value over 21 days.
+      // A later block ending exactly at due fits; one minute after does not.
+      const hoursUntilDue = scenario.due === "11:40" ? 8 / 3 : 159 / 60;
+      const deadlineBase = 60 - 60 / (1 + hoursUntilDue / 24) + 8 * 20 / 38;
+      const flexibleBase = 75 - 100 * (1 - 1 / (1 + 1 / (24 * 7))) + 8 * 100 / 38;
+      const expectedDeadline = deadlineBase + scenario.deadlineBonus;
+      const expectedFlexible = flexibleBase + scenario.flexibleBonus;
+      const remaining = new Map([[late.id, 40 - scenario.reserved]]);
+      for (const [candidate, expected, base, bonus] of [
+        [deadline, expectedDeadline, deadlineBase, scenario.deadlineBonus],
+        [flexible, expectedFlexible, flexibleBase, scenario.flexibleBonus]
+      ] as const) {
+        const actual = placementBenefit(candidate, taskBenefitConstants(candidate, config), early, null, later, remaining, config);
+        assert.ok(Math.abs(actual - expected) < 1e-10, `${candidate.id}: ${actual} vs independent ${expected}`);
+        assert.ok(Math.abs((actual - base) - bonus) < 1e-10, `${candidate.id}: exact last-chance bonus`);
+      }
+
+      const deadlineFirst = scenario.deadlineBonus === 500;
+      assert.equal(expectedDeadline > expectedFlexible, deadlineFirst);
+      const result = runScheduler([deadline, flexible], [early, ...later], config, new Map([[late.id, scenario.reserved]]));
+      const first = deadlineFirst ? deadline.id : flexible.id;
+      const second = deadlineFirst ? flexible.id : deadline.id;
+      const secondFits = scenario.later && scenario.reserved === 0;
+      assert.deepEqual(result.assignments, [
+        { taskId: first, intervalId: early.id },
+        ...(secondFits ? [{ taskId: second, intervalId: late.id }] : [])
+      ]);
+      assert.deepEqual(result.unassigned, secondFits ? [] : [{ taskId: second, reason: "no_feasible_interval" }]);
+    });
+  }
+
+  test(`${strategy}: flexible +80 reverses competition when reservations leave room only for the smaller task`, () => {
+    const config = mergeSchedulerConfig(now, { strategy });
+    const early = interval("early", date("09:00"), date("09:40"));
+    const late = interval("late", date("11:00"), date("11:40"));
+    const larger = { ...task("larger", 30), importance: 2 };
+    const smaller = { ...task("smaller", 15), importance: 7 };
+    // Independently computed flexible benefits, using default 21-day wait,
+    // one-hour slot delay, and rounded buffered durations of 38 and 19.
+    const largerBase = 15 - 20 * (1 - 1 / (1 + 1 / 168)) + 8 * 20 / 38;
+    const smallerBase = 52.5 - 70 * (1 - 1 / (1 + 1 / 168)) + 8 * 70 / 19;
+    assert.ok(largerBase < smallerBase && largerBase + 80 > smallerBase);
+    for (const reserved of [0, 20]) {
+      const remaining = new Map([[late.id, 40 - reserved]]);
+      for (const [candidate, expected] of [
+        [larger, largerBase + (reserved ? 80 : 0)], [smaller, smallerBase]
+      ] as const) {
+        const actual = placementBenefit(candidate, taskBenefitConstants(candidate, config), early, null, [late], remaining, config);
+        assert.ok(Math.abs(actual - expected) < 1e-10, `${candidate.id}: independent flexible benefit`);
+      }
+      const result = runScheduler([larger, smaller], [early, late], config, new Map([[late.id, reserved]]));
+      assert.deepEqual(result.assignments, [
+        { taskId: reserved ? larger.id : smaller.id, intervalId: early.id },
+        { taskId: reserved ? smaller.id : larger.id, intervalId: late.id }
+      ]);
+      assert.deepEqual(result.unassigned, []);
+    }
+  });
+}
+
 function item(partial: Partial<Item>): Item {
   return {
     id: "item", ownerId: "owner", title: "Item", body: "", isTask: false, isInterval: false,

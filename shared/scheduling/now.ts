@@ -39,44 +39,46 @@ function appointmentContains(item: Item, now: Date): boolean {
   return now.getTime() >= start.getTime() && now.getTime() < end.getTime();
 }
 
-function currentIntervals(items: Item[], now: Date): Item[] {
-  return items.filter((item) => {
+type PreparedInterval = {
+  item: Item;
+  start: Date | null;
+  end: Date | null;
+};
+
+function prepareIntervals(items: Item[]): PreparedInterval[] {
+  return items.flatMap((item) => {
     if (!item.isInterval) {
-      return false;
+      return [];
     }
     const slot = calendarIntervalFromItem(item);
     if (!slot || isArchivedSlot(slot)) {
-      return false;
+      return [];
     }
-    const start = slotRangeStart(slot);
-    const end = slotRangeEnd(slot);
-    if (!start || !end) {
-      return false;
-    }
-    return now.getTime() >= start.getTime() && now.getTime() < end.getTime();
+    return [{ item, start: slotRangeStart(slot), end: slotRangeEnd(slot) }];
   });
 }
 
-function todaysIntervals(items: Item[], now: Date): Item[] {
+function currentIntervals(intervals: PreparedInterval[], now: Date): Item[] {
+  return intervals
+    .filter(({ start, end }) =>
+      start !== null && end !== null && now.getTime() >= start.getTime() && now.getTime() < end.getTime()
+    )
+    .map(({ item }) => item);
+}
+
+function todaysIntervals(intervals: PreparedInterval[], now: Date): Item[] {
   const start = startOfDay(now);
   const end = endOfDay(now);
-  return items.filter((item) => {
-    if (!item.isInterval) {
-      return false;
-    }
-    const slot = calendarIntervalFromItem(item);
-    if (!slot || isArchivedSlot(slot)) {
-      return false;
-    }
-    const slotStart = slotRangeStart(slot);
-    const slotEnd = slotRangeEnd(slot);
-    if (!slotStart && !slotEnd) {
-      return false;
-    }
-    const a = slotStart ?? slotEnd!;
-    const b = slotEnd ?? slotStart!;
-    return a < end && b >= start;
-  });
+  return intervals
+    .filter(({ start: slotStart, end: slotEnd }) => {
+      if (!slotStart && !slotEnd) {
+        return false;
+      }
+      const a = slotStart ?? slotEnd!;
+      const b = slotEnd ?? slotStart!;
+      return a < end && b >= start;
+    })
+    .map(({ item }) => item);
 }
 
 export function buildNowFocus(items: Item[], links: ItemLink[], now: Date): NowFocus {
@@ -96,7 +98,8 @@ export function buildNowFocus(items: Item[], links: ItemLink[], now: Date): NowF
     };
   }
 
-  const current = currentIntervals(items, now);
+  const preparedIntervals = prepareIntervals(items);
+  const current = currentIntervals(preparedIntervals, now);
   const currentTasks = current
     .flatMap((interval) => tasksScheduledIn(interval.id, links))
     .map((id) => byId.get(id))
@@ -114,7 +117,7 @@ export function buildNowFocus(items: Item[], links: ItemLink[], now: Date): NowF
 
   const seen = new Set<string>();
   const todayTasks: Item[] = [];
-  for (const interval of todaysIntervals(items, now)) {
+  for (const interval of todaysIntervals(preparedIntervals, now)) {
     for (const taskId of tasksScheduledIn(interval.id, links)) {
       if (seen.has(taskId)) {
         continue;

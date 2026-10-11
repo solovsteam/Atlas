@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { firstFeasibleWorkBlock } from "../shared/decisionSchedule";
+import { buildNowFocus } from "../shared/scheduling/now";
 import type { Item } from "../shared/item";
 import type { ItemLink } from "../shared/links";
 
@@ -43,4 +44,24 @@ test("does not treat all-day capacity or elapsed blocks as a specific work block
 test("an overlapping appointment consumes block capacity", () => {
   const appointment = { ...task("appointment", 20), taskFixedStartsAt: "2026-09-24T09:00:00Z", taskFixedEndsAt: "2026-09-24T09:20:00Z" };
   assert.equal(firstFeasibleWorkBlock([first, second, appointment], [], 30, now), "second");
+});
+
+test("Now prepares intervals once while preserving current half-open boundaries and encounter order", () => {
+  const currentA = block("current-a", "2026-09-24T08:00:00Z", "2026-09-24T09:00:00Z");
+  const currentB = block("current-b", "2026-09-24T08:00:00Z", "2026-09-24T09:00:00Z");
+  const firstTask = task("first-task", 30);
+  const secondTask = task("second-task", 30);
+  const links = [
+    { kind: "scheduled_in", fromId: firstTask.id, toId: currentA.id },
+    { kind: "scheduled_in", fromId: secondTask.id, toId: currentB.id }
+  ] as ItemLink[];
+
+  const atStart = buildNowFocus([currentA, currentB, firstTask, secondTask], links, now);
+  assert.equal(atStart.primary?.item.id, firstTask.id);
+  assert.equal(atStart.primary?.reason, "In current-a");
+  assert.deepEqual(atStart.committed.map(({ item }) => item.id), [secondTask.id]);
+
+  const atEnd = buildNowFocus([currentA, currentB, firstTask, secondTask], links, new Date("2026-09-24T09:00:00Z"));
+  assert.equal(atEnd.primary?.item.id, firstTask.id);
+  assert.equal(atEnd.primary?.reason, "Committed today");
 });

@@ -15,6 +15,8 @@ import { buildNowFocus } from "../shared/scheduling/now";
 import { calendarIntervalFromItem, isArchivedSlot } from "../shared/schedule";
 import { proposeSchedule } from "../src/services/scheduling";
 import { compareItems, sortItemsByRelevance, type RelevanceContext } from "../shared/relevance";
+import { calculateSchedulerMetrics } from "../shared/scheduling/metrics";
+import { intervalRange } from "../shared/scheduling/constraints";
 
 const date = (hour: string) => `2026-09-24T${hour}:00.000Z`;
 const now = new Date(date("08:00"));
@@ -495,4 +497,43 @@ test("a block ending now or starting at the horizon has no usable capacity", () 
   const config = mergeSchedulerConfig(now, { horizonDays: 1 });
   assert.equal(intervalCapacityMinutes(interval("past", date("07:00"), date("08:00")), config), 0);
   assert.equal(intervalCapacityMinutes(interval("future", "2026-09-25T08:00:00Z", "2026-09-25T09:00:00Z"), config), 0);
+});
+
+test("scheduler metrics preserve repeated assignment and per-call clipped interval ranges", () => {
+  const tasks = [task("a"), { ...task("b"), tags: ["different"] }, task("leftover")];
+  const byId = new Map(tasks.map((entry) => [entry.id, entry]));
+  const intervals = [
+    interval("offset", "2026-09-24T08:30:00+02:00", "2026-09-24T12:00:00+02:00"),
+    interval("later", "2026-09-25T09:00:00Z", "2026-09-25T10:00:00Z"),
+    interval("invalid", "bad", "also bad")
+  ];
+  const intervalById = new Map(intervals.map((entry) => [entry.id, entry]));
+  const assignments = [
+    { taskId: "a", intervalId: "offset" },
+    { taskId: "b", intervalId: "offset" },
+    { taskId: "a", intervalId: "offset" },
+    { taskId: "b", intervalId: "later" },
+    { taskId: "a", intervalId: "invalid" },
+    { taskId: "b", intervalId: "missing" }
+  ];
+  const unassigned = [{ taskId: "leftover", reason: "no_feasible_interval" as const }];
+  const remaining = new Set(["leftover"]);
+
+  for (const config of [
+    mergeSchedulerConfig(new Date("2026-09-24T09:00:00Z"), { horizonDays: 3 }),
+    mergeSchedulerConfig(new Date("2026-09-24T10:00:00Z"), { horizonDays: 0.5 })
+  ]) {
+    const expectedTotal = assignments.reduce((total, assignment) => {
+      const range = intervalById.get(assignment.intervalId);
+      const start = range ? intervalRange(range, config)?.start ?? config.now : config.now;
+      return total + postponementCost(byId.get(assignment.taskId)!, start, config);
+    }, postponementCost(tasks[2]!, waitHorizon(tasks[2]!, config), config));
+    const expectedSwitches = 2;
+    assert.deepEqual(calculateSchedulerMetrics(assignments, unassigned, byId, intervalById, config, remaining), {
+      totalPostponement: expectedTotal,
+      contextSwitches: expectedSwitches,
+      assignedCount: assignments.length,
+      unassignedCount: unassigned.length
+    });
+  }
 });

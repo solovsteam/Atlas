@@ -13,13 +13,20 @@ export function calculateSchedulerMetrics(
 ): SchedulerMetrics {
   let totalPostponement = 0;
   const assignedInInterval = new Map<string, string[]>();
+  const intervalStarts = new Map<string, Date | null>();
 
   for (const assignment of assignments) {
     const task = byId.get(assignment.taskId);
     const interval = intervalById.get(assignment.intervalId);
     if (!task) continue;
-    const range = interval ? intervalRange(interval, config) : null;
-    totalPostponement += postponementCost(task, range?.start ?? config.now, config);
+    let start = config.now;
+    if (interval) {
+      if (!intervalStarts.has(assignment.intervalId)) {
+        intervalStarts.set(assignment.intervalId, intervalRange(interval, config)?.start ?? null);
+      }
+      start = intervalStarts.get(assignment.intervalId) ?? config.now;
+    }
+    totalPostponement += postponementCost(task, start, config);
     const list = assignedInInterval.get(assignment.intervalId) ?? [];
     list.push(assignment.taskId);
     assignedInInterval.set(assignment.intervalId, list);

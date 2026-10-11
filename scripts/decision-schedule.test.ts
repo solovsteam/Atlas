@@ -10,7 +10,7 @@ import { indexTaskCountsByInterval } from "../shared/intervalTaskCounts";
 import { byDueThenTitle } from "../shared/review";
 import { dueAtForPreset, isDueSameLocalDay, isDueThisWeek, isOverdue } from "../shared/due";
 import { nominalWorkWindow, workBlockForNow, workBlockOverlapsExisting } from "../shared/workBlocks";
-import type { ScheduleSlot } from "../shared/schedule";
+import { boxDisplayLabel, type ScheduleSlot } from "../shared/schedule";
 import {
   DATE_PLACEHOLDER, DATE_TIME_PLACEHOLDER, formatEuropeanDate, formatEuropeanDateTime,
   isoFromEuropeanDate, isoFromEuropeanDateTime, normalizeEuropeanDate, normalizeEuropeanDateTime,
@@ -193,6 +193,52 @@ test("interval task count index matches direct counts, including duplicate sched
 
   for (const intervalId of ["interval-a", "interval-b", "interval-empty"]) {
     assert.equal(counts.get(intervalId) ?? 0, taskCountInInterval(intervalId, links));
+  }
+});
+
+test("box labels preserve exact strings, link encounter order and inputs", () => {
+  const cases: [string, string, string, string[], string][] = [
+    ["appointment", "appt:visit", " Visit ", [], " Visit "],
+    ["appointment ignores links", "appt:visit", " Visit ", ["z", "a"], " Visit "],
+    ["empty appointment", "appt:visit", "", ["z"], ""],
+    ["blank appointment", "appt:visit", " \t ", [], " \t "],
+    ["explicit zero", "block", " Work ", [], " Work "],
+    ["explicit one", "block", " Work ", ["z"], " Work  · Zulu"],
+    ["explicit multiple", "block", "Work", ["z", "a"], "Work · 2 tasks"],
+    ["explicit duplicates", "block", "Work", ["z", "z", "a"], "Work · 3 tasks"],
+    ["explicit missing title", "block", "Work", ["missing"], "Work · task"],
+    ["explicit empty title", "block", "Work", ["empty"], "Work · "],
+    ["empty zero", "block", "", [], "Free"],
+    ["blank zero", "block", " \t ", [], "Free"],
+    ["blank one", "block", " \t ", ["z"], "Zulu"],
+    ["empty multiple", "block", "", ["z", "a", "empty"], "Zulu +2"],
+    ["reversed encounter order", "block", "", ["a", "z", "empty"], "Alpha +2"],
+    ["blank duplicates", "block", " \t ", ["z", "z"], "Zulu +1"],
+    ["blank missing title", "block", "", ["missing"], "Untitled"],
+    ["missing first title", "block", "", ["missing", "a"], "Untitled +1"],
+    ["blank empty title", "block", "", ["empty"], ""],
+    ["empty first title", "block", "", ["empty", "a"], " +1"]
+  ];
+  for (const [name, id, label, taskIds, expected] of cases) {
+    const slot: ScheduleSlot = {
+      id, label, ownerId: "owner", kind: "fixed", slotStatus: "scheduled",
+      startsAt: now.toISOString(), endsAt: "2026-09-24T09:00:00Z",
+      createdAt: now.toISOString(), updatedAt: now.toISOString()
+    };
+    const makeLink = (linkId: string, fromId: string, toId: string, kind: ItemLink["kind"]): ItemLink => ({
+      id: linkId, ownerId: "owner", fromId, toId, kind,
+      createdAt: now.toISOString(), updatedAt: now.toISOString()
+    });
+    const links = [
+      makeLink("context", "a", id, "context"),
+      makeLink("elsewhere", "a", "other-block", "scheduled_in"),
+      makeLink("outgoing", id, "a", "scheduled_in"),
+      ...taskIds.map((taskId, index) => makeLink(`link-${index}`, taskId, id, "scheduled_in"))
+    ];
+    const titles = new Map([["a", "Alpha"], ["z", "Zulu"], ["empty", ""]]);
+    const before = structuredClone({ slot, links, titles });
+    assert.equal(boxDisplayLabel(slot, links, titles), expected, name);
+    assert.deepEqual({ slot, links, titles }, before, `${name}: inputs must not mutate`);
   }
 });
 

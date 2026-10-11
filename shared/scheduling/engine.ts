@@ -1,8 +1,6 @@
-import { isQuickDuration } from "../duration";
 import {
   appointmentOverlapMinutes,
   constraintMode,
-  hasMissingInfo,
   intervalCapacityMinutes,
   intervalIsOpen,
   intervalRange,
@@ -12,6 +10,7 @@ import {
 import { nowMotivation, postponementCost, waitHorizon } from "./deferral";
 import { bufferedMinutes, valueScore } from "./math";
 import { switchCost } from "./switching";
+import { eligibleTasks } from "./eligible";
 import type {
   Assignment,
   IntervalInput,
@@ -64,36 +63,6 @@ function remainingFor(
     0,
     intervalCapacityMinutes(interval, config) - appointmentOverlapMinutes(interval, appointments, config) - (reservedMinutesByInterval.get(interval.id) ?? 0)
   );
-}
-
-function eligibleTasks(tasks: TaskScheduleInput[]): {
-  candidates: TaskScheduleInput[];
-  unassigned: UnassignedTask[];
-  appointments: TaskScheduleInput[];
-} {
-  const candidates: TaskScheduleInput[] = [];
-  const unassigned: UnassignedTask[] = [];
-  const appointments: TaskScheduleInput[] = [];
-
-  for (const task of tasks) {
-    const mode = constraintMode(task);
-    if (mode === "fixed") {
-      appointments.push(task);
-      unassigned.push({ taskId: task.id, reason: "excluded" });
-      continue;
-    }
-    if (hasMissingInfo(task)) {
-      unassigned.push({ taskId: task.id, reason: "missing_info" });
-      continue;
-    }
-    if (isQuickDuration(task.durationMinutes)) {
-      unassigned.push({ taskId: task.id, reason: "quick" });
-      continue;
-    }
-    candidates.push(task);
-  }
-
-  return { candidates, unassigned, appointments };
 }
 
 function metricsFor(

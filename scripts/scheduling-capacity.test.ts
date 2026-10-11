@@ -5,6 +5,7 @@ import type { ItemLink } from "../shared/links";
 import { firstFeasibleWorkBlock } from "../shared/decisionSchedule";
 import { runScheduler, mergeSchedulerConfig, type IntervalInput, type TaskScheduleInput } from "../shared/scheduling";
 import { intervalCapacityMinutes } from "../shared/scheduling/constraints";
+import { eligibleTasks } from "../shared/scheduling/eligible";
 import { proposeSchedule } from "../src/services/scheduling";
 
 const date = (hour: string) => `2026-09-24T${hour}:00.000Z`;
@@ -21,6 +22,23 @@ function task(id: string, minutes = 30, fixedStart?: string, fixedEnd?: string):
 function interval(id: string, start = date("09:00"), end = date("12:00")): IntervalInput {
   return { id, title: id, kind: "fixed", startsAt: start, endsAt: end, archived: false };
 }
+
+test("eligible task classification preserves fixed and missing-info precedence", () => {
+  const fixedDue = { ...task("fixed-due", 30, date("09:00"), date("10:00")), dueAt: date("11:00") };
+  const halfFixed = task("half-fixed", 30, date("09:00"));
+  const quickMissing = task("quick-missing", 2, date("09:00"));
+  const ordinary = task("ordinary", 30);
+
+  assert.deepEqual(eligibleTasks([fixedDue, halfFixed, quickMissing, ordinary]), {
+    candidates: [ordinary],
+    unassigned: [
+      { taskId: "fixed-due", reason: "excluded" },
+      { taskId: "half-fixed", reason: "missing_info" },
+      { taskId: "quick-missing", reason: "missing_info" }
+    ],
+    appointments: [fixedDue]
+  });
+});
 
 function item(partial: Partial<Item>): Item {
   return {

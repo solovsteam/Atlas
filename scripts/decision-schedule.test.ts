@@ -855,6 +855,88 @@ test("calendar event selection includes scheduled intervals and active appointme
   assert.equal(events[1].description, "Atlas appointment");
 });
 
+function freezeCalendarInput(value: unknown): void {
+  if (value !== null && typeof value === "object") {
+    Object.values(value).forEach(freezeCalendarInput);
+    Object.freeze(value);
+  }
+}
+
+for (const frozen of [false, true]) {
+  test(`calendar selection and export preserve ${frozen ? "frozen" : "mutable"} items, links and dates across A/B/A calls`, () => {
+    const items = [
+      { ...task("call", 30), taskFixedStartsAt: "2026-09-24T11:00:00Z", taskFixedEndsAt: "2026-09-24T11:30:00Z" },
+      { ...block("focus", "2026-09-24T09:00:00Z", "2026-09-24T10:00:00Z"), tags: ["work"],
+        documentationData: { notes: ["keep", { text: "unchanged" }] } },
+      { ...task("write", 30), title: "Write, review", tags: ["writing"] },
+      block("tomorrow", "2026-09-25T09:00:00Z", "2026-09-25T10:00:00Z")
+    ];
+    const links: ItemLink[] = [
+      { id: "scheduled", ownerId: "owner", fromId: "write", toId: "focus", kind: "scheduled_in", createdAt: "", updatedAt: "" },
+      { id: "context", ownerId: "owner", fromId: "call", toId: "focus", kind: "context", createdAt: "", updatedAt: "" }
+    ];
+    const timestamps = [new Date("2026-09-24T08:00:00Z"), new Date("2026-09-25T08:00:00Z")];
+    const inputs = { items, links, timestamps };
+    const before = structuredClone(inputs);
+    if (frozen) freezeCalendarInput(inputs);
+    const expected = [
+      { uid: "atlas-appt-call@atlas", start: new Date("2026-09-24T11:00:00Z"), end: new Date("2026-09-24T11:30:00Z"),
+        summary: "call", description: "Atlas appointment" },
+      { uid: "atlas-interval-focus@atlas", start: new Date("2026-09-24T09:00:00Z"), end: new Date("2026-09-24T10:00:00Z"),
+        summary: "focus", description: "Write, review" },
+      { uid: "atlas-interval-tomorrow@atlas", start: new Date("2026-09-25T09:00:00Z"), end: new Date("2026-09-25T10:00:00Z"),
+        summary: "tomorrow", description: "Nothing committed yet" }
+    ];
+    const exports: string[] = [];
+    for (const index of [0, 1, 0]) {
+      const timestamp = timestamps[index];
+      const events = selectCalendarEvents(items, links, timestamp);
+      assert.deepEqual(events, index === 0 ? expected : expected.slice(2));
+      assert.deepEqual(inputs, before, "selection preserves input values and order");
+      const exported = calendarIcs(items, links, timestamp);
+      assert.deepEqual(inputs, before, "export preserves all inputs, including Date internal values");
+      assert.equal((exported.match(/BEGIN:VALARM/g) ?? []).length, events.length);
+      assert.equal((exported.match(index === 0 ? /DTSTAMP:20260924T080000Z/g : /DTSTAMP:20260925T080000Z/g) ?? []).length, events.length);
+      exports.push(exported);
+      // Frozen Dates still allow setters: snapshots, not Object.freeze alone,
+      // prove preservation of internal Date values and returned-Date isolation.
+      for (const event of events) {
+        event.start.setTime(0);
+        event.end.setUTCFullYear(2000);
+      }
+      assert.deepEqual(inputs, before, "mutating returned dates leaves source items and timestamp intact");
+      assert.deepEqual(selectCalendarEvents(items, links, timestamp), index === 0 ? expected : expected.slice(2));
+      assert.equal(calendarIcs(items, links, timestamp), exported, "returned dates cannot contaminate the next export");
+      assert.deepEqual(inputs, before);
+    }
+    assert.equal(exports[0], exports[2], "A/B/A export is deterministic");
+    assert.notEqual(exports[0], exports[1], "B exercises a different timestamp and selection horizon");
+  });
+
+  test(`VEVENT serialization preserves ${frozen ? "frozen" : "mutable"} event dates and timestamps across A/B/A calls`, () => {
+    const event = {
+      uid: "immutable@atlas", start: new Date("2026-09-24T09:00:00Z"), end: new Date("2026-09-24T10:00:00Z"),
+      summary: "Write, review", description: "Reason; keep\nnext"
+    };
+    const timestamps = [new Date("2026-09-24T08:00:00Z"), new Date("2026-09-25T08:00:00Z")];
+    const inputs = { event, timestamps };
+    const before = structuredClone(inputs);
+    if (frozen) freezeCalendarInput(inputs);
+    for (const index of [0, 1, 0]) {
+      const expected = [
+        "BEGIN:VEVENT", "UID:immutable@atlas",
+        index === 0 ? "DTSTAMP:20260924T080000Z" : "DTSTAMP:20260925T080000Z",
+        "DTSTART:20260924T090000Z", "DTEND:20260924T100000Z",
+        "SUMMARY:Write\\, review", "DESCRIPTION:Reason\\; keep\\nnext",
+        "BEGIN:VALARM", "TRIGGER:-PT10M", "ACTION:DISPLAY", "DESCRIPTION:Write\\, review",
+        "END:VALARM", "END:VEVENT"
+      ].join("\r\n");
+      assert.equal(serializeVevent(event, timestamps[index]), expected);
+      assert.deepEqual(inputs, before, "serialization preserves event fields and every input Date value");
+    }
+  });
+}
+
 test("calendar export rejects malformed, reversed, and zero-length appointments", () => {
   const appointment = (id: string, start: string, end: string) => ({
     ...task(id, 30), taskFixedStartsAt: start, taskFixedEndsAt: end

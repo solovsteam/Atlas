@@ -6,7 +6,9 @@ import { firstFeasibleWorkBlock } from "../shared/decisionSchedule";
 import { runScheduler, mergeSchedulerConfig, type IntervalInput, type TaskScheduleInput } from "../shared/scheduling";
 import { appointmentOverlapMinutes, constraintMode, intervalCapacityMinutes, intervalIsOpen, taskFitsInterval, resolvedDuration } from "../shared/scheduling/constraints";
 import { eligibleTasks } from "../shared/scheduling/eligible";
-import { nowMotivation, postponementCost, waitHorizon } from "../shared/scheduling/deferral";
+import { nowMotivation, postponementCost, postponementCostDelta, waitHorizon } from "../shared/scheduling/deferral";
+import { switchCost } from "../shared/scheduling/switching";
+import type { SchedulerConfig } from "../shared/scheduling/types";
 import { bufferedMinutes, valueScore } from "../shared/scheduling/math";
 import { placementBenefit, taskBenefitConstants } from "../shared/scheduling/scoring";
 import { createScheduleInputResolver, itemToScheduleInput, itemsToScheduleInputs } from "../shared/scheduling/resolve";
@@ -1400,5 +1402,126 @@ for (const strategy of ["earliest_fit", "delta_cost"] as const) {
       return sum + 6 * 50 * (1 - 1 / (1 + days / 7));
     }, 0);
     assert.ok(Math.abs(result.metrics.totalPostponement - expectedPostponement) < 1e-10);
+  });
+}
+
+// Explicit, non-default scoring isolates the documented formulas from defaults.
+function deferralConfig(strategy: SchedulerConfig["strategy"] = "delta_cost_switch"): SchedulerConfig {
+  return {
+    now: new Date("2026-10-24T12:00:00Z"), horizonDays: 7, gamma: 2,
+    durationBuffer: 1, defaultDurationMinutes: 30, switchPenalty: 12,
+    wsptWeight: 3, urgencyWeight: 0.7, valueWeight: 0.3, strategy
+  };
+}
+
+function closeScore(actual: number, expected: number): void {
+  assert.ok(Math.abs(actual - expected) < 1e-10, `${actual} != ${expected}`);
+}
+
+test("deadline urgency mixes value after the curve and saturates at the exact due instant", () => {
+  const config = deferralConfig();
+  const due = config.now.getTime() + 2 * 86_400_000;
+  for (const importance of [2, 8]) {
+    const candidate = { ...task("deadline"), importance, dueAt: new Date(due).toISOString() };
+    // Two days, one day, and one millisecond before due; then due and overdue.
+    for (const offset of [-2 * 86_400_000, -86_400_000, -1, 0, 1, 86_400_000]) {
+      const at = new Date(due + offset);
+      const urgency = offset >= 0 ? 100 : 100 / (1 + 2 * (-offset / 86_400_000));
+      closeScore(postponementCost(candidate, at, config), 0.7 * urgency + 0.3 * importance * 10);
+      closeScore(postponementCostDelta(candidate, at, config),
+        0.7 * (urgency - 20)); // Value cancels; urgency at now is 100 / 5.
+      const atConfig = { ...config, now: at };
+      closeScore(nowMotivation(candidate, atConfig),
+        importance * 10 / (1 + 2 * Math.max(0, -offset / 86_400_000)) + (offset >= 0 ? 20 : 0));
+    }
+    assert.ok(postponementCost(candidate, new Date(due - 1), config) < postponementCost(candidate, new Date(due), config));
+    assert.equal(postponementCost(candidate, new Date(due), config), postponementCost(candidate, new Date(due + 1), config));
+  }
+});
+
+test("flexible deferral uses elapsed slot delay, ignores age, and falls back for invalid due times", () => {
+  const config = deferralConfig();
+  for (const dueAt of [null, "", "invalid-date"]) {
+    for (const createdAt of ["2000-01-01T00:00:00Z", "2026-10-24T12:00:00Z"]) {
+      const candidate = { ...task("flexible"), importance: 8, dueAt, createdAt };
+      for (const elapsed of [-1, 0, 1, 86_400_000, 7 * 86_400_000]) {
+        const at = new Date(config.now.getTime() + elapsed);
+        const expected = 80 * (1 - 1 / (1 + 2 * Math.max(0, elapsed / 86_400_000) / 7));
+        closeScore(postponementCost(candidate, at, config), expected);
+        closeScore(postponementCostDelta(candidate, at, config), expected);
+        assert.equal(nowMotivation(candidate, { ...config, now: at }), 80);
+      }
+    }
+  }
+  // Fixed appointments retain flexible deferral even when they also have a due date.
+  const fixed = { ...task("fixed", 30, "2026-10-24T13:00:00Z", "2026-10-24T14:00:00Z"), dueAt: config.now.toISOString() };
+  assert.equal(postponementCost(fixed, config.now, config), 0);
+  assert.equal(nowMotivation(fixed, config), 50);
+});
+
+test("waitHorizon selects the earlier valid due or elapsed horizon, including millisecond boundaries", () => {
+  const config = deferralConfig();
+  const originalNow = config.now.getTime();
+  const horizon = originalNow + 7 * 86_400_000; // Spans Berlin's fall DST change: seven elapsed days.
+  for (const due of [originalNow - 1, originalNow, originalNow + 1, horizon - 1, horizon, horizon + 1]) {
+    assert.equal(waitHorizon({ ...task("waiting"), dueAt: new Date(due).toISOString() }, config).getTime(), Math.min(due, horizon));
+  }
+  for (const dueAt of [null, "", "invalid-date"]) {
+    assert.equal(waitHorizon({ ...task("waiting"), dueAt }, config).getTime(), horizon);
+  }
+  assert.equal(waitHorizon(task("zero-horizon"), { ...config, horizonDays: 0 }).getTime(), originalNow);
+  assert.equal(waitHorizon(task("fractional-horizon"), { ...config, horizonDays: 0.5 }).getTime(), originalNow + 43_200_000);
+  assert.equal(config.now.getTime(), originalNow, "horizon calculation leaves now intact");
+});
+
+test("switch exemptions are symmetric for identity, siblings, parent/child and exact shared tags", () => {
+  const previous = { ...task("previous"), parentTaskId: "parent", tags: ["project", ""] };
+  const cases: [TaskScheduleInput, number][] = [
+    [{ ...task("previous"), tags: [] }, 0],
+    [{ ...task("sibling"), parentTaskId: "parent" }, 0],
+    [task("parent"), 0],
+    [{ ...task("child"), parentTaskId: "previous" }, 0],
+    [{ ...task("tagged"), tags: ["other", "project"] }, 0],
+    [{ ...task("unrelated"), parentTaskId: "different" }, 12],
+    [{ ...task("empty-tag"), tags: [""] }, 12],
+    [{ ...task("case-sensitive"), tags: ["Project"] }, 12]
+  ];
+  for (const [next, expected] of cases) {
+    assert.equal(switchCost(previous, next, 12), expected, next.id);
+    assert.equal(switchCost(next, previous, 12), expected, `reverse ${next.id}`);
+    for (const penalty of [0, -1]) assert.equal(switchCost(previous, next, penalty), 0);
+  }
+  assert.equal(switchCost(null, previous, 12), 0);
+  assert.equal(switchCost(task("a"), task("b"), 12), 12, "empty parents are not siblings");
+  assert.equal(switchCost(task("a"), task("b"), 0.001), 0.001);
+});
+
+for (const strategy of ["earliest_fit", "delta_cost", "delta_cost_switch"] as const) {
+  test(`${strategy}: preserves value ranking and only switch-aware placement promotes related work`, () => {
+    const config = deferralConfig(strategy);
+    const high = { ...task("high"), importance: 9, tags: ["project"] };
+    const middle = { ...task("middle"), importance: 6 };
+    const low = { ...task("low"), importance: 5 };
+    const block = interval("ranking", config.now.toISOString(), new Date(config.now.getTime() + 90 * 60_000).toISOString());
+    const order = (tasks: TaskScheduleInput[]) => runScheduler(tasks, [block], config).assignments.map(({ taskId }) => taskId);
+    assert.deepEqual(order([low, middle, high]), ["high", "middle", "low"]);
+    assert.deepEqual(order([middle, high, low]), ["high", "middle", "low"]);
+    for (const related of [
+      { ...low, tags: ["project"] },
+      { ...low, parentTaskId: high.id },
+      { ...low, parentTaskId: "common-parent" }
+    ]) {
+      const first = related.parentTaskId === "common-parent" ? { ...high, parentTaskId: "common-parent" } : high;
+      assert.deepEqual(order([middle, related, first]),
+        strategy === "delta_cost_switch" ? ["high", "low", "middle"] : ["high", "middle", "low"]);
+      // Motivation and deferral rankings themselves never depend on placement strategy or relationships.
+      assert.ok(nowMotivation(first, config) > nowMotivation(middle, config));
+      assert.ok(nowMotivation(middle, config) > nowMotivation(related, config));
+      const at = new Date(config.now.getTime() + 86_400_000);
+      assert.ok(postponementCost(middle, at, config) > postponementCost(related, at, config));
+    }
+    const deadlines = [4, 1, 2].map((days) => ({ ...task(`due-${days}`), dueAt: new Date(config.now.getTime() + days * 86_400_000).toISOString() }));
+    assert.deepEqual([...deadlines].sort((a, b) => nowMotivation(b, config) - nowMotivation(a, config)).map(({ id }) => id), ["due-1", "due-2", "due-4"]);
+    assert.deepEqual([...deadlines].sort((a, b) => postponementCost(b, config.now, config) - postponementCost(a, config.now, config)).map(({ id }) => id), ["due-1", "due-2", "due-4"]);
   });
 }

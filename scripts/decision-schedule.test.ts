@@ -95,34 +95,25 @@ test("Now prepares intervals once while preserving current half-open boundaries 
   assert.equal(atEnd.primary?.reason, "Committed today");
 });
 
-test("Now matches the link-scan result for overlapping intervals, orphan and duplicate links", () => {
+test("Now deduplicates current tasks across overlapping intervals and duplicate links", () => {
   const currentA = block("overlap-a", "2026-09-24T07:30:00Z", "2026-09-24T09:00:00Z");
   const currentB = block("overlap-b", "2026-09-24T07:00:00Z", "2026-09-24T09:00:00Z");
   const active = task("linked", 30);
+  const distinct = task("distinct", 30);
   const inactive = { ...task("inactive", 30), taskStatus: "done" as const };
   const links = [
     { kind: "scheduled_in", fromId: active.id, toId: currentB.id },
+    { kind: "scheduled_in", fromId: distinct.id, toId: currentB.id },
     { kind: "scheduled_in", fromId: "orphan", toId: currentA.id },
     { kind: "context", fromId: "wrong-kind", toId: currentA.id },
     { kind: "scheduled_in", fromId: active.id, toId: currentA.id },
     { kind: "scheduled_in", fromId: inactive.id, toId: currentA.id },
     { kind: "scheduled_in", fromId: active.id, toId: currentB.id }
   ] as ItemLink[];
-  const items = [currentA, currentB, active, inactive];
-  const reference = items.flatMap((interval) => {
-    if (!interval.isInterval || interval.intervalStatus === "archived") return [];
-    const start = Date.parse(interval.intervalStartsAt!);
-    const end = Date.parse(interval.intervalEndsAt!);
-    return now.getTime() >= start && now.getTime() < end ? [interval] : [];
-  }).flatMap((interval) => links
-    .filter((link) => link.kind === "scheduled_in" && link.toId === interval.id)
-    .map((link) => items.find((item) => item.id === link.fromId))
-    .filter((item): item is Item => Boolean(item?.isTask && item.taskStatus === "active")));
-
-  const [first, ...rest] = reference;
+  const items = [currentA, currentB, active, distinct, inactive];
   assert.deepEqual(buildNowFocus(items, links, now), {
-    primary: { item: first!, reason: `In ${currentA.title}` },
-    committed: rest.map((item) => ({ item, reason: "Also in this interval" })),
+    primary: { item: active, reason: `In ${currentA.title}` },
+    committed: [{ item: distinct, reason: "Also in this interval" }],
     suggestion: null
   });
 });

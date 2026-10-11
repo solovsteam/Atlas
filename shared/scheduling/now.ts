@@ -127,10 +127,17 @@ export function buildNowFocus(items: Item[], links: ItemLink[], now: Date): NowF
 
   const preparedIntervals = prepareIntervals(items);
   const current = currentIntervals(preparedIntervals, now);
+  const currentTaskIds = new Set<string>();
   const currentTasks = current
     .flatMap((interval) => tasksIn(interval.id))
     .map((id) => byId.get(id))
-    .filter((item): item is Item => item !== undefined && isActiveTask(item));
+    .filter((item): item is Item => {
+      if (!item || !isActiveTask(item) || currentTaskIds.has(item.id)) {
+        return false;
+      }
+      currentTaskIds.add(item.id);
+      return true;
+    });
 
   if (currentTasks.length > 0) {
     const [first, ...rest] = currentTasks;

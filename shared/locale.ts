@@ -164,17 +164,13 @@ function parseRelativeDate(text: string, referenceDate: Date): Date | null {
   return date;
 }
 
-function parseNumericShorthand(text: string, referenceDate: Date, requireTime: boolean): Date | null {
+function parseNumericShorthand(text: string, referenceDate: Date): Date | null {
   const match = text.match(/^(\d{1,2})\.(\d{1,2})(?:\.(\d{2,4}))?(?:\s+(\d{1,2})(?::(\d{2}))?)?$/);
   if (!match) {
     return null;
   }
 
   const trailingTime = match[4] !== undefined;
-  if (requireTime && !trailingTime) {
-    return null;
-  }
-
   return buildValidDate({
     day: Number(match[1]),
     month: Number(match[2]),
@@ -184,7 +180,7 @@ function parseNumericShorthand(text: string, referenceDate: Date, requireTime: b
   });
 }
 
-function parseMonthNameDate(text: string, referenceDate: Date, requireTime: boolean): Date | null {
+function parseMonthNameDate(text: string, referenceDate: Date): Date | null {
   const dayFirst = text.match(/^(\d{1,2})\.?\s+([a-zä]+)\.?(?:\s+(\d{1,2})(?::(\d{2}))?)?$/);
   if (dayFirst) {
     const month = resolveMonthName(dayFirst[2]);
@@ -193,10 +189,6 @@ function parseMonthNameDate(text: string, referenceDate: Date, requireTime: bool
     }
 
     const hasTime = dayFirst[3] !== undefined;
-    if (requireTime && !hasTime) {
-      return null;
-    }
-
     return buildValidDate({
       day: Number(dayFirst[1]),
       month,
@@ -214,10 +206,6 @@ function parseMonthNameDate(text: string, referenceDate: Date, requireTime: bool
     }
 
     const hasTime = monthFirst[3] !== undefined;
-    if (requireTime && !hasTime) {
-      return null;
-    }
-
     return buildValidDate({
       day: Number(monthFirst[2]),
       month,
@@ -230,7 +218,7 @@ function parseMonthNameDate(text: string, referenceDate: Date, requireTime: bool
   return null;
 }
 
-export function parseFlexibleDateTime(text: string, referenceDate: Date = new Date()): Date | null {
+function parseFlexibleDateValue(text: string, referenceDate: Date): Date | null {
   const strict = parseEuropeanDateTime(text);
   if (strict) {
     return strict;
@@ -243,27 +231,17 @@ export function parseFlexibleDateTime(text: string, referenceDate: Date = new Da
 
   return (
     parseRelativeDate(normalized, referenceDate) ??
-    parseNumericShorthand(normalized, referenceDate, false) ??
-    parseMonthNameDate(normalized, referenceDate, false)
+    parseNumericShorthand(normalized, referenceDate) ??
+    parseMonthNameDate(normalized, referenceDate)
   );
 }
 
+export function parseFlexibleDateTime(text: string, referenceDate: Date = new Date()): Date | null {
+  return parseFlexibleDateValue(text, referenceDate);
+}
+
 export function parseFlexibleDate(text: string, referenceDate: Date = new Date()): Date | null {
-  const strict = parseEuropeanDate(text);
-  if (strict) {
-    return strict;
-  }
-
-  const normalized = text.trim().toLowerCase().replace(/\s+/g, " ");
-  if (!normalized) {
-    return null;
-  }
-
-  return (
-    parseRelativeDate(normalized, referenceDate) ??
-    parseNumericShorthand(normalized, referenceDate, false) ??
-    parseMonthNameDate(normalized, referenceDate, false)
-  );
+  return parseFlexibleDateValue(text, referenceDate);
 }
 
 export function normalizeEuropeanDateTime(text: string, referenceDate: Date = new Date()): string | null {

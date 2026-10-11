@@ -8,6 +8,78 @@ import type { Item } from "../shared/item";
 import { taskCountInInterval, type ItemLink } from "../shared/links";
 import { indexTaskCountsByInterval } from "../shared/intervalTaskCounts";
 import { byDueThenTitle } from "../shared/review";
+import {
+  DATE_PLACEHOLDER, DATE_TIME_PLACEHOLDER, formatEuropeanDate, formatEuropeanDateTime,
+  isoFromEuropeanDate, isoFromEuropeanDateTime, normalizeEuropeanDate, normalizeEuropeanDateTime,
+  parseEuropeanDate, parseEuropeanDateTime, parseFlexibleDate, parseFlexibleDateTime,
+  validateEuropeanDate, validateEuropeanDateTime
+} from "../shared/locale";
+
+// Frozen private oracle copied from shared/locale.ts before the deduplication.
+const oracleStrictRe = /^(\d{1,2})\.(\d{1,2})\.(\d{4})(?:[,\s]+(\d{1,2}):(\d{2}))?$/;
+const oracleMonths: Record<string, number> = { jan:1, januar:1, january:1, feb:2, februar:2, february:2, mar:3, marz:3, märz:3, march:3, apr:4, april:4, mai:5, may:5, jun:6, juni:6, june:6, jul:7, juli:7, july:7, aug:8, august:8, sep:9, sept:9, september:9, okt:10, oktober:10, oct:10, october:10, nov:11, november:11, dez:12, dezember:12, dec:12, december:12 };
+const oracleOffsets: Record<string, number> = { heute:0, today:0, morgen:1, tomorrow:1 };
+type OracleParts = { day: number; month: number; year: number; hour: number; minute: number };
+function oracleBuild({day, month, year, hour, minute}: OracleParts): Date | null {
+  if (month < 1 || month > 12 || day < 1 || day > 31 || hour > 23 || minute > 59) return null;
+  const date = new Date(year, month - 1, day, hour, minute);
+  return date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day ? null : date;
+}
+function oracleStrict(text: string): Date | null {
+  const trimmed = text.trim(); if (!trimmed) return null;
+  const match = trimmed.match(oracleStrictRe); if (!match) return null;
+  return oracleBuild({day:+match[1], month:+match[2], year:+match[3], hour:match[4] !== undefined ? +match[4] : 0, minute:match[5] !== undefined ? +match[5] : 0});
+}
+function oracleYear(value: number | undefined, ref: Date): number { return value === undefined ? ref.getFullYear() : value < 100 ? 2000 + value : value; }
+function oracleFlexible(text: string, ref: Date): Date | null {
+  const strict = oracleStrict(text); if (strict) return strict;
+  const normalized = text.trim().toLowerCase().replace(/\s+/g, " "); if (!normalized) return null;
+  const offset = oracleOffsets[normalized];
+  if (offset !== undefined) { const date = new Date(ref); date.setHours(0,0,0,0); date.setDate(date.getDate()+offset); return date; }
+  const numeric = normalized.match(/^(\d{1,2})\.(\d{1,2})(?:\.(\d{2,4}))?(?:\s+(\d{1,2})(?::(\d{2}))?)?$/);
+  if (numeric) return oracleBuild({day:+numeric[1], month:+numeric[2], year:oracleYear(numeric[3] !== undefined ? +numeric[3] : undefined, ref), hour:numeric[4] !== undefined ? +numeric[4] : 0, minute:numeric[4] !== undefined && numeric[5] !== undefined ? +numeric[5] : 0});
+  const dayFirst = normalized.match(/^(\d{1,2})\.?\s+([a-zä]+)\.?(?:\s+(\d{1,2})(?::(\d{2}))?)?$/);
+  const monthFirst = normalized.match(/^([a-zä]+)\.?\s+(\d{1,2})\.?(?:\s+(\d{1,2})(?::(\d{2}))?)?$/);
+  const named = dayFirst ? {d:dayFirst[1], m:dayFirst[2], h:dayFirst[3], min:dayFirst[4]} : monthFirst ? {d:monthFirst[2], m:monthFirst[1], h:monthFirst[3], min:monthFirst[4]} : null;
+  if (!named) return null;
+  const month = oracleMonths[named.m.replace(/\./g, "").trim()]; if (!month) return null;
+  return oracleBuild({day:+named.d, month, year:ref.getFullYear(), hour:named.h !== undefined ? +named.h : 0, minute:named.h !== undefined && named.min !== undefined ? +named.min : 0});
+}
+function oracleNormalize(date: Date | null, time: boolean): string | null { return date ? (time ? formatEuropeanDateTime(date) : formatEuropeanDate(date)) : null; }
+
+test("locale parsing refactor preserves the frozen parser across a seeded corpus", () => {
+  let seed = 0x6d2b79f5;
+  const random = () => { seed = (Math.imul(seed ^ (seed >>> 15), 1 | seed) + 0x6d2b79f5) | 0; seed ^= seed + Math.imul(seed ^ (seed >>> 7), 61 | seed); return ((seed ^ (seed >>> 14)) >>> 0) / 4294967296; };
+  const pick = <T,>(xs: T[]): T => xs[Math.floor(random() * xs.length)];
+  const names = ["Januar", "Jan.", "February", "Feb.", "März", "March", "April", "Mai", "May", "Juni", "June", "Juli", "July", "August", "September", "Sept.", "Oktober", "Oct.", "November", "Dezember", "December"];
+  const corpus = ["", "   ", "garbage", "31.02.2026", "29.02.2025", "today", "TODAY", "morgen", "Tomorrow"];
+  for (let i=0; i<4000; i++) {
+    const d = 1 + Math.floor(random()*35), m = 1 + Math.floor(random()*14), y = pick(["", ".26", ".2026", ".99"]);
+    const time = pick(["", ` ${Math.floor(random()*27)}:${String(Math.floor(random()*70)).padStart(2,"0")}`, ` ${Math.floor(random()*27)}`]);
+    const name = pick(names);
+    corpus.push(`${String(d).padStart(2,"0")}.${String(m).padStart(2,"0")}.${2020+Math.floor(random()*12)}` + pick(["", ` ${Math.floor(random()*27)}:${String(Math.floor(random()*70)).padStart(2,"0")}`, `, ${Math.floor(random()*27)}:${String(Math.floor(random()*70)).padStart(2,"0")}`]));
+    corpus.push(`${d}.${m}${y}${time}`, `${d}${pick([" ", ". "])}${name}${pick(["", "."])}${pick([" ", "  "])}${Math.floor(random()*32)}${time}`, `${name}${pick(["", "."])} ${d}${pick(["", "."])}${time}`);
+    corpus.push(` ${d}.${m}${y}, ${Math.floor(random()*27)}:${String(Math.floor(random()*70)).padStart(2,"0")} `);
+  }
+  assert.ok(corpus.length >= 3000);
+  const references = [new Date(2026,2,28,12), new Date(2026,2,29,12), new Date(2026,9,24,12), new Date(2026,9,25,12), new Date(2026,5,15,12)];
+  for (const text of corpus) for (const ref of references) {
+    const oracle = oracleFlexible(text, ref);
+    const equalDate = (actual: Date | null, expected: Date | null) => assert.equal(actual?.getTime() ?? null, expected?.getTime() ?? null, `${JSON.stringify(text)} @ ${ref.toString()}`);
+    equalDate(parseFlexibleDate(text, ref), oracle); equalDate(parseFlexibleDateTime(text, ref), oracle);
+    equalDate(parseEuropeanDate(text), oracleStrict(text)); equalDate(parseEuropeanDateTime(text), oracleStrict(text));
+    assert.equal(normalizeEuropeanDate(text, ref), oracleNormalize(oracle, false));
+    assert.equal(normalizeEuropeanDateTime(text, ref), oracleNormalize(oracle, true));
+    for (const endOfDay of [false, true]) {
+      const expected = oracle ? new Date(oracle).toISOString() : "";
+      if (oracle && endOfDay) { const end = new Date(oracle); end.setHours(23,59,0,0); assert.equal(isoFromEuropeanDate(text, true, ref), end.toISOString()); }
+      else assert.equal(isoFromEuropeanDate(text, endOfDay, ref), expected);
+    }
+    assert.equal(isoFromEuropeanDateTime(text, ref), oracle?.toISOString() ?? "");
+    assert.equal(validateEuropeanDate(text, ref), !text.trim() ? "Enter a date." : oracle ? null : `Use ${DATE_PLACEHOLDER}`);
+    assert.equal(validateEuropeanDateTime(text, ref), !text.trim() ? "Enter a date and time." : oracle ? null : `Use ${DATE_TIME_PLACEHOLDER}`);
+  }
+});
 
 const now = new Date("2026-09-24T08:00:00Z");
 

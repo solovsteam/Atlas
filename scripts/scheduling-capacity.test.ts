@@ -812,6 +812,60 @@ test("scheduler sorts equivalent offset starts chronologically and preserves tie
   });
 });
 
+test("scheduler full output is invariant to equivalent timestamp offsets near midnight and at a clipped interval", () => {
+  const configNow = new Date("2026-03-29T00:15:00Z");
+  const tasks: TaskScheduleInput[] = [
+    { ...task("appointment", 45, "2026-03-29T00:05:00Z", "2026-03-29T00:50:00Z"), importance: 8 },
+    { ...task("due", 30), dueAt: "2026-03-29T00:40:00Z", importance: 7 },
+    { ...task("flex-a", 30), importance: 6, parentTaskId: "project", tags: ["shared"] },
+    { ...task("flex-b", 30), importance: 5, tags: ["shared"] },
+    { ...task("too-long", 180), importance: 2 }
+  ];
+  const intervals = [
+    interval("clipped", "2026-03-28T23:45:00Z", "2026-03-29T02:00:00Z"),
+    interval("later", "2026-03-29T03:00:00Z", "2026-03-29T04:00:00Z"),
+    { ...interval("civil-day", "2026-03-29T00:00:00Z", "2026-03-30T00:00:00Z"), kind: "allDay" }
+  ];
+
+  // Render an instant with another legal ISO offset. The selected offsets cross
+  // the civil-date boundary for this near-midnight fixture while preserving time.
+  const withOffset = (value: string, offsetMinutes: number): string => {
+    const local = new Date(Date.parse(value) + offsetMinutes * 60_000);
+    const sign = offsetMinutes >= 0 ? "+" : "-";
+    const abs = Math.abs(offsetMinutes);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${local.getUTCFullYear()}-${pad(local.getUTCMonth() + 1)}-${pad(local.getUTCDate())}T${pad(local.getUTCHours())}:${pad(local.getUTCMinutes())}:${pad(local.getUTCSeconds())}.${String(local.getUTCMilliseconds()).padStart(3, "0")}${sign}${pad(Math.floor(abs / 60))}:${pad(abs % 60)}`;
+  };
+  const changedTasks = tasks.map((entry) => ({
+    ...entry,
+    dueAt: entry.dueAt === null ? null : withOffset(entry.dueAt, 120),
+    fixedStartsAt: entry.fixedStartsAt === null ? null : withOffset(entry.fixedStartsAt, -300),
+    fixedEndsAt: entry.fixedEndsAt === null ? null : withOffset(entry.fixedEndsAt, 330)
+  }));
+  const changedIntervals = intervals.map((entry) => entry.kind === "allDay" ? entry : ({
+    ...entry,
+    startsAt: withOffset(entry.startsAt, 330),
+    endsAt: withOffset(entry.endsAt, -300)
+  }));
+
+  assert.notEqual(changedIntervals[0]!.startsAt.slice(0, 10), intervals[0]!.startsAt.slice(0, 10), "fixture crosses a civil-date boundary");
+  assert.ok(Date.parse(changedIntervals[0]!.startsAt) === Date.parse(intervals[0]!.startsAt));
+  assert.ok(Date.parse(changedTasks[0]!.fixedStartsAt!) === Date.parse(tasks[0]!.fixedStartsAt!));
+  assert.ok(Date.parse(changedTasks[1]!.dueAt!) === Date.parse(tasks[1]!.dueAt!));
+
+  for (const strategy of ["earliest_fit", "delta_cost", "delta_cost_switch"] as const) {
+    const config = mergeSchedulerConfig(configNow, { strategy, horizonDays: 0.2 });
+    const baseline = runScheduler(tasks, intervals, config);
+    assert.ok(baseline.assignments.length > 0, `${strategy}: fixture assigns work`);
+    assert.ok(baseline.unassigned.length > 0, `${strategy}: fixture has unassigned work`);
+    assert.deepEqual(
+      runScheduler(changedTasks, changedIntervals, config),
+      baseline,
+      `${strategy}: assignments, unassigned reasons, and metrics are invariant`
+    );
+  }
+});
+
 test("all-day capacity uses the actual elapsed time across daylight-saving transitions", () => {
   const spring = { ...interval("spring", "2026-03-29T00:00:00+01:00", "2026-03-30T00:00:00+02:00"), kind: "allDay" };
   const autumn = { ...interval("autumn", "2026-10-25T00:00:00+02:00", "2026-10-26T00:00:00+01:00"), kind: "allDay" };

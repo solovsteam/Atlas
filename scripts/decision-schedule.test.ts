@@ -513,6 +513,80 @@ test("Now deduplicates current tasks across overlapping intervals and duplicate 
   });
 });
 
+test("Now observes stale and future links excluding suggestions without creating commitments", () => {
+  const reference = new Date(2026, 8, 24, 12);
+  const archived = {
+    ...block("archived", new Date(2026, 8, 24, 11).toISOString(), new Date(2026, 8, 24, 13).toISOString()),
+    intervalStatus: "archived"
+  };
+  const tomorrow = block("future", new Date(2026, 8, 25, 11).toISOString(), new Date(2026, 8, 25, 13).toISOString());
+  const linkedQuick = task("linked-quick", 2);
+  const available = task("available", 30);
+
+  // Characterization only: the docs do not decide whether stale links should be
+  // repaired or their tasks released. Preserve the existing suggestion exclusion.
+  for (const [targetId, intervals] of [
+    ["absent", []], [archived.id, [archived]], [tomorrow.id, [tomorrow]]
+  ] as const) {
+    const links = [{ kind: "scheduled_in", fromId: linkedQuick.id, toId: targetId }] as ItemLink[];
+    assert.deepEqual(buildNowFocus([...intervals, linkedQuick, available], links, reference), {
+      primary: { item: available, reason: "Highest start-now motivation among unscheduled work" },
+      committed: [],
+      suggestion: null
+    }, targetId);
+    assert.deepEqual(buildNowFocus([...intervals, linkedQuick], links, reference), {
+      primary: null, committed: [], suggestion: null
+    }, targetId);
+    assert.deepEqual(buildNowFocus([...intervals, linkedQuick, available], [], reference), {
+      primary: { item: linkedQuick, reason: "Two minutes or less — do it now, don’t calendar it" },
+      committed: [],
+      suggestion: null
+    }, `${targetId}: unlinked control`);
+  }
+});
+
+test("Now filters orphan and inactive links and keeps block then link order for current and today commitments", () => {
+  const reference = new Date(2026, 8, 24, 12);
+  const currentA = block("input-first", new Date(2026, 8, 24, 11).toISOString(), new Date(2026, 8, 24, 13).toISOString());
+  const currentB = block("starts-earlier", new Date(2026, 8, 24, 10).toISOString(), new Date(2026, 8, 24, 13).toISOString());
+  const firstLinked = task("first-linked", 30);
+  const shared = task("shared", 30);
+  const other = task("other", 30);
+  const inactive = (["done", "cancelled", "later"] as const).map((taskStatus) => ({
+    ...task(taskStatus, 2), taskStatus
+  }));
+  const nonTask = { ...task("non-task", 2), isTask: false };
+  const available = task("unscheduled", 30);
+  const link = (fromId: string, toId: string): ItemLink => ({ kind: "scheduled_in", fromId, toId } as ItemLink);
+  // Global link order and task order both differ from interval traversal order.
+  const links = [
+    link(other.id, currentB.id), link(shared.id, currentB.id),
+    ...["orphan", ...inactive.map((item) => item.id), nonTask.id].flatMap((id) => [
+      link(id, currentA.id), link(id, currentB.id)
+    ]),
+    link(firstLinked.id, currentA.id), link(shared.id, currentA.id),
+    link(firstLinked.id, currentA.id), link(other.id, currentB.id)
+  ];
+  const tasks = [other, shared, ...inactive, nonTask, available, firstLinked];
+  for (const intervals of [[currentA, currentB], [currentB, currentA]]) {
+    const [primary, ...committed] = intervals[0] === currentA
+      ? [firstLinked, shared, other]
+      : [other, shared, firstLinked];
+    assert.deepEqual(buildNowFocus([...intervals, ...tasks], links, reference), {
+      primary: { item: primary, reason: `In ${intervals[0].title}` },
+      committed: committed.map((item) => ({ item, reason: "Also in this interval" })),
+      suggestion: null
+    });
+    // Once both blocks end, the same filtered, duplicate-free order is retained
+    // as today's commitments, with unscheduled work available as a suggestion.
+    assert.deepEqual(buildNowFocus([...intervals, ...tasks], links, new Date(2026, 8, 24, 14)), {
+      primary: { item: primary, reason: "Committed today" },
+      committed: committed.map((item) => ({ item, reason: "Also today" })),
+      suggestion: { item: available, reason: "Highest start-now motivation among unscheduled work" }
+    });
+  }
+});
+
 test("Now keeps appointment priority and today link deduplication", () => {
   const futureBlock = block("later-today", "2026-09-24T10:00:00Z", "2026-09-24T11:00:00Z");
   const committedTask = task("today-committed", 30);

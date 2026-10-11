@@ -1414,6 +1414,79 @@ test("scheduler full output is invariant to equivalent offsets and distinct fixe
   }
 });
 
+for (const strategy of ["earliest_fit", "delta_cost", "delta_cost_switch"] as const) {
+  test(`${strategy}: consistent ID renaming preserves ordered results and metrics`, () => {
+    const config = mergeSchedulerConfig(now, { strategy, durationBuffer: 1 });
+    const relatedTasks = [
+      { ...task("high", 30), importance: 9, parentTaskId: "external-parent" },
+      { ...task("middle", 30), importance: 6, tags: ["other"] },
+      { ...task("low", 30), importance: 5, parentTaskId: "external-parent" },
+      { ...task("overflow", 200), dueAt: date("11:30") },
+      task("quick", 1),
+      task("appointment", 15, date("09:00"), date("09:15"))
+    ];
+    const fixtures = [
+      {
+        name: "siblings with an external parent",
+        tasks: relatedTasks,
+        intervals: [interval("first", date("09:00"), date("10:45")), interval("later", date("11:00"), date("12:00"))],
+        reservations: new Map([["first", 15], ["later", 30]])
+      },
+      {
+        name: "parent/child",
+        tasks: relatedTasks.map((entry) => ({ ...entry, parentTaskId: entry.id === "low" ? "high" : "" })),
+        intervals: [interval("first", date("09:00"), date("10:45")), interval("later", date("11:00"), date("12:00"))],
+        reservations: new Map([["first", 15], ["later", 30]])
+      },
+      {
+        name: "equal-score tasks and equal-start intervals",
+        tasks: [task("tie-z", 30), task("tie-a", 30), task("tie-m", 30), task("tie-b", 30)],
+        intervals: [interval("block-z", date("09:00"), date("09:45")), interval("block-a", date("09:00"), date("09:45"))],
+        reservations: new Map([["block-z", 15], ["block-a", 15]])
+      }
+    ];
+    for (const fixture of fixtures) {
+      const { tasks, intervals, reservations } = fixture;
+      const baseline = runScheduler(tasks, intervals, config, reservations);
+      assert.ok(baseline.assignments.length >= 2, `${fixture.name}: assigns across blocks`);
+      assert.equal(new Set(baseline.assignments.map(({ intervalId }) => intervalId)).size, 2);
+      assert.ok(baseline.unassigned.some(({ reason }) => reason === "no_feasible_interval"));
+      if (fixture.name === "equal-score tasks and equal-start intervals") {
+        assert.deepEqual(baseline.assignments, [
+          { taskId: "tie-z", intervalId: "block-z" }, { taskId: "tie-a", intervalId: "block-a" }
+        ], "ties retain encounter order");
+      } else {
+        assert.ok(baseline.unassigned.some(({ taskId, reason }) => taskId === "appointment" && reason === "excluded"));
+        assert.deepEqual(baseline.assignments.map(({ taskId }) => taskId),
+          strategy === "delta_cost_switch" ? ["high", "low", "middle"] : ["high", "middle", "low"]);
+        assert.equal(baseline.metrics.contextSwitches, strategy === "delta_cost_switch" ? 0 : 1);
+        assert.notDeepEqual(runScheduler(tasks, intervals, config).assignments, baseline.assignments,
+          "reservations affect placement");
+        assert.notDeepEqual(runScheduler(tasks.filter(({ id }) => id !== "appointment"), intervals, config, reservations).assignments,
+          baseline.assignments, "fixed appointment occupancy affects placement");
+      }
+      // Rename every referenced identity, including parents absent from tasks.
+      // Array and Map encounter order stay intact; only opaque IDs change.
+      const ids = [...new Set([...tasks.map(({ id }) => id), ...tasks.map(({ parentTaskId }) => parentTaskId).filter(Boolean),
+        ...intervals.map(({ id }) => id), ...reservations.keys()])];
+      for (const reverse of [false, true]) {
+        const renamed = new Map(ids.map((id, index) => [id, `opaque-${String(reverse ? ids.length - index : index).padStart(3, "0")}`]));
+        const restored = new Map([...renamed].map(([before, after]) => [after, before]));
+        const rename = (id: string) => id === "" ? "" : renamed.get(id)!;
+        const renamedTasks = tasks.map((entry) => ({ ...entry, id: rename(entry.id), parentTaskId: rename(entry.parentTaskId) }));
+        const renamedIntervals = intervals.map((entry) => ({ ...entry, id: rename(entry.id) }));
+        const renamedReservations = new Map([...reservations].map(([id, minutes]) => [rename(id), minutes]));
+        const result = runScheduler(renamedTasks, renamedIntervals, config, renamedReservations);
+        assert.deepEqual({
+          ...result,
+          assignments: result.assignments.map((entry) => ({ taskId: restored.get(entry.taskId), intervalId: restored.get(entry.intervalId) })),
+          unassigned: result.unassigned.map((entry) => ({ ...entry, taskId: restored.get(entry.taskId) }))
+        }, baseline, `${fixture.name}, ${reverse ? "reverse" : "forward"} lexical IDs: full ordered result`);
+      }
+    }
+  });
+}
+
 test("scheduler A/B/A calls isolate config and reservations on reused immutable inputs", () => {
   const strategies = ["earliest_fit", "delta_cost", "delta_cost_switch"] as const;
   for (const [index, strategy] of strategies.entries()) {

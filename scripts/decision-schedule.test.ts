@@ -45,7 +45,7 @@ test("review orders valid deadlines by instant and undated tasks deterministical
   ]);
 });
 
-test("recurrence horizon rejects invalid dates and includes leap days", () => {
+test("recurrence horizon rejects invalid dates", () => {
   const daily = { frequency: "daily", interval: 1, horizonDays: 2 } as const;
   assert.deepEqual(occurrenceKeysInHorizon(daily, new Date("invalid"), now), []);
   assert.deepEqual(occurrenceKeysInHorizon(daily, now, new Date("invalid")), []);
@@ -60,12 +60,48 @@ test("recurrence horizon rejects invalid dates and includes leap days", () => {
       { frequency: "daily", interval: 1, horizonDays }, now, now
     ), []);
   }
+});
 
-  assert.deepEqual(occurrenceKeysInHorizon(
-    { frequency: "monthly", interval: 12, horizonDays: 365 },
-    new Date(2024, 1, 29),
-    new Date(2024, 1, 28)
-  ), ["2024-02-29"]);
+test("ordinary recurrence fixtures follow local civil dates and include the horizon endpoint", () => {
+  const originalTimezone = process.env.TZ;
+  try {
+    for (const timezone of ["Europe/Berlin", "UTC"]) {
+      process.env.TZ = timezone;
+      assert.deepEqual(occurrenceKeysInHorizon(
+        { frequency: "daily", interval: 2, horizonDays: 6 },
+        new Date(2026, 2, 27), new Date(2026, 2, 27)
+      ), ["2026-03-27", "2026-03-29", "2026-03-31", "2026-04-02"]);
+
+      assert.deepEqual(occurrenceKeysInHorizon(
+        { frequency: "monthly", interval: 1, horizonDays: 365 },
+        new Date(2024, 1, 29), new Date(2024, 1, 29)
+      ), ["2024-02-29", "2024-03-29", "2024-04-29", "2024-05-29", "2024-06-29", "2024-07-29", "2024-08-29", "2024-09-29", "2024-10-29", "2024-11-29", "2024-12-29", "2025-01-29"]);
+
+      assert.deepEqual(occurrenceKeysInHorizon(
+        { frequency: "monthly", interval: 1, horizonDays: 120 },
+        new Date(2026, 0, 31), new Date(2026, 0, 31)
+      ), ["2026-01-31", "2026-03-31", "2026-05-31"]);
+    }
+
+    process.env.TZ = "Europe/Berlin";
+    assert.deepEqual(occurrenceKeysInHorizon(
+      { frequency: "daily", interval: 1, horizonDays: 3 },
+      new Date(2026, 2, 28), new Date(2026, 2, 28)
+    ), ["2026-03-28", "2026-03-29", "2026-03-30", "2026-03-31"]);
+    assert.deepEqual(occurrenceKeysInHorizon(
+      { frequency: "daily", interval: 1, horizonDays: 3 },
+      new Date(2026, 9, 24), new Date(2026, 9, 24)
+    ), ["2026-10-24", "2026-10-25", "2026-10-26", "2026-10-27"]);
+
+    process.env.TZ = "UTC";
+    assert.deepEqual(occurrenceKeysInHorizon(
+      { frequency: "weekly", interval: 2, horizonDays: 28 },
+      new Date(2026, 0, 1), new Date(2026, 0, 1)
+    ), ["2026-01-01", "2026-01-15", "2026-01-29"]);
+  } finally {
+    if (originalTimezone === undefined) delete process.env.TZ;
+    else process.env.TZ = originalTimezone;
+  }
 });
 
 function block(id: string, start: string, end: string): Item {

@@ -16,7 +16,7 @@ Unified notes, tasks, and calendar app — **Vite + React + Supabase**.
 
 ## Calendar and scheduling
 
-The calendar and scheduling implementation was developed on `experiment/scientific-atlas` and has been promoted to `main`. It includes Tasks, Items, Calendar, Archive, work intervals, task placement, automatic scheduling, and `.ics` export. See [`docs/EXPERIMENT.md`](docs/EXPERIMENT.md) for the design and current limits.
+The calendar and scheduling implementation was developed on `experiment/scientific-atlas` and was promoted to `main` on 2026-09-26. The cumulative scheduler behavior described in [`docs/EXPERIMENT.md`](docs/EXPERIMENT.md) documents this experimental worktree; it does not establish which commit or behavior a deployed `main` frontend serves. Check the deployment's source commit before assuming it includes these later experimental corrections. The scheduler allocates tasks to existing work intervals, accounts for clipped remaining capacity, overlapping appointments, and active reservations, and applies elapsed-duration buffers. It does not generate recurring blocks or place tasks at exact start/end minutes.
 
 ## Schema-driven schedule loop
 

@@ -2,7 +2,17 @@
 
 Originally developed on `experiment/scientific-atlas` from `origin/main` (`35eb93c`), this implementation was promoted to `main` at the user's request on 2026-09-26. The experiment branch remains in Git history as a recovery point.
 
-This implementation tests how far Atlas can go by following widely established time-management advice where it is congruent, and by taking Atlas’s side where the product is deliberately new (intervals as capacity, Now as one thing). Product architecture still follows [ROADMAP.md](ROADMAP.md): one Item model, graph links, undo-not-confirm, `shared/` + `src/services/`.
+This implementation tests how far Atlas can go by following widely established time-management advice where it is congruent, and by taking Atlas’s side where the product is deliberately new (intervals as capacity, Now as one thing). Product architecture still follows [ROADMAP.md](ROADMAP.md): one Item model, graph links, undo-not-confirm, `shared/` + `src/services/`. The promotion statement above is historical: this document's cumulative scheduler corrections describe the experimental tree and do not assert that a deployed `main` frontend contains them. Verify the deployed source commit independently.
+
+## Cumulative experimental scheduler behavior
+
+The scheduler allocates work to existing intervals; it does not place tasks at exact start/end minutes. For each run, usable interval capacity is clipped to the current instant and configured horizon. Fixed appointments consume the union of their overlapping time ranges once. Existing active `scheduled_in` work reserves buffered duration once per task and interval; completed work releases its reservation, and appointments consume their real time rather than an additional duration reservation. Candidate intervals are processed by chronological instant (with stable input order for ties), including timestamps expressed with different UTC offsets. Task duration is buffered in elapsed minutes (default factor 1.25), while all-day capacity uses actual elapsed time across daylight-saving transitions.
+
+These claims map to [`shared/scheduling/constraints.ts`](../shared/scheduling/constraints.ts) (`intervalRange`, `appointmentOverlapMinutes`), [`shared/scheduling/engine.ts`](../shared/scheduling/engine.ts) (clipped capacity and chronological ordering), [`shared/scheduling/reservations.ts`](../shared/scheduling/reservations.ts), [`shared/scheduling/math.ts`](../shared/scheduling/math.ts), and [`shared/recurrence.ts`](../shared/recurrence.ts). The Brain decision handoff uses the same capacity and reservation rules in [`shared/decisionSchedule.ts`](../shared/decisionSchedule.ts).
+
+Recurrence support is limited to calculating local civil-day occurrence keys for daily, weekly, and monthly rules within a finite horizon. It is not a recurring compiler: it does not materialize recurring intervals or compile a recurrence rule into exact minute placements. The scheduler continues to fit whole buffered tasks into an interval's remaining capacity.
+
+Behavioral evidence: [`scripts/scheduling-capacity.test.ts`](../scripts/scheduling-capacity.test.ts) covers clipping, elapsed blocks, appointment unions, reservations, elapsed-duration/DST behavior, and chronological ordering; [`scripts/decision-schedule.test.ts`](../scripts/decision-schedule.test.ts) covers recurrence horizon/date validation and handoff capacity. The bounded exhaustive oracle later in this document is explicitly limited to tiny fixed-interval cases and is not proof of global optimality.
 
 ## Intentional ROADMAP exception
 

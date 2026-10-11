@@ -8,6 +8,7 @@ import { appointmentOverlapMinutes, constraintMode, intervalCapacityMinutes, int
 import { eligibleTasks } from "../shared/scheduling/eligible";
 import { nowMotivation, postponementCost, waitHorizon } from "../shared/scheduling/deferral";
 import { bufferedMinutes } from "../shared/scheduling/math";
+import { placementBenefit, taskBenefitConstants } from "../shared/scheduling/scoring";
 import { itemToScheduleInput, itemsToScheduleInputs } from "../shared/scheduling/resolve";
 import { calendarIntervalFromItem, isArchivedSlot } from "../shared/schedule";
 import { proposeSchedule } from "../src/services/scheduling";
@@ -184,6 +185,21 @@ for (const strategy of ["delta_cost", "delta_cost_switch"] as const) {
     });
   });
 }
+
+test("delta scoring reevaluates last chance when later capacity changes", () => {
+  const candidate = task("candidate", 30);
+  const early = interval("early", date("09:00"), date("10:00"));
+  const later = interval("later", date("11:00"), date("12:00"));
+  const config = mergeSchedulerConfig(now, { strategy: "delta_cost" });
+  const constants = taskBenefitConstants(candidate, config);
+  const remaining = new Map([["later", 40]]);
+
+  const withLaterFit = placementBenefit(candidate, constants, early, null, [later], remaining, config);
+  remaining.set("later", 0);
+  const withoutLaterFit = placementBenefit(candidate, constants, early, null, [later], remaining, config);
+
+  assert.equal(withoutLaterFit - withLaterFit, 80);
+});
 
 function item(partial: Partial<Item>): Item {
   return {

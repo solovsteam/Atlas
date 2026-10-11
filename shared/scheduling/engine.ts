@@ -1,17 +1,16 @@
 import {
   appointmentOverlapMinutes,
-  constraintMode,
   intervalCapacityMinutes,
   intervalIsOpen,
   intervalRange,
   resolvedDuration,
   taskFitsInterval
 } from "./constraints";
-import { nowMotivation, postponementCost, waitHorizon } from "./deferral";
-import { bufferedMinutes, valueScore } from "./math";
-import { switchCost } from "./switching";
+import { nowMotivation } from "./deferral";
+import { bufferedMinutes } from "./math";
 import { eligibleTasks } from "./eligible";
 import { calculateSchedulerMetrics } from "./metrics";
+import { placementBenefit, taskBenefitConstants } from "./scoring";
 import type {
   Assignment,
   IntervalInput,
@@ -20,27 +19,6 @@ import type {
   TaskScheduleInput,
   UnassignedTask
 } from "./types";
-
-function placementBenefit(
-  task: TaskScheduleInput,
-  constants: { duration: number; valueScore: number; delayCostIfWait: number },
-  interval: IntervalInput,
-  previous: TaskScheduleInput | null,
-  later: IntervalInput[],
-  remaining: Map<string, number>,
-  config: SchedulerConfig
-): number {
-  const range = intervalRange(interval);
-  const slotTime = range ? (range.start.getTime() < config.now.getTime() ? config.now : range.start) : config.now;
-  const delayCostHere = postponementCost(task, slotTime, config);
-  const switching = config.strategy === "delta_cost_switch" ? switchCost(previous, task, config.switchPenalty) : 0;
-  const laterFit = later.some((candidate) =>
-    taskFitsInterval(task, candidate, remaining.get(candidate.id) ?? 0, config)
-  );
-  const lastChance = laterFit ? 0 : constraintMode(task) === "deadline" ? 500 : 80;
-  return lastChance + (constants.delayCostIfWait - delayCostHere) - switching +
-    config.wsptWeight * (constants.valueScore / constants.duration);
-}
 
 function openIntervals(intervals: IntervalInput[], config: SchedulerConfig): IntervalInput[] {
   return intervals
@@ -120,11 +98,7 @@ function runDeltaCost(
   const remaining = initializeRemaining(intervals, appointments, reservedMinutesByInterval, config);
   const open = new Set(candidates.map((task) => task.id));
   const byId = new Map(candidates.map((task) => [task.id, task]));
-  const constantsById = new Map(candidates.map((task) => [task.id, {
-    duration: bufferedMinutes(resolvedDuration(task, config), config),
-    valueScore: valueScore(task.importance),
-    delayCostIfWait: postponementCost(task, waitHorizon(task, config), config)
-  }]));
+  const constantsById = new Map(candidates.map((task) => [task.id, taskBenefitConstants(task, config)]));
   const assignments: Assignment[] = [];
   const lastInInterval = new Map<string, TaskScheduleInput>();
 

@@ -3,10 +3,23 @@ import { test } from "node:test";
 import { firstFeasibleWorkBlock } from "../shared/decisionSchedule";
 import { buildNowFocus } from "../shared/scheduling/now";
 import { selectCalendarEvents, serializeVevent } from "../shared/ics";
+import { occurrenceKeysInHorizon } from "../shared/recurrence";
 import type { Item } from "../shared/item";
 import type { ItemLink } from "../shared/links";
 
 const now = new Date("2026-09-24T08:00:00Z");
+
+test("recurrence horizon rejects invalid dates and includes leap days", () => {
+  const daily = { frequency: "daily", interval: 1, horizonDays: 2 } as const;
+  assert.deepEqual(occurrenceKeysInHorizon(daily, new Date("invalid"), now), []);
+  assert.deepEqual(occurrenceKeysInHorizon(daily, now, new Date("invalid")), []);
+
+  assert.deepEqual(occurrenceKeysInHorizon(
+    { frequency: "monthly", interval: 12, horizonDays: 1462 },
+    new Date(2024, 1, 29),
+    new Date(2024, 1, 28)
+  ), ["2024-02-29", "2028-02-29"]);
+});
 
 function block(id: string, start: string, end: string): Item {
   return {

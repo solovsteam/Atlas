@@ -96,6 +96,10 @@ function occursOn(rule: RecurrenceRule, anchor: Date, day: Date): boolean {
 }
 
 export function occurrenceKeysInHorizon(rule: RecurrenceRule, anchor: Date, now: Date): string[] {
+  if (!Number.isFinite(anchor.getTime()) || !Number.isFinite(now.getTime())) {
+    return [];
+  }
+
   const start = startOfDay(now);
   const end = addDays(start, rule.horizonDays);
   const anchorDay = startOfDay(anchor);

@@ -1206,6 +1206,63 @@ test("scheduler full output is invariant to equivalent offsets and distinct fixe
   }
 });
 
+test("scheduler A/B/A calls isolate config and reservations on reused immutable inputs", () => {
+  const strategies = ["earliest_fit", "delta_cost", "delta_cost_switch"] as const;
+  for (const [index, strategy] of strategies.entries()) {
+    // Also vary scoring within a strategy: a strategy-keyed cache must not
+    // accidentally make the cross-strategy sequences pass.
+    for (const bStrategy of [strategy, strategies[(index + 1) % strategies.length]!]) {
+      const tasks = [
+        { ...task("due", 25), dueAt: date("11:30"), importance: 8 },
+        { ...task("parent", 20), importance: 6, tags: ["focus"] },
+        { ...task("child", 15), parentTaskId: "parent", tags: ["focus"] },
+        task("long", 50),
+        task("appointment", 15, date("09:15"), date("09:30"))
+      ];
+      const intervals = [
+        interval("morning", date("08:00"), date("10:00")),
+        interval("later", date("11:00"), date("12:30"))
+      ];
+      const configA = {
+        now: new Date(date("08:30")), strategy, horizonDays: 1,
+        gamma: 1, durationBuffer: 1.25, defaultDurationMinutes: 30,
+        switchPenalty: 12, wsptWeight: 8, urgencyWeight: 0.6, valueWeight: 0.4
+      };
+      const configB = {
+        now: new Date(date("09:00")), strategy: bStrategy, horizonDays: 0.125,
+        gamma: 2, durationBuffer: 1.5, defaultDurationMinutes: 40,
+        switchPenalty: 5, wsptWeight: 3, urgencyWeight: 0.3, valueWeight: 0.7
+      };
+      const reservationsA = new Map([["morning", 10], ["later", 5]]);
+      const reservationsB = new Map([["morning", 20], ["later", 25]]);
+      const inputs = { tasks, intervals, configA, configB, reservationsA, reservationsB };
+      const before = structuredClone(inputs);
+      for (const entry of tasks) { Object.freeze(entry.tags); Object.freeze(entry); }
+      intervals.forEach(Object.freeze);
+      Object.freeze(tasks);
+      Object.freeze(intervals);
+      Object.freeze(configA);
+      Object.freeze(configB);
+
+      const firstA = runScheduler(tasks, intervals, configA, reservationsA);
+      const b = runScheduler(tasks, intervals, configB, reservationsB);
+      const repeatedA = runScheduler(tasks, intervals, configA, reservationsA);
+      // Clone the pristine snapshot, including tags, dates and reservation maps,
+      // so B's reference call shares no task/interval object identities.
+      const fresh = structuredClone(before);
+      const freshB = runScheduler(fresh.tasks, fresh.intervals, fresh.configB, fresh.reservationsB);
+      const context = `${strategy} → ${bStrategy} → ${strategy}`;
+      assert.deepEqual(repeatedA, firstA, `${context}: repeated A full output`);
+      assert.deepEqual(b, freshB, `${context}: B matches fresh-object full output`);
+      assert.notDeepEqual(b.assignments, firstA.assignments, `${context}: configs exercise different placements`);
+      assert.ok(firstA.assignments.length > 0 && b.assignments.length > 0, context);
+      assert.ok(Number.isFinite(firstA.metrics.totalPostponement) && Number.isFinite(b.metrics.totalPostponement), context);
+      // Freezing does not protect Date internals or Map entries; check those too.
+      assert.deepEqual(inputs, before, `${context}: all inputs remain unchanged`);
+    }
+  }
+});
+
 test("equal-start fixed intervals retain encounter order outside the permutation premise", () => {
   const first = interval("first", "2026-09-24T10:00:00+02:00", "2026-09-24T11:00:00+02:00");
   const second = interval("second", date("08:00"), date("09:00"));

@@ -142,7 +142,7 @@ export function runSchedulingFixtures(): FixtureResult[] {
   }
 
   {
-    const morning = interval("am", 9, 10);
+    const morning = interval("am", 10, 11);
     const appointment = task({
       id: "appt",
       title: "Appointment",
@@ -196,7 +196,7 @@ export function runSchedulingFixtures(): FixtureResult[] {
       task({ id: "t2", title: "B", durationMinutes: 60, importance: 8 }),
       task({ id: "t3", title: "C", durationMinutes: 60, importance: 8 })
     ];
-    const tiny = [interval("tiny", 9, 11)];
+    const tiny = [interval("tiny", 10, 12)];
     const result = runScheduler(overflow, tiny, mergeSchedulerConfig(NOW));
     results.push(
       assert(

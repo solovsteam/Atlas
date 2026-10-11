@@ -23,25 +23,26 @@ export function resolvedDuration(task: TaskScheduleInput, config: SchedulerConfi
   return task.durationMinutes && task.durationMinutes > 0 ? task.durationMinutes : config.defaultDurationMinutes;
 }
 
-export function intervalRange(interval: IntervalInput): { start: Date; end: Date } | null {
-  const start = parseTime(interval.startsAt);
-  const end = parseTime(interval.endsAt);
-  if (!start || !end || end.getTime() <= start.getTime()) {
-    if (interval.kind === "allDay" && start) {
-      const dayEnd = new Date(start);
-      dayEnd.setHours(23, 59, 59, 999);
-      return { start, end: dayEnd };
-    }
-    return null;
+export function intervalRange(interval: IntervalInput, config?: SchedulerConfig): { start: Date; end: Date } | null {
+  let start = parseTime(interval.startsAt);
+  let end = parseTime(interval.endsAt);
+  if (!start) return null;
+  if (!end || end.getTime() <= start.getTime()) {
+    if (interval.kind !== "allDay") return null;
+    end = new Date(start);
+    end.setHours(0, 0, 0, 0);
+    end.setDate(end.getDate() + 1);
   }
-  return { start, end };
+  if (config) {
+    // Existing blocks may straddle now or the horizon; only this part is usable.
+    start = new Date(Math.max(start.getTime(), config.now.getTime()));
+    end = new Date(Math.min(end.getTime(), config.now.getTime() + config.horizonDays * 86_400_000));
+  }
+  return end.getTime() > start.getTime() ? { start, end } : null;
 }
 
-export function intervalCapacityMinutes(interval: IntervalInput): number {
-  if (interval.kind === "allDay") {
-    return 24 * 60;
-  }
-  const range = intervalRange(interval);
+export function intervalCapacityMinutes(interval: IntervalInput, config?: SchedulerConfig): number {
+  const range = intervalRange(interval, config);
   if (!range) {
     return 0;
   }
@@ -54,33 +55,40 @@ export function overlapMinutes(aStart: Date, aEnd: Date, bStart: Date, bEnd: Dat
   return Math.max(0, (end - start) / 60_000);
 }
 
-export function appointmentOverlapMinutes(interval: IntervalInput, appointments: TaskScheduleInput[]): number {
-  const range = intervalRange(interval);
+export function appointmentOverlapMinutes(
+  interval: IntervalInput, appointments: TaskScheduleInput[], config?: SchedulerConfig
+): number {
+  const range = intervalRange(interval, config);
   if (!range) {
     return 0;
   }
-  let used = 0;
+  const occupied: Array<{ start: number; end: number }> = [];
   for (const task of appointments) {
     const start = parseTime(task.fixedStartsAt);
     const end = parseTime(task.fixedEndsAt);
     if (!start || !end) {
       continue;
     }
-    used += overlapMinutes(range.start, range.end, start, end);
+    const clippedStart = Math.max(range.start.getTime(), start.getTime());
+    const clippedEnd = Math.min(range.end.getTime(), end.getTime());
+    if (clippedEnd > clippedStart) occupied.push({ start: clippedStart, end: clippedEnd });
   }
-  return used;
+  occupied.sort((a, b) => a.start - b.start);
+  // Conflicting appointments still occupy each minute only once.
+  let used = 0;
+  let occupiedUntil = range.start.getTime();
+  for (const span of occupied) {
+    used += Math.max(0, span.end - Math.max(span.start, occupiedUntil));
+    occupiedUntil = Math.max(occupiedUntil, span.end);
+  }
+  return used / 60_000;
 }
 
 export function intervalIsOpen(interval: IntervalInput, config: SchedulerConfig): boolean {
   if (interval.archived) {
     return false;
   }
-  const range = intervalRange(interval);
-  if (!range) {
-    return false;
-  }
-  const horizon = new Date(config.now.getTime() + config.horizonDays * 86_400_000);
-  return range.start.getTime() <= horizon.getTime() && range.end.getTime() >= config.now.getTime();
+  return intervalRange(interval, config) !== null;
 }
 
 export function taskFitsInterval(

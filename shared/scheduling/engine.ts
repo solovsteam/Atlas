@@ -57,12 +57,12 @@ function openIntervals(intervals: IntervalInput[], config: SchedulerConfig): Int
 function remainingFor(
   interval: IntervalInput,
   appointments: TaskScheduleInput[],
-  assignedDurations: number,
-  reservedMinutesByInterval: Map<string, number>
+  reservedMinutesByInterval: Map<string, number>,
+  config: SchedulerConfig
 ): number {
   return Math.max(
     0,
-    intervalCapacityMinutes(interval) - appointmentOverlapMinutes(interval, appointments) - assignedDurations - (reservedMinutesByInterval.get(interval.id) ?? 0)
+    intervalCapacityMinutes(interval, config) - appointmentOverlapMinutes(interval, appointments, config) - (reservedMinutesByInterval.get(interval.id) ?? 0)
   );
 }
 
@@ -113,7 +113,7 @@ function metricsFor(
     if (!task) {
       continue;
     }
-    const range = interval ? intervalRange(interval) : null;
+    const range = interval ? intervalRange(interval, config) : null;
     const at = range?.start ?? config.now;
     totalPostponement += postponementCost(task, at, config);
     const list = assignedInInterval.get(assignment.intervalId) ?? [];
@@ -156,7 +156,7 @@ function metricsFor(
     totalPostponement,
     contextSwitches,
     assignedCount: assignments.length,
-    unassignedCount: unassigned.length + remainingCandidates.size
+    unassignedCount: unassigned.length
   };
 }
 
@@ -169,7 +169,7 @@ function runEarliestFit(
 ): { assignments: Assignment[]; leftover: TaskScheduleInput[] } {
   const remaining = new Map<string, number>();
   for (const interval of intervals) {
-    remaining.set(interval.id, remainingFor(interval, appointments, 0, reservedMinutesByInterval));
+    remaining.set(interval.id, remainingFor(interval, appointments, reservedMinutesByInterval, config));
   }
   const ordered = [...candidates].sort((a, b) => nowMotivation(b, config) - nowMotivation(a, config));
   const assignments: Assignment[] = [];
@@ -205,7 +205,7 @@ function runDeltaCost(
 ): { assignments: Assignment[]; leftover: TaskScheduleInput[] } {
   const remaining = new Map<string, number>();
   for (const interval of intervals) {
-    remaining.set(interval.id, remainingFor(interval, appointments, 0, reservedMinutesByInterval));
+    remaining.set(interval.id, remainingFor(interval, appointments, reservedMinutesByInterval, config));
   }
   const open = new Set(candidates.map((task) => task.id));
   const byId = new Map(candidates.map((task) => [task.id, task]));

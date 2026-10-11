@@ -8,7 +8,7 @@ import {
   type PlacementStrategy,
   type SchedulerResult
 } from "@shared/scheduling";
-import { bufferedMinutes } from "@shared/scheduling/math";
+import { scheduledReservations } from "@shared/scheduling/reservations";
 import type { IntervalInput } from "@shared/scheduling/types";
 
 export function intervalsFromItems(items: Item[]): IntervalInput[] {
@@ -38,16 +38,9 @@ export function proposeSchedule(
 ): SchedulerResult {
   const config = mergeSchedulerConfig(now, { strategy, ...(options.horizonDays !== undefined ? { horizonDays: options.horizonDays } : {}) });
   const allTasks = itemsToScheduleInputs(items);
-  const taskById = new Map(allTasks.map((task) => [task.id, task]));
   const scheduledLinks = (options.links ?? []).filter((link) => link.kind === "scheduled_in");
   const scheduledIds = new Set(scheduledLinks.map((link) => link.fromId));
-  const reserved = new Map<string, number>();
-  for (const link of scheduledLinks) {
-    const task = taskById.get(link.fromId);
-    if (!task || (task.fixedStartsAt && task.fixedEndsAt)) continue;
-    const duration = task.durationMinutes && task.durationMinutes > 0 ? task.durationMinutes : config.defaultDurationMinutes;
-    reserved.set(link.toId, (reserved.get(link.toId) ?? 0) + bufferedMinutes(duration, config));
-  }
+  const reserved = scheduledReservations(allTasks, scheduledLinks, config);
 
   const allowed = options.taskIds ? new Set(options.taskIds) : null;
   const candidates = allTasks.filter((task) =>

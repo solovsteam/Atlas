@@ -1,6 +1,14 @@
 # Handoff
 
-Last updated 2026-10-06.
+Last updated 2026-10-11.
+
+## Scheduling capacity fixes (11 Oct)
+
+- Implemented and verified on `atlas-scheduling-20261011`; leave the branch unmerged for the new experimental batch workflow recorded in Brain's CONSTRUCT.md, *Overnight coding on an experimental branch*. The overnight-coding thread's brief names this as Atlas's first batch content.
+- Previews use only time remaining between now and the bounded horizon, count overlapping appointments once, and share duplicate-free active-task reservations with the Brain decision handoff. Linked appointments are not charged twice; completed tasks release capacity. Handoffs sort different UTC offsets by actual time. Unassigned metrics count each task once; all-day capacity follows actual elapsed time, including daylight-saving changes.
+- `npm run check` passed: lint/build/MCP typecheck, 17 scheduling fixtures, actual MCP effect-layer/feedback checks, Brain adapter contract, 26 capacity/decision tests and 3 web-handoff tests. Of the first 19 capacity regressions, 16 failed against the original implementation. Two older fixtures were moved to future blocks so they still test appointment capacity/overflow after elapsed time is excluded. Existing lint and bundle-size warnings remain.
+- No UI, migration, routine rule, background job, effect-layer contract or cloud data changed. Scheduling remains interval-level capacity allocation; it does not produce minute-by-minute placements or implement the recurring compiler.
+- Portable task note is local to the worktree at `.handoff/atlas-scheduling-20261011.md`. Next: bring the verified commit into the single Atlas experimental branch, run combined checks, then include it in the human-reviewed batch. The existing main MCP process has not been restarted onto these branch-only changes.
 
 ## State
 
@@ -12,7 +20,7 @@ Last updated 2026-10-06.
 
 ## Next step
 
-Commit and push the effect-layer contract/tests on main per Atlas rules. Brain integrates/deploys its companion tests and docs separately. Reload an existing Atlas MCP process to receive the new conversational contract.
+The effect-layer contract/tests are already committed on main (`17b8aca`). Integrate the scheduling-capacity branch through the experimental batch as above. Brain's earlier companion branch is tracked separately. Do not apply or replay calendar data as part of code integration.
 
 ## Decisions for the user
 

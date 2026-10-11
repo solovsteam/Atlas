@@ -138,6 +138,84 @@ test("bounded exhaustive oracle enumerates tiny plans and compares heuristics to
 const date = (hour: string) => `2026-09-24T${hour}:00.000Z`;
 const now = new Date(date("08:00"));
 
+test("tiny oracle records packing and ordering Pareto counterexamples at default weights", () => {
+  // A short, fixed search list; no appointments, reservations, or policy overrides.
+  // These are local counterexamples, not a demand for heuristic optimality.
+  // Observed 2026-10-11: all three strategies choose [large] in packing,
+  // (postponement 90.4733727810651, switches 0, assigned 1), dominated by
+  // [small-a, small-b] (60.710059171597635, 0, 2) in the 76-minute block.
+  // In ordering, earliest_fit and delta_cost choose [high, middle, low]
+  // (170/169, 2, 3); [middle, high, low] has (170/169, 1, 3).
+  // delta_cost_switch chooses [high, low, middle], also with one switch.
+  const fixtures = [
+    {
+      name: "packing",
+      tasks: [
+        { ...task("large", 60), importance: 8, tags: ["same"] },
+        { ...task("small-a", 30), importance: 6, tags: ["same"] },
+        { ...task("small-b", 30), importance: 6, tags: ["same"] }
+      ],
+      block: interval("only", date("09:00"), date("10:16")),
+      baseline: ["large"], witness: ["small-a", "small-b"],
+      baselineCost: 80 / 169 + 120 * 3 / 4,
+      witnessCost: 120 / 169 + 80 * 3 / 4,
+      baselineSwitches: 0, witnessSwitches: 0,
+      strategies: ["earliest_fit", "delta_cost", "delta_cost_switch"] as const
+    },
+    {
+      name: "ordering",
+      tasks: [
+        { ...task("high", 30), importance: 8, tags: ["same"] },
+        task("middle", 30),
+        { ...task("low", 30), importance: 4, tags: ["same"] }
+      ],
+      block: interval("only", date("09:00"), date("11:00")),
+      baseline: ["high", "middle", "low"], witness: ["middle", "high", "low"],
+      baselineCost: 170 / 169, witnessCost: 170 / 169,
+      baselineSwitches: 2, witnessSwitches: 1,
+      strategies: ["earliest_fit", "delta_cost"] as const
+    }
+  ];
+  for (const fixture of fixtures) {
+    const config = mergeSchedulerConfig(now);
+    const plans = exhaustivePlans(fixture.tasks, [fixture.block], config);
+    const find = (ids: string[]) => plans.find((plan) =>
+      JSON.stringify(plan.assignments.map(({ taskId }) => taskId)) === JSON.stringify(ids));
+    const baseline = find(fixture.baseline);
+    const witness = find(fixture.witness);
+    assert.ok(baseline, fixture.name);
+    assert.ok(witness, fixture.name);
+    // Independent arithmetic: ceil(duration*1.25) gives 75 and 38 minutes.
+    // At 09:00, one hour / seven days gives cost value/169;
+    // the default 21-day leftover horizon gives cost value*3/4.
+    for (const [plan, cost, switches, count] of [
+      [baseline, fixture.baselineCost, fixture.baselineSwitches, fixture.baseline.length],
+      [witness, fixture.witnessCost, fixture.witnessSwitches, fixture.witness.length]
+    ] as const) {
+      assert.ok(Math.abs(plan.metrics.totalPostponement - cost) < 1e-10);
+      assert.equal(plan.metrics.contextSwitches, switches);
+      assert.equal(plan.metrics.assignedCount, count);
+    }
+    assert.ok(fixture.witnessCost <= fixture.baselineCost);
+    assert.ok(fixture.witnessSwitches <= fixture.baselineSwitches);
+    assert.ok(fixture.witness.length >= fixture.baseline.length);
+    assert.ok(fixture.witnessCost < fixture.baselineCost ||
+      fixture.witnessSwitches < fixture.baselineSwitches || fixture.witness.length > fixture.baseline.length);
+    assert.ok(paretoPlans(plans).includes(witness), `${fixture.name}: witness is nondominated in the exhaustive set`);
+    assert.ok(!paretoPlans(plans).includes(baseline), `${fixture.name}: baseline is dominated`);
+    for (const strategy of fixture.strategies) {
+      const result = runScheduler(fixture.tasks, [fixture.block], mergeSchedulerConfig(now, { strategy }));
+      // Check oracle facts even if a future heuristic improves: do not require
+      // it to stay suboptimal, or to become optimal, on these fixtures.
+      const actual = find(result.assignments.map(({ taskId }) => taskId));
+      assert.ok(actual, `${fixture.name}/${strategy}: feasible oracle plan`);
+      assert.ok(Math.abs(result.metrics.totalPostponement - actual.metrics.totalPostponement) < 1e-10);
+      assert.equal(result.metrics.contextSwitches, actual.metrics.contextSwitches);
+      assert.equal(result.metrics.assignedCount, actual.metrics.assignedCount);
+    }
+  }
+});
+
 // Ordinary relevance regressions: reuse the full Item helper below.
 for (const fixture of [
   {

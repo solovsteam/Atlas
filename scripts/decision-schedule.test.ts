@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { firstFeasibleWorkBlock } from "../shared/decisionSchedule";
 import { buildNowFocus } from "../shared/scheduling/now";
-import { selectCalendarEvents, serializeVevent } from "../shared/ics";
+import { calendarIcs, selectCalendarEvents, serializeVevent } from "../shared/ics";
 import { occurrenceKeysInHorizon } from "../shared/recurrence";
 import type { Item } from "../shared/item";
 import { taskCountInInterval, type ItemLink } from "../shared/links";
@@ -198,6 +198,27 @@ test("calendar event selection includes scheduled intervals and active appointme
   assert.deepEqual(events.map(({ uid }) => uid), ["atlas-interval-work@atlas", "atlas-appt-appointment@atlas"]);
   assert.equal(events[0].description, "Write, review");
   assert.equal(events[1].description, "Atlas appointment");
+});
+
+test("calendar exports are empty for invalid enumeration inputs", () => {
+  const appointment = {
+    ...task("invalid-range-appointment", 30), title: "Call",
+    taskFixedStartsAt: "2026-09-24T11:00:00Z", taskFixedEndsAt: "2026-09-24T11:30:00Z"
+  };
+  const items = [appointment];
+  const emptyCalendar = [
+    "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Atlas//EN", "CALSCALE:GREGORIAN", "END:VCALENDAR"
+  ].join("\r\n");
+
+  assert.deepEqual(selectCalendarEvents(items, [], new Date(Number.NaN)), []);
+  for (const dayCount of [0, -1, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+    assert.deepEqual(selectCalendarEvents(items, [], now, dayCount), []);
+    assert.equal(calendarIcs(items, [], now, dayCount), emptyCalendar);
+  }
+  assert.deepEqual(selectCalendarEvents(items, [], now, Number.MAX_VALUE).map(({ uid }) => uid), [
+    "atlas-appt-invalid-range-appointment@atlas"
+  ]);
+  assert.equal(calendarIcs(items, [], new Date(Number.NaN)), emptyCalendar);
 });
 
 test("calendar interval descriptions preserve scheduled link order, duplicates, and orphan filtering", () => {

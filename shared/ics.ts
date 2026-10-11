@@ -54,8 +54,12 @@ export function calendarIcs(items: Item[], links: ItemLink[], now: Date, dayCoun
 }
 
 export function selectCalendarEvents(items: Item[], links: ItemLink[], now: Date, dayCount = 7): CalendarEvent[] {
+  if (!Number.isFinite(now.getTime()) || !Number.isFinite(dayCount) || dayCount <= 0) {
+    return [];
+  }
   const rangeStart = startOfDay(now);
   const rangeEnd = addDays(rangeStart, dayCount);
+  const rangeEndTime = Number.isFinite(rangeEnd.getTime()) ? rangeEnd.getTime() : Number.POSITIVE_INFINITY;
   const byId = new Map(items.map((item) => [item.id, item]));
   const titlesByInterval = new Map<string, string[]>();
   for (const link of links) {
@@ -83,7 +87,7 @@ export function selectCalendarEvents(items: Item[], links: ItemLink[], now: Date
       }
       const start = slotRangeStart(slot);
       const end = slotRangeEnd(slot);
-      if (!start || !end || end <= rangeStart || start >= rangeEnd) {
+      if (!start || !end || end <= rangeStart || start.getTime() >= rangeEndTime) {
         continue;
       }
       const committed = titlesByInterval.get(item.id) ?? [];
@@ -98,7 +102,7 @@ export function selectCalendarEvents(items: Item[], links: ItemLink[], now: Date
     if (item.isTask && item.taskStatus === "active") {
       const start = parseTime(item.taskFixedStartsAt);
       const end = parseTime(item.taskFixedEndsAt);
-      if (!start || !end || end <= rangeStart || start >= rangeEnd) {
+      if (!start || !end || end <= rangeStart || start.getTime() >= rangeEndTime) {
         continue;
       }
       events.push({

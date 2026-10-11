@@ -1990,6 +1990,56 @@ test("switch exemptions are symmetric for identity, siblings, parent/child and e
   assert.equal(switchCost(task("a"), task("b"), 0.001), 0.001);
 });
 
+for (const relationship of ["unrelated", "shared tags", "siblings", "parent/child"] as const) {
+  for (const deadlines of [false, true]) {
+    for (const capacity of ["roomy", "tight", "separate reserved intervals"] as const) {
+      test(`zero switch penalty matches delta_cost fully: ${relationship}, ${deadlines ? "deadlines" : "flexible"}, ${capacity}`, () => {
+        const high = { ...task("high"), importance: 9 };
+        const middle = { ...task("middle"), importance: 6, tags: ["other"] };
+        const low = { ...task("low"), importance: 5 };
+        if (relationship === "shared tags") {
+          high.tags = ["project", "high-only"];
+          low.tags = ["low-only", "project"];
+        } else if (relationship === "siblings") {
+          high.parentTaskId = low.parentTaskId = "external-parent";
+        } else if (relationship === "parent/child") {
+          low.parentTaskId = high.id;
+        }
+        const tasks = [middle, low, high, task("overflow", 200)].map((entry) => ({
+          ...entry,
+          // Low must fit the first block; high can also fit the later block.
+          dueAt: deadlines ? (entry.id === "low" ? date("10:54") : date("12:00")) : null
+        }));
+        const blocks = capacity === "separate reserved intervals"
+          ? [interval("first", date("09:00"), date("10:30")), interval("later", date("11:00"), date("11:45"))]
+          : [interval("only", date("09:00"), date(capacity === "roomy" ? "10:54" : "10:16"))];
+        const reservations = capacity === "separate reserved intervals"
+          ? new Map([["first", 14], ["later", 7]]) : new Map<string, number>();
+        // Leave every other default intact. The only difference between calls
+        // is strategy; compare ordered assignments, reasons, and all metrics.
+        const config = mergeSchedulerConfig(now, { strategy: "delta_cost", switchPenalty: 0 });
+        const baseline = runScheduler(tasks, blocks, config, reservations);
+        const switched = runScheduler(tasks, blocks, { ...config, strategy: "delta_cost_switch" }, reservations);
+        assert.deepEqual(switched, baseline);
+        // Guard against vacuous equality: ceil(30 * 1.25) = 38 minutes,
+        // leaving oversized work (and one ordinary task in the tight block).
+        const assignedCount = capacity === "tight" ? 2 : 3;
+        assert.equal(baseline.assignments.length, assignedCount);
+        assert.equal(baseline.metrics.assignedCount, assignedCount);
+        assert.equal(baseline.unassigned.length, tasks.length - assignedCount);
+        assert.equal(baseline.metrics.unassignedCount, tasks.length - assignedCount);
+        assert.ok(baseline.unassigned.some(({ taskId, reason }) => taskId === "overflow" && reason === "no_feasible_interval"));
+        assert.ok(Number.isFinite(baseline.metrics.totalPostponement) && baseline.metrics.totalPostponement > 0);
+        assert.equal(baseline.metrics.contextSwitches, 0, "zero penalty also suppresses the transition metric");
+        if (capacity === "separate reserved intervals") {
+          assert.deepEqual(baseline.assignments.map(({ intervalId }) => intervalId), ["first", "first", "later"]);
+          if (deadlines) assert.ok(baseline.assignments.some(({ taskId, intervalId }) => taskId === "low" && intervalId === "first"));
+        }
+      });
+    }
+  }
+}
+
 for (const strategy of ["earliest_fit", "delta_cost", "delta_cost_switch"] as const) {
   test(`${strategy}: preserves value ranking and only switch-aware placement promotes related work`, () => {
     const config = deferralConfig(strategy);

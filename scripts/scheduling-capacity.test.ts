@@ -393,6 +393,49 @@ function interval(id: string, start = date("09:00"), end = date("12:00")): Inter
   return { id, title: id, kind: "fixed", startsAt: start, endsAt: end, archived: false };
 }
 
+test("appointment union matches a bounded minute-grid oracle across clipping and permutations", () => {
+  const at = (minute: number) => new Date(now.getTime() + minute * 60_000).toISOString();
+  type Span = readonly [number, number];
+  const endpoints = [-2, 0, 2, 4, 6, 8];
+  const spans: Span[] = endpoints.flatMap((start) =>
+    endpoints.filter((end) => end > start).map((end) => [start, end] as const));
+  const cases: Span[][] = [
+    [], [[-2, 8], [0, 6], [2, 4]], // nested
+    [[-2, 2], [0, 4], [2, 6]], // overlap chain
+    [[-2, 0], [0, 2], [2, 4]], // touching half-open spans
+    [[0, 4], [0, 4], [6, 8]] // duplicates and a gap
+  ];
+  for (const a of spans) for (const b of spans) cases.push([a, b]);
+  const permutations = (entries: TaskScheduleInput[]): TaskScheduleInput[][] =>
+    entries.length === 0 ? [[]] : entries.flatMap((entry, index) =>
+      permutations(entries.filter((_, other) => other !== index)).map((rest) => [entry, ...rest]));
+  const ranges: Span[] = [[-2, 8], [-2, 2], [4, 8], [-2, 0], [6, 8], [2, 4], [4, 4], [4, 2]];
+  const clipped = mergeSchedulerConfig(now, { horizonDays: 6 / 1440 });
+
+  for (const config of [undefined, clipped]) for (const [start, end] of ranges) {
+    const block = interval("grid", at(start), at(end));
+    for (const [caseIndex, entries] of cases.entries()) {
+      // Independent oracle: count covered half-open minute cells directly.
+      // No production range, overlap, sorting, or union helper computes expectations.
+      let capacity = 0;
+      let occupied = 0;
+      for (let minute = -2; minute < 8; minute += 1) {
+        if (minute < start || minute >= end || (config && (minute < 0 || minute >= 6))) continue;
+        capacity += 1;
+        if (entries.some(([from, to]) => minute >= from && minute < to)) occupied += 1;
+      }
+      const appointments = entries.map(([from, to], index) => task(`grid-${index}`, 1, at(from), at(to)));
+      for (const [order, permutation] of permutations(appointments).entries()) {
+        const context = `case ${caseIndex}, range [${start}, ${end}), clipped ${Boolean(config)}, order ${order}`;
+        const actual = appointmentOverlapMinutes(block, permutation, config);
+        assert.equal(actual, occupied, context);
+        assert.ok(actual >= 0 && actual <= capacity, `${context}: occupancy bounded by independent capacity`);
+        assert.equal(intervalCapacityMinutes(block, config), capacity, `${context}: capacity`);
+      }
+    }
+  }
+});
+
 for (const strategy of ["earliest_fit", "delta_cost", "delta_cost_switch"] as const) {
   test(`${strategy}: seeded minute-grid schedules respect independent capacity and deadline counts`, () => {
     let seed = 0x8be0722a;
@@ -446,6 +489,9 @@ for (const strategy of ["earliest_fit", "delta_cost", "delta_cost_switch"] as co
           summedOccupancy += covering;
         }
         unionSavingsCount += summedOccupancy > occupied ? 1 : 0;
+        const overlap = appointmentOverlapMinutes(block, appointments, config);
+        assert.equal(overlap, occupied, `${context}, ${block.id}: independently counted union`);
+        assert.ok(overlap >= 0 && overlap <= available, `${context}, ${block.id}: occupancy bounds`);
         const usable = Math.max(0, available - occupied - reservations.get(block.id)!);
         exhaustedCount += usable === 0 ? 1 : 0;
         let assignedMinutes = 0;

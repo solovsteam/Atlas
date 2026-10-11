@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { firstFeasibleWorkBlock } from "../shared/decisionSchedule";
 import { buildNowFocus } from "../shared/scheduling/now";
+import { selectCalendarEvents, serializeVevent } from "../shared/ics";
 import type { Item } from "../shared/item";
 import type { ItemLink } from "../shared/links";
 
@@ -64,4 +65,37 @@ test("Now prepares intervals once while preserving current half-open boundaries 
   const atEnd = buildNowFocus([currentA, currentB, firstTask, secondTask], links, new Date("2026-09-24T09:00:00Z"));
   assert.equal(atEnd.primary?.item.id, firstTask.id);
   assert.equal(atEnd.primary?.reason, "Committed today");
+});
+
+test("calendar event selection includes scheduled intervals and active appointments, excluding archived and out-of-range items", () => {
+  const workBlock = { ...block("work", "2026-09-24T09:00:00Z", "2026-09-24T10:00:00Z"), title: "Focus" };
+  const archived = { ...workBlock, id: "archived", intervalStatus: "archived" };
+  const committed = { ...task("committed", 30), title: "Write, review" };
+  const appointment = {
+    ...task("appointment", 30), title: "Call", taskFixedStartsAt: "2026-09-24T11:00:00Z", taskFixedEndsAt: "2026-09-24T11:30:00Z"
+  };
+  const doneAppointment = {
+    ...appointment, id: "done", taskStatus: "done" as const, taskFixedStartsAt: "2026-09-24T12:00:00Z"
+  };
+  const outside = { ...workBlock, id: "outside", intervalStartsAt: "2026-10-03T09:00:00Z", intervalEndsAt: "2026-10-03T10:00:00Z" };
+  const events = selectCalendarEvents(
+    [workBlock, archived, committed, appointment, doneAppointment, outside],
+    [{ id: "link", ownerId: "owner", fromId: "committed", toId: "work", kind: "scheduled_in", createdAt: "", updatedAt: "" }],
+    now
+  );
+
+  assert.deepEqual(events.map(({ uid }) => uid), ["atlas-interval-work@atlas", "atlas-appt-appointment@atlas"]);
+  assert.equal(events[0].description, "Write, review");
+  assert.equal(events[1].description, "Atlas appointment");
+});
+
+test("VEVENT serialization escapes text and uses its supplied timestamp", () => {
+  const serialized = serializeVevent({
+    uid: "event@atlas", start: new Date("2026-09-24T09:00:00Z"), end: new Date("2026-09-24T10:00:00Z"),
+    summary: "A, B; C\\D", description: "First\nSecond"
+  }, new Date("2026-09-24T08:00:00Z"));
+
+  assert.match(serialized, /DTSTAMP:20260924T080000Z/);
+  assert.match(serialized, /SUMMARY:A\\, B\\; C\\\\D/);
+  assert.match(serialized, /DESCRIPTION:First\\nSecond/);
 });

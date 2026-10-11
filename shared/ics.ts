@@ -18,19 +18,27 @@ function icsEscape(value: string): string {
   return value.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\n/g, "\\n");
 }
 
-function eventBlock(uid: string, start: Date, end: Date, summary: string, description: string): string {
+export type CalendarEvent = {
+  uid: string;
+  start: Date;
+  end: Date;
+  summary: string;
+  description: string;
+};
+
+export function serializeVevent(event: CalendarEvent, timestamp: Date): string {
   return [
     "BEGIN:VEVENT",
-    `UID:${uid}`,
-    `DTSTAMP:${icsUtc(new Date())}`,
-    `DTSTART:${icsUtc(start)}`,
-    `DTEND:${icsUtc(end)}`,
-    `SUMMARY:${icsEscape(summary)}`,
-    `DESCRIPTION:${icsEscape(description)}`,
+    `UID:${event.uid}`,
+    `DTSTAMP:${icsUtc(timestamp)}`,
+    `DTSTART:${icsUtc(event.start)}`,
+    `DTEND:${icsUtc(event.end)}`,
+    `SUMMARY:${icsEscape(event.summary)}`,
+    `DESCRIPTION:${icsEscape(event.description)}`,
     "BEGIN:VALARM",
     "TRIGGER:-PT10M",
     "ACTION:DISPLAY",
-    `DESCRIPTION:${icsEscape(summary)}`,
+    `DESCRIPTION:${icsEscape(event.summary)}`,
     "END:VALARM",
     "END:VEVENT"
   ].join("\r\n");
@@ -38,10 +46,18 @@ function eventBlock(uid: string, start: Date, end: Date, summary: string, descri
 
 /** OS calendars already interrupt people. This is how Atlas borrows that, without Atlas staying open. */
 export function calendarIcs(items: Item[], links: ItemLink[], now: Date, dayCount = 7): string {
+  const events = selectCalendarEvents(items, links, now, dayCount);
+  const serializedEvents = events.map((event) => serializeVevent(event, new Date()));
+  return ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Atlas//EN", "CALSCALE:GREGORIAN", ...serializedEvents, "END:VCALENDAR"].join(
+    "\r\n"
+  );
+}
+
+export function selectCalendarEvents(items: Item[], links: ItemLink[], now: Date, dayCount = 7): CalendarEvent[] {
   const rangeStart = startOfDay(now);
   const rangeEnd = addDays(rangeStart, dayCount);
   const byId = new Map(items.map((item) => [item.id, item]));
-  const events: string[] = [];
+  const events: CalendarEvent[] = [];
 
   for (const item of items) {
     if (item.isInterval) {
@@ -57,15 +73,13 @@ export function calendarIcs(items: Item[], links: ItemLink[], now: Date, dayCoun
       const committed = tasksScheduledIn(item.id, links)
         .map((id) => byId.get(id)?.title)
         .filter((title): title is string => Boolean(title));
-      events.push(
-        eventBlock(
-          `atlas-interval-${item.id}@atlas`,
-          start,
-          end,
-          item.title || "Work block",
-          committed.length > 0 ? committed.join(", ") : "Nothing committed yet"
-        )
-      );
+      events.push({
+        uid: `atlas-interval-${item.id}@atlas`,
+        start,
+        end,
+        summary: item.title || "Work block",
+        description: committed.length > 0 ? committed.join(", ") : "Nothing committed yet"
+      });
     }
     if (item.isTask && item.taskStatus === "active") {
       const start = parseTime(item.taskFixedStartsAt);
@@ -73,11 +87,15 @@ export function calendarIcs(items: Item[], links: ItemLink[], now: Date, dayCoun
       if (!start || !end || end <= rangeStart || start >= rangeEnd) {
         continue;
       }
-      events.push(eventBlock(`atlas-appt-${item.id}@atlas`, start, end, item.title || "Appointment", "Atlas appointment"));
+      events.push({
+        uid: `atlas-appt-${item.id}@atlas`,
+        start,
+        end,
+        summary: item.title || "Appointment",
+        description: "Atlas appointment"
+      });
     }
   }
 
-  return ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Atlas//EN", "CALSCALE:GREGORIAN", ...events, "END:VCALENDAR"].join(
-    "\r\n"
-  );
+  return events;
 }

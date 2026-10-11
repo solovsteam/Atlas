@@ -18,6 +18,7 @@ import { nominalWorkWindow, workBlockForNow, workBlockOverlapsExisting } from ".
 import { boxDisplayLabel, boxesForDay, layoutBoxesOnDay, slotsInRange, type ScheduleSlot } from "../shared/schedule";
 import {
   DATE_PLACEHOLDER, DATE_TIME_PLACEHOLDER, formatEuropeanDate, formatEuropeanDateTime,
+  europeanDateFromIso, europeanDateTimeFromIso, formatDate, formatDateTime, formatDayLabel, formatIsoDateTime, pad2,
   isoFromEuropeanDate, isoFromEuropeanDateTime, normalizeEuropeanDate, normalizeEuropeanDateTime,
   parseEuropeanDate, parseEuropeanDateTime, parseFlexibleDate, parseFlexibleDateTime,
   validateEuropeanDate, validateEuropeanDateTime
@@ -1412,4 +1413,207 @@ test("documentation completion and label lookup distinguish false, blank text an
     ["checked", "Checked"], ["amount", "Amount"], ["notes", "Notes"]
   ]));
   assert.deepEqual(schemaFieldLabels([]), new Map());
+});
+
+// Ordinary locale regressions use civil literals / native Date arithmetic, never
+// the copied parser above or production formatting to compute an expectation.
+function localeLocalParts(date: Date): number[] {
+  return [date.getFullYear(), date.getMonth() + 1, date.getDate(), date.getHours(), date.getMinutes(), date.getSeconds(), date.getMilliseconds()];
+}
+function assertLocaleDate(actual: Date | null, expected: Date, input: string): void {
+  assert.ok(actual, input);
+  assert.deepEqual(localeLocalParts(actual), localeLocalParts(expected), input);
+}
+const localeReference = new Date(2026, 5, 15, 12, 34, 56, 789);
+
+test("European formats and parsers round trip every local day of 2024 and 2026 at midnight and 23:59", () => {
+  let days = 0;
+  for (const year of [2024, 2026]) {
+    for (let month = 1; month <= 12; month++) {
+      const dayCount = new Date(year, month, 0).getDate();
+      for (let day = 1; day <= dayCount; day++) {
+        days++;
+        const dateText = `${String(day).padStart(2, "0")}.${String(month).padStart(2, "0")}.${year}`;
+        for (const [hour, minute, timeText] of [[0, 0, "00:00"], [23, 59, "23:59"]] as const) {
+          const date = new Date(year, month - 1, day, hour, minute);
+          const dateTimeText = `${dateText} ${timeText}`;
+          // Pin each side independently before exercising the round trip.
+          assert.equal(formatEuropeanDate(date), dateText);
+          assert.equal(formatEuropeanDateTime(date), dateTimeText);
+          assertLocaleDate(parseEuropeanDate(dateText), new Date(year, month - 1, day), dateText);
+          assertLocaleDate(parseEuropeanDateTime(dateTimeText), date, dateTimeText);
+          assertLocaleDate(parseEuropeanDate(formatEuropeanDate(date)), new Date(year, month - 1, day), dateText);
+          assertLocaleDate(parseEuropeanDateTime(formatEuropeanDateTime(date)), date, dateTimeText);
+        }
+      }
+    }
+  }
+  assert.equal(days, 731);
+});
+
+test("strict European parsing accepts digit widths, commas, whitespace and rejects invalid dates and times", () => {
+  for (const day of ["4", "04"]) for (const month of ["7", "07"]) {
+    const text = `${day}.${month}.2026`;
+    for (const parse of [parseEuropeanDate, parseEuropeanDateTime]) {
+      assertLocaleDate(parse(` \t${text}\n`), new Date(2026, 6, 4), text);
+      for (const hour of ["9", "09"]) for (const separator of [" ", "   ", ",", ",  "]) {
+        const timed = ` \t${text}${separator}${hour}:05\n`;
+        assertLocaleDate(parse(timed), new Date(2026, 6, 4, 9, 5), timed);
+      }
+    }
+  }
+  for (const text of ["31.04.2026", "29.02.2026", "00.01.2026", "01.00.2026", "01.13.2026", "32.01.2026", "04.07.2026 24:00", "04.07.2026 23:60", "", " \t\n", "not a date", "2026-07-04", "4.7.26", "4.7.2026 9:5", "4.7.2026 9", "4.7.2026 09:05:00", "4.7.2026 trailing"]) {
+    assert.equal(parseEuropeanDate(text), null, text);
+    assert.equal(parseEuropeanDateTime(text), null, text);
+  }
+});
+
+test("relative German and English dates use explicit civil references across month, year and Berlin DST boundaries", () => {
+  const fixtures = [
+    [2026, 1, 31, 2026, 2, 1], [2024, 2, 28, 2024, 2, 29],
+    [2024, 2, 29, 2024, 3, 1], [2026, 12, 31, 2027, 1, 1],
+    [2026, 3, 28, 2026, 3, 29], [2026, 3, 29, 2026, 3, 30],
+    [2026, 10, 24, 2026, 10, 25], [2026, 10, 25, 2026, 10, 26]
+  ];
+  for (const [y, m, d, ty, tm, td] of fixtures) {
+    const reference = new Date(y, m - 1, d, 23, 59, 56, 789);
+    const before = reference.getTime();
+    for (const parse of [parseFlexibleDate, parseFlexibleDateTime]) {
+      for (const text of ["hEuTe", "ToDaY", " HEUTE ", "today"]) assertLocaleDate(parse(text, reference), new Date(y, m - 1, d), text);
+      for (const text of ["mOrGeN", "ToMoRrOw", " MORGEN ", "tomorrow"]) assertLocaleDate(parse(text, reference), new Date(ty, tm - 1, td), text);
+    }
+    assert.equal(reference.getTime(), before, "reference is unchanged");
+  }
+});
+
+test("numeric shorthand uses the explicit reference year and accepts optional hour or hh:mm", () => {
+  for (const base of ["4.7", "04.07", "4.7.2026"]) {
+    for (const [suffix, hour, minute] of [["", 0, 0], [" 9", 9, 0], [" 09", 9, 0], [" 9:05", 9, 5], [" 23:59", 23, 59]] as const) {
+      for (const parse of [parseFlexibleDate, parseFlexibleDateTime]) {
+        assertLocaleDate(parse(`  ${base}${suffix}  `, localeReference), new Date(2026, 6, 4, hour, minute), base + suffix);
+      }
+    }
+  }
+  assertLocaleDate(parseFlexibleDate("4.7", new Date(2024, 0, 1)), new Date(2024, 6, 4), "reference year 2024");
+  for (const text of ["31.4", "29.2.2026", "0.1", "1.13", "4.7 24", "4.7 9:60", "4.7.6", "4.7.20266", "4.7 9:5"]) {
+    assert.equal(parseFlexibleDate(text, localeReference), null, text);
+    assert.equal(parseFlexibleDateTime(text, localeReference), null, text);
+  }
+});
+
+test("current behavior: two-digit and leading-zero three-digit shorthand years map below 100 into the 2000s", () => {
+  for (const [yearText, year] of [["00", 2000], ["26", 2026], ["99", 2099], ["026", 2026], ["099", 2099], ["100", 100], ["999", 999]] as const) {
+    for (const suffix of ["", " 9", " 09:05"]) {
+      const text = `4.7.${yearText}${suffix}`;
+      const expected = new Date(year, 6, 4, suffix ? 9 : 0, suffix.includes(":") ? 5 : 0);
+      for (const parse of [parseFlexibleDate, parseFlexibleDateTime]) assertLocaleDate(parse(text, localeReference), expected, text);
+    }
+  }
+  assert.equal(parseEuropeanDate("04.07.0026"), null, "native Date's 0–99 year remapping fails strict year validation");
+  assertLocaleDate(parseFlexibleDate("04.07.0026", localeReference), new Date(2026, 6, 4), "flexible fallback remaps 0026");
+});
+
+// Independently listed language vocabulary, grouped by civil month.
+const localeMonthFixtures = [
+  ["Jan", "Januar", "January"], ["Feb", "Februar", "February"],
+  ["Mar", "Marz", "März", "March"], ["Apr", "April"], ["Mai", "May"],
+  ["Jun", "Juni", "June"], ["Jul", "Juli", "July"], ["Aug", "August"],
+  ["Sep", "Sept", "September"], ["Okt", "Oktober", "Oct", "October"],
+  ["Nov", "November"], ["Dez", "Dezember", "Dec", "December"]
+];
+test("German and English month names and abbreviations accept dots, both word orders and mixed case", () => {
+  for (const [index, names] of localeMonthFixtures.entries()) for (const name of names) {
+    for (const token of [name, name.toUpperCase(), name.toLowerCase()]) for (const dot of ["", "."]) {
+      for (const text of [`4 ${token}${dot}`, `4. ${token}${dot}`, `${token}${dot} 4`, `${token}${dot} 4.`]) {
+        for (const parse of [parseFlexibleDate, parseFlexibleDateTime]) {
+          assertLocaleDate(parse(` \t${text.replace(/ /g, "   ")}\n`, localeReference), new Date(2026, index, 4), text);
+        }
+      }
+    }
+  }
+});
+
+test("current behavior: month-name dates reject trailing years and treat a one- or two-digit suffix as an hour", () => {
+  for (const [index, names] of localeMonthFixtures.entries()) for (const name of names) {
+    for (const base of [`4. ${name}`, `${name}. 4`]) for (const parse of [parseFlexibleDate, parseFlexibleDateTime]) {
+      for (const suffix of [" 2026", " 026", " 26", " 24", " 9:60"]) assert.equal(parse(base + suffix, localeReference), null, base + suffix);
+      for (const [suffix, hour, minute] of [[" 20", 20, 0], [" 9", 9, 0], [" 09:05", 9, 5], [" 23:59", 23, 59]] as const) {
+        assertLocaleDate(parse(base + suffix, localeReference), new Date(2026, index, 4, hour, minute), base + suffix);
+      }
+    }
+  }
+});
+
+test("locale normalization, ISO conversion, validation, aliases and placeholder hints have explicit expectations", () => {
+  assert.equal(DATE_PLACEHOLDER, "04.07.2026");
+  assert.equal(DATE_TIME_PLACEHOLDER, "04.07.2026 23:59");
+  for (const [text, dateText, timeText, expected] of [
+    ["4.7 9:05", "04.07.2026", "04.07.2026 09:05", new Date(2026, 6, 4, 9, 5)],
+    ["morgen", "16.06.2026", "16.06.2026 00:00", new Date(2026, 5, 16)],
+    ["29.2.2024", "29.02.2024", "29.02.2024 00:00", new Date(2024, 1, 29)]
+  ] as const) {
+    assert.equal(normalizeEuropeanDate(text, localeReference), dateText);
+    assert.equal(normalizeEuropeanDateTime(text, localeReference), timeText);
+    assert.equal(isoFromEuropeanDateTime(text, localeReference), expected.toISOString());
+    assert.equal(isoFromEuropeanDate(text, false, localeReference), expected.toISOString());
+    const end = new Date(expected.getFullYear(), expected.getMonth(), expected.getDate(), 23, 59);
+    const endIso = isoFromEuropeanDate(text, true, localeReference);
+    assert.equal(endIso, end.toISOString());
+    assert.deepEqual(localeLocalParts(new Date(endIso)), localeLocalParts(end));
+    assert.equal(validateEuropeanDate(text, localeReference), null);
+    assert.equal(validateEuropeanDateTime(text, localeReference), null);
+    assert.equal(europeanDateFromIso(expected.toISOString()), dateText);
+    assert.equal(europeanDateTimeFromIso(expected.toISOString()), timeText);
+    assert.equal(formatIsoDateTime(expected.toISOString()), timeText);
+    assert.equal(formatDate(expected), dateText);
+    assert.equal(formatDateTime(expected), timeText);
+  }
+  for (const text of ["", " \t\n", "not a date", "31.04.2026"]) {
+    assert.equal(normalizeEuropeanDate(text, localeReference), null);
+    assert.equal(normalizeEuropeanDateTime(text, localeReference), null);
+    assert.equal(isoFromEuropeanDateTime(text, localeReference), "");
+    for (const end of [false, true]) assert.equal(isoFromEuropeanDate(text, end, localeReference), "");
+    assert.equal(validateEuropeanDate(text, localeReference), text.trim() ? "Use 04.07.2026" : "Enter a date.");
+    assert.equal(validateEuropeanDateTime(text, localeReference), text.trim() ? "Use 04.07.2026 23:59" : "Enter a date and time.");
+  }
+  for (const [input, expected] of [[0, "00"], [4, "04"], [12, "12"], [123, "123"]] as const) assert.equal(pad2(input), expected);
+});
+
+test("current behavior: date-only helpers accept time-bearing input and ISO conversion retains its time", () => {
+  assertLocaleDate(parseEuropeanDate("04.07.2026 23:59"), new Date(2026, 6, 4, 23, 59), "strict date with time");
+  assert.equal(normalizeEuropeanDate("4.7 9", localeReference), "04.07.2026");
+  assert.equal(isoFromEuropeanDate("4.7 9", false, localeReference), new Date(2026, 6, 4, 9).toISOString());
+  assert.equal(validateEuropeanDate("4.7 9", localeReference), null);
+});
+
+test("formatDayLabel uses German weekday abbreviations for a full local week", () => {
+  for (const [offset, expected] of ["Mo, 05.01.2026", "Di, 06.01.2026", "Mi, 07.01.2026", "Do, 08.01.2026", "Fr, 09.01.2026", "Sa, 10.01.2026", "So, 11.01.2026"].entries()) {
+    assert.equal(formatDayLabel(new Date(2026, 0, 5 + offset, 12)), expected);
+  }
+});
+
+test("current behavior: ISO display helpers return empty for absent input and NaN text for invalid input", () => {
+  for (const iso of [null, ""]) {
+    assert.equal(europeanDateFromIso(iso), "");
+    assert.equal(europeanDateTimeFromIso(iso), "");
+  }
+  for (const iso of ["not-an-iso-date", "2026-99-99T25:60:00Z"]) {
+    assert.equal(europeanDateFromIso(iso), "NaN.NaN.NaN");
+    assert.equal(europeanDateTimeFromIso(iso), "NaN.NaN.NaN NaN:NaN");
+    assert.equal(formatIsoDateTime(iso), "NaN.NaN.NaN NaN:NaN");
+  }
+});
+
+test("current behavior: nonexistent spring-forward times normalize forward instead of being rejected", () => {
+  for (const minute of [0, 30, 59]) {
+    // Native local construction is the independent oracle for any host zone.
+    // Berlin skips 02:00–02:59 on 29 March 2026; UTC preserves those hours.
+    const expected = new Date(2026, 2, 29, 2, minute);
+    const text = `29.03.2026 02:${String(minute).padStart(2, "0")}`;
+    for (const parse of [parseEuropeanDate, parseEuropeanDateTime]) assertLocaleDate(parse(text), expected, text);
+    for (const parse of [parseFlexibleDate, parseFlexibleDateTime]) assertLocaleDate(parse(text, localeReference), expected, text);
+    assert.equal(isoFromEuropeanDateTime(text, localeReference), expected.toISOString());
+    if (process.env.TZ === "Europe/Berlin") assert.equal(expected.getHours(), 3);
+    if (process.env.TZ === "UTC") assert.equal(expected.getHours(), 2);
+  }
 });

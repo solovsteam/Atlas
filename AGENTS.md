@@ -33,6 +33,12 @@ Atlas/                     # repo root
 
 ## Git workflow
 
+**Brain coder (Tonio, 11 Oct 2026):** unattended Luna/Sol changes use isolated worktrees and merge only into the single `brain-experimental` branch. It stays current with `main`; merging the whole batch into `main` requires Tonio's human-admin approval. A blocking change is reverted with its reason and lesson recorded in Brain. This supersedes unattended main merges for this channel; the interactive Git workflow below remains the historical default outside it.
+
+`.brain.json` links this program to inquiry `IQ-b3a3849d` and the cross-program coding inquiry. Before coding, run `python3 /Users/tonio/apps/Brain/scripts/repo_brain.py context --repo .`; after a verified commit record decisions and lessons through `schema-web` in the program inquiry, citing the hash and anchors such as `atlas:path@commit`. Code and tests define behavior; Brain holds reasons and open problems.
+
+The coder freezes the effect layer and its write/parser/auth/configuration dependencies listed in `.brain.json`: create only, never move/edit/delete human items, same account, exact fresh preview and approval gate. It cannot edit the existing MCP effect tests or Brain adapter contract; `tests/constraints/` is also append-only. Add a new constraint test there; `npm run check` discovers it. Changes requiring protected code or dependencies are blockers for human-reviewed work, not permission to weaken the protections.
+
 **Default:** after meaningful changes, **commit and push** yourself (`git add` → `git commit` → `git push`). User expects GitHub/Vercel to stay current without being asked each time.
 
 **Branches:** only when user explicitly asks for a backup branch — otherwise work on `main`.

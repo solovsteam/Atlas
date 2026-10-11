@@ -11,6 +11,7 @@ node_modules
 dist
 dist-ssr
 *.local
+.handoff/
 
 # Lakebed build artifacts + local porting reference (not pushed)
 .lakebed/

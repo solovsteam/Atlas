@@ -1,0 +1,52 @@
+{
+  "project": "atlas",
+  "inquiries": ["IQ-b3a3849d", "IQ-2f2c41d2"],
+  "since": "17b8aca",
+  "coder": {
+    "check": "npm run check",
+    "main_branch": "main",
+    "experimental_branch": "brain-experimental",
+    "append_only": [
+      "tests/constraints",
+      "scripts/brain-atlas-mcp.test.ts",
+      "scripts/brain-contract.test.ts"
+    ],
+    "frozen": [
+      ".brain.json",
+      ".claude",
+      ".cursor",
+      ".github",
+      ".gitignore",
+      ".env",
+      ".env.local",
+      "AGENTS.md",
+      "CLAUDE.md",
+      "package.json",
+      "package-lock.json",
+      "tsconfig.json",
+      "tsconfig.app.json",
+      "tsconfig.node.json",
+      "tsconfig.brain-mcp.json",
+      "vite.config.ts",
+      "scripts/brain-atlas-mcp.ts",
+      "src/services/brainTools.ts",
+      "src/services/items.ts",
+      "src/services/links.ts",
+      "src/services/schemaScheduleRuns.ts",
+      "src/services/webHandoff.ts",
+      "src/services/schema.ts",
+      "src/lib/supabase.ts",
+      "src/hooks/useAuthSession.ts",
+      "src/types/database.ts",
+      "shared/item.ts",
+      "shared/links.ts",
+      "shared/schemaSchedule.ts",
+      "shared/webHandoff.ts",
+      "shared/subtasks.ts",
+      "shared/completion.ts",
+      "shared/duration.ts",
+      "supabase",
+      "docs/BRAIN_MCP.md"
+    ]
+  }
+}

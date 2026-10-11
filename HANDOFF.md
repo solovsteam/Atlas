@@ -10,6 +10,13 @@ Last updated 2026-10-11.
 - No UI, migration, routine rule, background job, effect-layer contract or cloud data changed. Scheduling remains interval-level capacity allocation; it does not produce minute-by-minute placements or implement the recurring compiler.
 - Portable task note is local to the worktree at `.handoff/atlas-scheduling-20261011.md`. Next: bring the verified commit into the single Atlas experimental branch, run combined checks, then include it in the human-reviewed batch. The existing main MCP process has not been restarted onto these branch-only changes.
 
+## Overnight coder opt-in (11 Oct 2026)
+
+`.brain.json` chooses one `brain-experimental` branch, based on `main`; unattended Luna/Sol changes stay there until Tonio approves the whole batch through Brain's human-admin path. Program reasons and lessons belong in Brain inquiry `IQ-b3a3849d`. Frozen paths cover the MCP approval/account/preview/create-only gate, its write/parser/auth dependencies, migrations and execution configuration. Existing MCP effect tests and Brain adapter contract plus `tests/constraints/` are append-only. Ordinary scheduling code can still change. A protected-code or dependency change needs human-reviewed work.
+
+Opt-in worktree `overnight-optin-20261011` passed `npm run check`, including actual effect-layer checks, the Brain import contract and three new protected policy tests; existing lint/bundle warnings only. Main is unchanged and no calendar data or MCP process was modified. Scheduling seed `3ea19f0` passed its checks and its owner finished at 13:44 UTC. Brain pins the opt-in config commit before approval, so main does not need a setup merge. Next: combine seed and opt-in on experimental, run combined check, then stage its summary for batch approval.
+
+
 ## State
 
 - Main now includes the already-promoted scientific Atlas and Brain surface contract (d17545b). The checkout started clean on `experiment/scientific-atlas`; `origin/main` already held the promotion (46628ec), and local main was fast-forwarded to the existing experiment tip before this work.

@@ -472,6 +472,100 @@ function interval(id: string, start = date("09:00"), end = date("12:00")): Inter
   return { id, title: id, kind: "fixed", startsAt: start, endsAt: end, archived: false };
 }
 
+for (const strategy of ["earliest_fit", "delta_cost", "delta_cost_switch"] as const) {
+  test(`${strategy}: empty and filtered scheduler inputs return complete finite deterministic results`, () => {
+    const config = mergeSchedulerConfig(now, { strategy });
+    const excluded = task("excluded", 2, date("09:00"), date("10:00"));
+    const quick = task("quick", 2);
+    const missing = task("missing", 2, date("09:00"));
+    const filtered = [excluded, quick, missing];
+    const rejected = [
+      { taskId: "excluded", reason: "excluded" as const },
+      { taskId: "quick", reason: "quick" as const },
+      { taskId: "missing", reason: "missing_info" as const }
+    ];
+    const closed = [
+      interval("elapsed", date("06:00"), date("08:00")),
+      interval("horizon", "2026-10-15T08:00:00Z", "2026-10-15T09:00:00Z"),
+      { ...interval("archived"), archived: true }
+    ];
+    const invalidRanges = [
+      interval("invalid-start", "not-a-date", date("10:00")),
+      interval("invalid-end", date("09:00"), "not-a-date"),
+      interval("blank-start", "", date("10:00")),
+      interval("blank-end", date("09:00"), ""),
+      interval("equal", date("09:00"), date("09:00")),
+      interval("reversed", date("10:00"), date("09:00")),
+      { ...interval("all-day-invalid-start", "not-a-date", ""), kind: "allDay" }
+    ];
+    type Case = {
+      name: string; tasks: TaskScheduleInput[]; intervals: IntervalInput[];
+      assignments: { taskId: string; intervalId: string }[];
+      unassigned: ReturnType<typeof runScheduler>["unassigned"]; cost: number;
+    };
+    const leftover = [{ taskId: "work", reason: "no_feasible_interval" as const }];
+    const cases: Case[] = [
+      { name: "both empty", tasks: [], intervals: [], assignments: [], unassigned: [], cost: 0 },
+      { name: "empty tasks", tasks: [], intervals: [interval("open")], assignments: [], unassigned: [], cost: 0 },
+      // Default flexible value 50 deferred by 21 days: 50 * (1 - 1 / 4).
+      { name: "empty intervals", tasks: [task("work")], intervals: [], assignments: [], unassigned: leftover, cost: 37.5 },
+      { name: "no open intervals", tasks: [task("work")], intervals: closed, assignments: [], unassigned: leftover, cost: 37.5 },
+      ...invalidRanges.map((block) => ({ name: block.id, tasks: [task("work")], intervals: [block], assignments: [], unassigned: leftover, cost: 37.5 })),
+      ...filtered.map((entry, index) => ({ name: `only ${entry.id}`, tasks: [entry], intervals: [interval("open")], assignments: [], unassigned: [rejected[index]!], cost: 0 })),
+      { name: "all filtered", tasks: filtered, intervals: [interval("open")], assignments: [], unassigned: rejected, cost: 0 },
+      { name: "all filtered without intervals", tasks: filtered, intervals: [], assignments: [], unassigned: rejected, cost: 0 },
+      { name: "archived before live", tasks: [task("work")], intervals: [
+        { ...interval("archived", date("08:00")), archived: true },
+        interval("live", date("08:00"))
+      ], assignments: [{ taskId: "work", intervalId: "live" }], unassigned: [], cost: 0 },
+      // Existing all-day semantics recover missing, invalid, equal and reversed
+      // ends to the next local midnight; fixed ranges above do not recover.
+      ...["", "not-a-date", date("08:00"), date("07:00")].map((end) => ({
+        name: `all-day fallback ${end}`, tasks: [task("work")],
+        intervals: [{ ...interval("day", date("08:00"), end), kind: "allDay" }],
+        assignments: [{ taskId: "work", intervalId: "day" }], unassigned: [], cost: 0
+      }))
+    ];
+    for (const fixture of cases) {
+      const snapshot = structuredClone({ tasks: fixture.tasks, intervals: fixture.intervals, config });
+      const expected = {
+        assignments: fixture.assignments, unassigned: fixture.unassigned,
+        metrics: { totalPostponement: fixture.cost, contextSwitches: 0,
+          assignedCount: fixture.assignments.length, unassignedCount: fixture.unassigned.length }
+      };
+      for (let repeat = 0; repeat < 3; repeat += 1) {
+        let result: ReturnType<typeof runScheduler> | undefined;
+        assert.doesNotThrow(() => { result = runScheduler(fixture.tasks, fixture.intervals, config); }, fixture.name);
+        assert.deepEqual(result, expected, `${fixture.name}: repeat ${repeat}, complete result`);
+        assert.ok(Object.values(result!.metrics).every(Number.isFinite), `${fixture.name}: finite metrics`);
+        assert.deepEqual({ tasks: fixture.tasks, intervals: fixture.intervals, config }, snapshot, `${fixture.name}: inputs unchanged`);
+      }
+    }
+  });
+
+  test(`${strategy}: equivalent chronological starts retain caller tie order deterministically`, () => {
+    const config = mergeSchedulerConfig(now, { strategy });
+    const tasks = [task("work")];
+    const a = interval("a", "2026-09-24T10:00:00+02:00", "2026-09-24T11:00:00+02:00");
+    const b = interval("b", date("08:00"), date("09:00"));
+    const later = interval("later", date("09:00"), date("10:00"));
+    for (const ties of [[a, b], [b, a]]) {
+      const blocks = [later, ...ties];
+      const snapshot = structuredClone({ tasks, blocks, config });
+      for (let repeat = 0; repeat < 3; repeat += 1) {
+        let result: ReturnType<typeof runScheduler> | undefined;
+        assert.doesNotThrow(() => { result = runScheduler(tasks, blocks, config); });
+        assert.deepEqual(result, {
+          assignments: [{ taskId: "work", intervalId: ties[0]!.id }], unassigned: [],
+          metrics: { totalPostponement: 0, contextSwitches: 0, assignedCount: 1, unassignedCount: 0 }
+        });
+        assert.ok(Object.values(result!.metrics).every(Number.isFinite));
+        assert.deepEqual({ tasks, blocks, config }, snapshot);
+      }
+    }
+  });
+}
+
 test("appointment union matches a bounded minute-grid oracle across clipping and permutations", () => {
   const at = (minute: number) => new Date(now.getTime() + minute * 60_000).toISOString();
   type Span = readonly [number, number];

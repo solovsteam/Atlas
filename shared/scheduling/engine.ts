@@ -10,7 +10,7 @@ import { nowMotivation } from "./deferral";
 import { bufferedMinutes } from "./math";
 import { eligibleTasks } from "./eligible";
 import { calculateSchedulerMetrics } from "./metrics";
-import { placementBenefit, taskBenefitConstants } from "./scoring";
+import { placementBenefit, placementSlotClock, taskBenefitConstants } from "./scoring";
 import type {
   Assignment,
   IntervalInput,
@@ -99,6 +99,7 @@ function runDeltaCost(
   const open = new Set(candidates.map((task) => task.id));
   const byId = new Map(candidates.map((task) => [task.id, task]));
   const constantsById = new Map(candidates.map((task) => [task.id, taskBenefitConstants(task, config)]));
+  const slotClocks = new Map(intervals.map((interval) => [interval.id, placementSlotClock(interval, config)]));
   const assignments: Assignment[] = [];
   const lastInInterval = new Map<string, TaskScheduleInput>();
 
@@ -121,7 +122,7 @@ function runDeltaCost(
         if (!constants) {
           continue;
         }
-        const benefit = placementBenefit(task, constants, interval, previous, later, remaining, config);
+        const benefit = placementBenefit(task, constants, interval, previous, later, remaining, config, slotClocks.get(interval.id));
         if (!best || benefit > best.benefit) {
           best = { task, benefit };
         }

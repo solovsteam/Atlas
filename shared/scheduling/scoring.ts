@@ -12,6 +12,15 @@ export type TaskBenefitConstants = {
   delayCostIfWait: number;
 };
 
+export type PlacementSlotClock = {
+  time: Date;
+};
+
+export function placementSlotClock(interval: IntervalInput, config: SchedulerConfig): PlacementSlotClock {
+  const range = intervalRange(interval);
+  return { time: range ? (range.start.getTime() < config.now.getTime() ? config.now : range.start) : config.now };
+}
+
 export function placementBenefit(
   task: TaskScheduleInput,
   constants: TaskBenefitConstants,
@@ -19,10 +28,10 @@ export function placementBenefit(
   previous: TaskScheduleInput | null,
   later: IntervalInput[],
   remaining: Map<string, number>,
-  config: SchedulerConfig
+  config: SchedulerConfig,
+  slotClock?: PlacementSlotClock
 ): number {
-  const range = intervalRange(interval);
-  const slotTime = range ? (range.start.getTime() < config.now.getTime() ? config.now : range.start) : config.now;
+  const slotTime = slotClock?.time ?? placementSlotClock(interval, config).time;
   const delayCostHere = postponementCost(task, slotTime, config);
   const switching = config.strategy === "delta_cost_switch" ? switchCost(previous, task, config.switchPenalty) : 0;
   const laterFit = later.some((candidate) =>

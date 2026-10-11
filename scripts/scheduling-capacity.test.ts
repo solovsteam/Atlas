@@ -20,6 +20,7 @@ import { buildInboxEntries, collectTags, compareItems, isArchivedTask, isLibrary
 import { calculateSchedulerMetrics } from "../shared/scheduling/metrics";
 import { intervalRange } from "../shared/scheduling/constraints";
 import { buildNudges, nextPendingNudge } from "../shared/nudges";
+import { serializeVevent } from "../shared/ics";
 
 type OraclePlan = { assignments: { taskId: string; intervalId: string }[]; unassigned: string[]; metrics: { totalPostponement: number; contextSwitches: number; assignedCount: number } };
 
@@ -1812,6 +1813,43 @@ test("scheduler full output is invariant to equivalent offsets and distinct fixe
         );
       }
     }
+  }
+
+  // Only fixed intervals and valid offset-bearing timestamps share this
+  // premise. Local civil/all-day recurrence and export selection are out of scope.
+  const originalTimezone = process.env.TZ;
+  try {
+    process.env.TZ = "UTC";
+    const strategies = ["earliest_fit", "delta_cost", "delta_cost_switch"] as const;
+    const explicitNow = "2026-03-28T19:15:00-05:00";
+    const baselines = strategies.map((strategy) => runScheduler(changedTasks, offsetFixedIntervals,
+      mergeSchedulerConfig(new Date(explicitNow), { strategy, horizonDays: 0.2 }), reservations));
+    const expectedBytes = new TextEncoder().encode([
+      "BEGIN:VEVENT", "UID:fixed-zone@atlas", "DTSTAMP:20260329T001500Z",
+      "DTSTART:20260328T234500Z", "DTEND:20260329T020000Z",
+      "SUMMARY:clipped", "DESCRIPTION:Fixed interval",
+      "BEGIN:VALARM", "TRIGGER:-PT10M", "ACTION:DISPLAY", "DESCRIPTION:clipped",
+      "END:VALARM", "END:VEVENT"
+    ].join("\r\n"));
+    for (const timezone of ["UTC", "Europe/Berlin", "America/New_York"]) {
+      process.env.TZ = timezone;
+      for (const [index, strategy] of strategies.entries()) {
+        const result = runScheduler(changedTasks, offsetFixedIntervals,
+          mergeSchedulerConfig(new Date(explicitNow), { strategy, horizonDays: 0.2 }), reservations);
+        assert.ok(result.assignments.length > 0, `${timezone}/${strategy}: assigns work`);
+        assert.ok(result.unassigned.length > 0, `${timezone}/${strategy}: has leftovers`);
+        assert.deepEqual(result, baselines[index], `${timezone}/${strategy}: full result matches UTC`);
+      }
+      const entry = offsetFixedIntervals[0]!;
+      const serialized = serializeVevent({
+        uid: "fixed-zone@atlas", start: new Date(entry.startsAt), end: new Date(entry.endsAt),
+        summary: entry.title, description: "Fixed interval"
+      }, new Date(explicitNow));
+      assert.deepEqual(new TextEncoder().encode(serialized), expectedBytes, `${timezone}: UTC VEVENT bytes`);
+    }
+  } finally {
+    if (originalTimezone === undefined) delete process.env.TZ;
+    else process.env.TZ = originalTimezone;
   }
 });
 

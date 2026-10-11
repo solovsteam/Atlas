@@ -152,6 +152,30 @@ test("Now keeps appointment priority and today link deduplication", () => {
   });
 });
 
+test("Now parses active appointments once and preserves overlap priority and half-open boundaries", () => {
+  const appointment = (id: string, start: string, end: string, taskStatus: Item["taskStatus"] = "active"): Item => ({
+    ...task(id, 30), taskStatus, taskFixedStartsAt: start, taskFixedEndsAt: end
+  });
+  const endsFirst = appointment("ends-first", "2026-09-24T07:00:00Z", "2026-09-24T08:20:00Z");
+  const tieFirst = appointment("tie-first-appt", "2026-09-24T08:00:00Z", "2026-09-24T08:30:00Z");
+  const tieSecond = appointment("tie-second-appt", "2026-09-24T07:30:00Z", "2026-09-24T08:30:00Z");
+  const invalidStart = appointment("invalid-start", "invalid", "2026-09-24T08:10:00Z");
+  const invalidEnd = appointment("invalid-end", "2026-09-24T07:00:00Z", "invalid");
+  const endedAtNow = appointment("ended-at-now", "2026-09-24T07:00:00Z", "2026-09-24T08:00:00Z");
+  const inactive = appointment("inactive-live", "2026-09-24T07:00:00Z", "2026-09-24T08:10:00Z", "done");
+
+  assert.deepEqual(buildNowFocus(
+    [tieFirst, invalidStart, inactive, endsFirst, endedAtNow, tieSecond, invalidEnd], [], now
+  ), {
+    primary: { item: endsFirst, reason: "Fixed appointment now" },
+    committed: [
+      { item: tieFirst, reason: "Also in range" },
+      { item: tieSecond, reason: "Also in range" }
+    ],
+    suggestion: null
+  });
+});
+
 test("Now preserves encounter order for equal motivation and exact suggestion metadata", () => {
   const firstTask = task("tie-first", 30);
   const secondTask = task("tie-second", 30);

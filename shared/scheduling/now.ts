@@ -30,15 +30,6 @@ function isActiveTask(item: Item): boolean {
   return item.isTask && item.taskStatus === "active";
 }
 
-function appointmentContains(item: Item, now: Date): boolean {
-  const start = parseTime(item.taskFixedStartsAt);
-  const end = parseTime(item.taskFixedEndsAt);
-  if (!start || !end) {
-    return false;
-  }
-  return now.getTime() >= start.getTime() && now.getTime() < end.getTime();
-}
-
 type PreparedInterval = {
   item: Item;
   start: Date | null;
@@ -105,8 +96,17 @@ export function buildNowFocus(items: Item[], links: ItemLink[], now: Date): NowF
   };
 
   const liveAppointments = active
-    .filter((item) => appointmentContains(item, now))
-    .sort((a, b) => (parseTime(a.taskFixedEndsAt)?.getTime() ?? 0) - (parseTime(b.taskFixedEndsAt)?.getTime() ?? 0));
+    .map((item, index) => ({
+      item,
+      index,
+      start: parseTime(item.taskFixedStartsAt),
+      end: parseTime(item.taskFixedEndsAt)
+    }))
+    .filter(({ start, end }) =>
+      start !== null && end !== null && now.getTime() >= start.getTime() && now.getTime() < end.getTime()
+    )
+    .sort((a, b) => a.end!.getTime() - b.end!.getTime() || a.index - b.index)
+    .map(({ item }) => item);
 
   if (liveAppointments[0]) {
     return {

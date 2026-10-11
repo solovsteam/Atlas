@@ -23,6 +23,7 @@ import type {
 
 function placementBenefit(
   task: TaskScheduleInput,
+  constants: { duration: number; valueScore: number; delayCostIfWait: number },
   interval: IntervalInput,
   previous: TaskScheduleInput | null,
   later: IntervalInput[],
@@ -32,15 +33,13 @@ function placementBenefit(
   const range = intervalRange(interval);
   const slotTime = range ? (range.start.getTime() < config.now.getTime() ? config.now : range.start) : config.now;
   const delayCostHere = postponementCost(task, slotTime, config);
-  const delayCostIfWait = postponementCost(task, waitHorizon(task, config), config);
-  const duration = bufferedMinutes(resolvedDuration(task, config), config);
-  const wspt = valueScore(task.importance) / duration;
   const switching = config.strategy === "delta_cost_switch" ? switchCost(previous, task, config.switchPenalty) : 0;
   const laterFit = later.some((candidate) =>
     taskFitsInterval(task, candidate, remaining.get(candidate.id) ?? 0, config)
   );
   const lastChance = laterFit ? 0 : constraintMode(task) === "deadline" ? 500 : 80;
-  return lastChance + (delayCostIfWait - delayCostHere) - switching + config.wsptWeight * wspt;
+  return lastChance + (constants.delayCostIfWait - delayCostHere) - switching +
+    config.wsptWeight * (constants.valueScore / constants.duration);
 }
 
 function openIntervals(intervals: IntervalInput[], config: SchedulerConfig): IntervalInput[] {
@@ -178,6 +177,11 @@ function runDeltaCost(
   }
   const open = new Set(candidates.map((task) => task.id));
   const byId = new Map(candidates.map((task) => [task.id, task]));
+  const constantsById = new Map(candidates.map((task) => [task.id, {
+    duration: bufferedMinutes(resolvedDuration(task, config), config),
+    valueScore: valueScore(task.importance),
+    delayCostIfWait: postponementCost(task, waitHorizon(task, config), config)
+  }]));
   const assignments: Assignment[] = [];
   const lastInInterval = new Map<string, TaskScheduleInput>();
 
@@ -196,7 +200,11 @@ function runDeltaCost(
         if (!taskFitsInterval(task, interval, left, config)) {
           continue;
         }
-        const benefit = placementBenefit(task, interval, previous, later, remaining, config);
+        const constants = constantsById.get(task.id);
+        if (!constants) {
+          continue;
+        }
+        const benefit = placementBenefit(task, constants, interval, previous, later, remaining, config);
         if (!best || benefit > best.benefit) {
           best = { task, benefit };
         }
@@ -204,7 +212,7 @@ function runDeltaCost(
       if (!best) {
         break;
       }
-      const duration = bufferedMinutes(resolvedDuration(best.task, config), config);
+      const duration = constantsById.get(best.task.id)!.duration;
       remaining.set(interval.id, left - duration);
       assignments.push({ taskId: best.task.id, intervalId: interval.id });
       lastInInterval.set(interval.id, best.task);

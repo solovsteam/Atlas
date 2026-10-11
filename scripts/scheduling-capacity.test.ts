@@ -40,6 +40,34 @@ test("eligible task classification preserves fixed and missing-info precedence",
   });
 });
 
+for (const strategy of ["delta_cost", "delta_cost_switch"] as const) {
+  test(`${strategy}: per-call benefit caching preserves deadline last chances and reserved capacity`, () => {
+    const deadline = { ...task("deadline", 30), importance: 2, dueAt: date("10:00") };
+    const valuable = { ...task("valuable", 30), importance: 10 };
+    const project = { ...task("project", 30), importance: 7, parentTaskId: "p" };
+    const result = runScheduler(
+      [deadline, valuable, project],
+      [interval("early", date("09:00"), date("10:00")), interval("late", date("11:00"), date("12:00"))],
+      mergeSchedulerConfig(now, { strategy }),
+      new Map([["early", 20]])
+    );
+
+    assert.deepEqual(result, {
+      assignments: [
+        { taskId: "deadline", intervalId: "early" },
+        { taskId: "valuable", intervalId: "late" }
+      ],
+      unassigned: [{ taskId: "project", reason: "no_feasible_interval" }],
+      metrics: {
+        totalPostponement: 119.85438596491227,
+        contextSwitches: 0,
+        assignedCount: 2,
+        unassignedCount: 1
+      }
+    });
+  });
+}
+
 function item(partial: Partial<Item>): Item {
   return {
     id: "item", ownerId: "owner", title: "Item", body: "", isTask: false, isInterval: false,

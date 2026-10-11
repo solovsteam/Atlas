@@ -106,7 +106,7 @@ export function selectCalendarEvents(items: Item[], links: ItemLink[], now: Date
       }
       const start = slotRangeStart(slot);
       const end = slotRangeEnd(slot);
-      if (!start || !end || end <= rangeStart || start.getTime() >= rangeEndTime) {
+      if (!start || !end || !Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end <= start || end <= rangeStart || start.getTime() >= rangeEndTime) {
         continue;
       }
       const committed = titlesByInterval.get(item.id) ?? [];
@@ -121,7 +121,7 @@ export function selectCalendarEvents(items: Item[], links: ItemLink[], now: Date
     if (item.isTask && item.taskStatus === "active") {
       const start = parseTime(item.taskFixedStartsAt);
       const end = parseTime(item.taskFixedEndsAt);
-      if (!start || !end || end <= rangeStart || start.getTime() >= rangeEndTime) {
+      if (!start || !end || end <= start || end <= rangeStart || start.getTime() >= rangeEndTime) {
         continue;
       }
       events.push({

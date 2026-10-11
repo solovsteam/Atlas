@@ -221,6 +221,23 @@ test("calendar event selection includes scheduled intervals and active appointme
   assert.equal(events[1].description, "Atlas appointment");
 });
 
+test("calendar export rejects malformed, reversed, and zero-length appointments", () => {
+  const appointment = (id: string, start: string, end: string) => ({
+    ...task(id, 30), taskFixedStartsAt: start, taskFixedEndsAt: end
+  });
+  const valid = appointment("valid-range", "2026-09-24T11:00:00Z", "2026-09-24T11:30:00Z");
+  const events = selectCalendarEvents([
+    valid,
+    appointment("reversed-range", "2026-09-24T12:00:00Z", "2026-09-24T11:30:00Z"),
+    appointment("zero-range", "2026-09-24T12:00:00Z", "2026-09-24T12:00:00Z"),
+    appointment("malformed-start", "not-a-date", "2026-09-24T12:30:00Z"),
+    appointment("malformed-end", "2026-09-24T12:00:00Z", "not-a-date")
+  ], [], now);
+
+  assert.deepEqual(events.map(({ uid }) => uid), ["atlas-appt-valid-range@atlas"]);
+  assert.match(calendarIcs([valid], [], now), /DTSTART:20260924T110000Z\r\nDTEND:20260924T113000Z/);
+});
+
 test("calendar exports are empty for invalid enumeration inputs", () => {
   const appointment = {
     ...task("invalid-range-appointment", 30), title: "Call",

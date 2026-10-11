@@ -283,6 +283,31 @@ test("VEVENT serialization escapes text and uses its supplied timestamp", () => 
   assert.match(serialized, /DESCRIPTION:First\\nSecond/);
 });
 
+test("VEVENT serialization escapes every newline form to exact calendar bytes", () => {
+  const serialized = serializeVevent({
+    uid: "event@atlas", start: new Date("2026-09-24T09:00:00Z"), end: new Date("2026-09-24T10:00:00Z"),
+    summary: "Title\r\nnext\rline\n😀,;\\end",
+    description: "Detail\r\nnext\rline\n雪,;\\end"
+  }, new Date("2026-09-24T08:00:00Z"));
+  const expected = [
+    "BEGIN:VEVENT",
+    "UID:event@atlas",
+    "DTSTAMP:20260924T080000Z",
+    "DTSTART:20260924T090000Z",
+    "DTEND:20260924T100000Z",
+    "SUMMARY:Title\\nnext\\nline\\n😀\\,\\;\\\\end",
+    "DESCRIPTION:Detail\\nnext\\nline\\n雪\\,\\;\\\\end",
+    "BEGIN:VALARM",
+    "TRIGGER:-PT10M",
+    "ACTION:DISPLAY",
+    "DESCRIPTION:Title\\nnext\\nline\\n😀\\,\\;\\\\end",
+    "END:VALARM",
+    "END:VEVENT"
+  ].join("\r\n");
+
+  assert.deepEqual(new TextEncoder().encode(serialized), new TextEncoder().encode(expected));
+});
+
 test("VEVENT serialization folds long UTF-8 lines and unfolds to the original content", () => {
   const event = {
     uid: "folding-event@atlas", start: now, end: new Date(now.getTime() + 60_000),

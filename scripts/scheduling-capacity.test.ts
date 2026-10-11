@@ -4,10 +4,12 @@ import type { Item } from "../shared/item";
 import type { ItemLink } from "../shared/links";
 import { firstFeasibleWorkBlock } from "../shared/decisionSchedule";
 import { runScheduler, mergeSchedulerConfig, type IntervalInput, type TaskScheduleInput } from "../shared/scheduling";
-import { intervalCapacityMinutes, intervalIsOpen, taskFitsInterval, resolvedDuration } from "../shared/scheduling/constraints";
+import { appointmentOverlapMinutes, constraintMode, intervalCapacityMinutes, intervalIsOpen, taskFitsInterval, resolvedDuration } from "../shared/scheduling/constraints";
 import { eligibleTasks } from "../shared/scheduling/eligible";
 import { nowMotivation, postponementCost, waitHorizon } from "../shared/scheduling/deferral";
 import { bufferedMinutes } from "../shared/scheduling/math";
+import { itemsToScheduleInputs } from "../shared/scheduling/resolve";
+import { calendarIntervalFromItem, isArchivedSlot } from "../shared/schedule";
 import { proposeSchedule } from "../src/services/scheduling";
 
 const date = (hour: string) => `2026-09-24T${hour}:00.000Z`;
@@ -151,6 +153,33 @@ const link = (id: string, fromId: string, toId: string): ItemLink => ({
   createdAt: now.toISOString(), updatedAt: now.toISOString()
 });
 
+function directFirstFeasibleReference(items: Item[], links: ItemLink[], duration: number, at: Date): string | null {
+  if (!Number.isFinite(duration) || duration <= 2) return null;
+  const config = mergeSchedulerConfig(at);
+  const tasks = itemsToScheduleInputs(items);
+  const appointments = tasks.filter((entry) => entry.fixedStartsAt && entry.fixedEndsAt);
+  const blocks = items.flatMap((entry) => {
+    const slot = calendarIntervalFromItem(entry);
+    return !slot || slot.kind !== "fixed" || isArchivedSlot(slot) || !slot.startsAt || !slot.endsAt
+      ? [] : [{ id: entry.id, title: entry.title, kind: slot.kind, startsAt: slot.startsAt, endsAt: slot.endsAt, archived: false }];
+  }).filter((entry) => intervalIsOpen(entry, config) && Date.parse(entry.startsAt) > at.getTime())
+    .sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt));
+  const needed = bufferedMinutes(duration, config);
+  return blocks.find((block) => {
+    const seen = new Set<string>();
+    let reserved = 0;
+    for (const scheduled of links) {
+      if (scheduled.kind !== "scheduled_in" || scheduled.toId !== block.id || seen.has(scheduled.fromId)) continue;
+      const taskInput = tasks.find((entry) => entry.id === scheduled.fromId);
+      if (!taskInput || constraintMode(taskInput) === "fixed") continue;
+      seen.add(scheduled.fromId);
+      reserved += bufferedMinutes(resolvedDuration(taskInput, config), config);
+    }
+    const free = intervalCapacityMinutes(block, config) - appointmentOverlapMinutes(block, appointments, config) - reserved;
+    return free >= needed;
+  })?.id ?? null;
+}
+
 for (const strategy of ["earliest_fit", "delta_cost", "delta_cost_switch"] as const) {
   test(`${strategy}: elapsed block time cannot hold new work`, () => {
     const result = runScheduler([task("work", 60)], [interval("block")],
@@ -197,6 +226,27 @@ test("Atlas preview and Brain handoff reserve duplicate scheduled links once", (
   const result = proposeSchedule(items, now, "delta_cost_switch", { links, taskIds: ["new"] });
   assert.deepEqual(result.assignments, [{ taskId: "new", intervalId: "block" }]);
   assert.equal(firstFeasibleWorkBlock(items, links, 15, now), "block");
+});
+
+test("Brain handoff matches a per-block link scan across several occupied blocks", () => {
+  const items = [
+    workBlock("too-full", date("09:00"), date("09:30")),
+    workBlock("exact-fit", date("10:00"), "2026-09-24T10:32:00.000Z"),
+    workBlock("later", date("11:00"), date("12:00")),
+    scheduledTask("active-a", 20), scheduledTask("active-b", 10),
+    item({ ...scheduledTask("released", 25), taskStatus: "done" }),
+    item({ ...scheduledTask("appointment", 20), taskFixedStartsAt: date("11:00"), taskFixedEndsAt: date("11:20") })
+  ];
+  const links = [
+    link("a", "active-a", "too-full"), link("a-duplicate", "active-a", "too-full"),
+    link("b", "active-b", "exact-fit"), link("released-link", "released", "exact-fit"),
+    link("appointment-link", "appointment", "later"), link("unknown", "missing-task", "later")
+  ];
+  for (const input of [items, [...items].reverse()]) {
+    const indexedResult = firstFeasibleWorkBlock(input, links, 15, now);
+    assert.equal(indexedResult, directFirstFeasibleReference(input, links, 15, now));
+    assert.equal(indexedResult, "exact-fit");
+  }
 });
 
 test("Brain handoff does not reserve a linked appointment twice", () => {

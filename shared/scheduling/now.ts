@@ -72,6 +72,62 @@ function todaysIntervals(intervals: PreparedInterval[], now: Date): Item[] {
     .map(({ item }) => item);
 }
 
+function selectLiveAppointments(active: Item[], now: Date): Item[] {
+  return active
+    .map((item, index) => ({
+      item,
+      index,
+      start: parseTime(item.taskFixedStartsAt),
+      end: parseTime(item.taskFixedEndsAt)
+    }))
+    .filter(({ start, end }) =>
+      start !== null && end !== null && now.getTime() >= start.getTime() && now.getTime() < end.getTime()
+    )
+    .sort((a, b) => a.end!.getTime() - b.end!.getTime() || a.index - b.index)
+    .map(({ item }) => item);
+}
+
+function selectCommittedTasks(
+  preparedIntervals: PreparedInterval[],
+  links: ItemLink[],
+  byId: Map<string, Item>,
+  now: Date
+): { current: Item[]; currentTasks: Item[]; todayTasks: Item[]; seenToday: Set<string> } {
+  const scheduledInByInterval = new Map<string, string[]>();
+  for (const link of links) {
+    if (link.kind !== "scheduled_in") continue;
+    const taskIds = scheduledInByInterval.get(link.toId);
+    if (taskIds) taskIds.push(link.fromId);
+    else scheduledInByInterval.set(link.toId, [link.fromId]);
+  }
+  const tasksIn = (intervalId: string) => scheduledInByInterval.get(intervalId) ?? [];
+  const current = currentIntervals(preparedIntervals, now);
+  const currentTaskIds = new Set<string>();
+  const currentTasks = current
+    .flatMap((interval) => tasksIn(interval.id))
+    .map((id) => byId.get(id))
+    .filter((item): item is Item => {
+      if (!item || !isActiveTask(item) || currentTaskIds.has(item.id)) {
+        return false;
+      }
+      currentTaskIds.add(item.id);
+      return true;
+    });
+
+  const seenToday = new Set<string>();
+  const todayTasks: Item[] = [];
+  for (const interval of todaysIntervals(preparedIntervals, now)) {
+    for (const taskId of tasksIn(interval.id)) {
+      if (seenToday.has(taskId)) continue;
+      const item = byId.get(taskId);
+      if (!item || !isActiveTask(item)) continue;
+      seenToday.add(taskId);
+      todayTasks.push(item);
+    }
+  }
+  return { current, currentTasks, todayTasks, seenToday };
+}
+
 export function buildNowFocus(items: Item[], links: ItemLink[], now: Date): NowFocus {
   const config = mergeSchedulerConfig(now);
   const resolveScheduleInput = createScheduleInputResolver(items);
@@ -96,18 +152,7 @@ export function buildNowFocus(items: Item[], links: ItemLink[], now: Date): NowF
     return motivation;
   };
 
-  const liveAppointments = active
-    .map((item, index) => ({
-      item,
-      index,
-      start: parseTime(item.taskFixedStartsAt),
-      end: parseTime(item.taskFixedEndsAt)
-    }))
-    .filter(({ start, end }) =>
-      start !== null && end !== null && now.getTime() >= start.getTime() && now.getTime() < end.getTime()
-    )
-    .sort((a, b) => a.end!.getTime() - b.end!.getTime() || a.index - b.index)
-    .map(({ item }) => item);
+  const liveAppointments = selectLiveAppointments(active, now);
 
   if (liveAppointments[0]) {
     return {
@@ -117,28 +162,9 @@ export function buildNowFocus(items: Item[], links: ItemLink[], now: Date): NowF
     };
   }
 
-  const scheduledInByInterval = new Map<string, string[]>();
-  for (const link of links) {
-    if (link.kind !== "scheduled_in") continue;
-    const taskIds = scheduledInByInterval.get(link.toId);
-    if (taskIds) taskIds.push(link.fromId);
-    else scheduledInByInterval.set(link.toId, [link.fromId]);
-  }
-  const tasksIn = (intervalId: string) => scheduledInByInterval.get(intervalId) ?? [];
-
   const preparedIntervals = prepareIntervals(items);
-  const current = currentIntervals(preparedIntervals, now);
-  const currentTaskIds = new Set<string>();
-  const currentTasks = current
-    .flatMap((interval) => tasksIn(interval.id))
-    .map((id) => byId.get(id))
-    .filter((item): item is Item => {
-      if (!item || !isActiveTask(item) || currentTaskIds.has(item.id)) {
-        return false;
-      }
-      currentTaskIds.add(item.id);
-      return true;
-    });
+  const { current, currentTasks, todayTasks, seenToday: seen } =
+    selectCommittedTasks(preparedIntervals, links, byId, now);
 
   if (currentTasks.length > 0) {
     const [first, ...rest] = currentTasks;
@@ -148,22 +174,6 @@ export function buildNowFocus(items: Item[], links: ItemLink[], now: Date): NowF
       committed: rest.map((item) => ({ item, reason: "Also in this interval" })),
       suggestion: null
     };
-  }
-
-  const seen = new Set<string>();
-  const todayTasks: Item[] = [];
-  for (const interval of todaysIntervals(preparedIntervals, now)) {
-    for (const taskId of tasksIn(interval.id)) {
-      if (seen.has(taskId)) {
-        continue;
-      }
-      const item = byId.get(taskId);
-      if (!item || !isActiveTask(item)) {
-        continue;
-      }
-      seen.add(taskId);
-      todayTasks.push(item);
-    }
   }
 
   const scheduled = scheduledTaskIds(links);

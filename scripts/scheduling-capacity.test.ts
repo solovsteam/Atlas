@@ -394,6 +394,88 @@ function interval(id: string, start = date("09:00"), end = date("12:00")): Inter
 }
 
 for (const strategy of ["earliest_fit", "delta_cost", "delta_cost_switch"] as const) {
+  test(`${strategy}: seeded minute-grid schedules respect independent capacity and deadline counts`, () => {
+    let seed = 0x8be0722a;
+    const integer = (limit: number) => {
+      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+      return Math.floor(seed / 4294967296 * limit);
+    };
+    const at = (minute: number) => new Date(now.getTime() + minute * 60_000).toISOString();
+    let assignedCount = 0;
+    let deadlineCount = 0;
+    let exhaustedCount = 0;
+    let unionSavingsCount = 0;
+
+    for (let trial = 0; trial < 200; trial += 1) {
+      const config = mergeSchedulerConfig(now, {
+        strategy, horizonDays: 1 / 24,
+        durationBuffer: [1, 1.25, 1.5, 2][integer(4)]!,
+        defaultDurationMinutes: 3 + integer(6)
+      });
+      const blocks = [-10, 15, 45, 60].map((start, index) =>
+        interval(`block-${index}`, at(start), at(start + 15 + integer(16))));
+      // Always overlapping; further spans cross now, the horizon, and block edges.
+      const spans = [[3, 8], [5, 11], [-12, integer(5)], [55, 65 + integer(6)],
+        [integer(55), 60 + integer(10)]];
+      const appointments = spans.map(([start, end], index) =>
+        task(`fixed-${index}`, 5, at(start), at(end)));
+      const candidates = Array.from({ length: 12 }, (_, index) => ({
+        ...task(`task-${index}`, 3 + integer(10)),
+        durationMinutes: index === 0 ? null : index === 1 ? 0 : 3 + integer(10),
+        dueAt: index % 2 === 0 ? at(10 + integer(61)) : null,
+        importance: 1 + integer(10),
+        tags: [index % 2 === 0 ? "work" : "home"]
+      }));
+      const reservations = new Map(blocks.map(({ id }) => [id, 1 + integer(20)]));
+      const result = runScheduler([...appointments, ...candidates], blocks, config, reservations);
+      const context = `${strategy}, seed 0x8be0722a, trial ${trial}`;
+      const assignedIds = result.assignments.map(({ taskId }) => taskId);
+      assert.equal(new Set(assignedIds).size, assignedIds.length, `${context}: unique tasks`);
+
+      for (const block of blocks) {
+        // Count half-open minute cells, not scheduler range/union helpers.
+        let available = 0;
+        let occupied = 0;
+        let summedOccupancy = 0;
+        for (let minute = 0; minute < 60; minute += 1) {
+          const instant = now.getTime() + minute * 60_000;
+          if (instant < Date.parse(block.startsAt) || instant >= Date.parse(block.endsAt)) continue;
+          available += 1;
+          const covering = spans.filter(([start, end]) => minute >= start && minute < end).length;
+          occupied += covering > 0 ? 1 : 0;
+          summedOccupancy += covering;
+        }
+        unionSavingsCount += summedOccupancy > occupied ? 1 : 0;
+        const usable = Math.max(0, available - occupied - reservations.get(block.id)!);
+        exhaustedCount += usable === 0 ? 1 : 0;
+        let assignedMinutes = 0;
+        for (const assignment of result.assignments.filter(({ intervalId }) => intervalId === block.id)) {
+          const candidate = candidates.find(({ id }) => id === assignment.taskId);
+          assert.ok(candidate, `${context}: only candidate tasks assigned`);
+          // Independently resolve fallback duration and round each task's buffer.
+          const duration = candidate.durationMinutes != null && candidate.durationMinutes > 0
+            ? candidate.durationMinutes : config.defaultDurationMinutes;
+          assignedMinutes += Math.max(1, Math.ceil(duration * config.durationBuffer));
+          assignedCount += 1;
+          if (candidate.dueAt) {
+            deadlineCount += 1;
+            // Assignments name whole intervals; their end must be by due.
+            assert.ok(Date.parse(block.endsAt) <= Date.parse(candidate.dueAt), `${context}: deadline`);
+          }
+        }
+        assert.ok(assignedMinutes <= usable, `${context}, ${block.id}: ${assignedMinutes} <= ${usable}`);
+      }
+      assert.ok(result.assignments.every(({ intervalId }) => blocks.some(({ id }) => id === intervalId)),
+        `${context}: known intervals`);
+    }
+    assert.ok(assignedCount > 0, "generated cases exercise actual assignments");
+    assert.ok(deadlineCount > 0, "generated cases exercise assigned deadlines");
+    assert.ok(exhaustedCount > 0, "generated cases exercise zero usable capacity");
+    assert.ok(unionSavingsCount > 0, "generated cases exercise overlapping occupancy");
+  });
+}
+
+for (const strategy of ["earliest_fit", "delta_cost", "delta_cost_switch"] as const) {
   test(`${strategy}: deadline boundaries remain hard filters with exact capacity and reservations`, () => {
     const config = {
       now: new Date(date("09:15")), horizonDays: 21, gamma: 1, durationBuffer: 1.25,

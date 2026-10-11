@@ -14,7 +14,7 @@ import { buildReview } from "../shared/review";
 import { buildNowFocus } from "../shared/scheduling/now";
 import { calendarIntervalFromItem, isArchivedSlot } from "../shared/schedule";
 import { proposeSchedule } from "../src/services/scheduling";
-import { compareItems, sortItemsByRelevance, type RelevanceContext } from "../shared/relevance";
+import { buildInboxEntries, collectTags, compareItems, isArchivedTask, isLibraryItem, isParkedTask, searchItems, sortItemsByRelevance, type RelevanceContext } from "../shared/relevance";
 import { calculateSchedulerMetrics } from "../shared/scheduling/metrics";
 import { intervalRange } from "../shared/scheduling/constraints";
 
@@ -134,6 +134,160 @@ test("bounded exhaustive oracle enumerates tiny plans and compares heuristics to
 
 const date = (hour: string) => `2026-09-24T${hour}:00.000Z`;
 const now = new Date(date("08:00"));
+
+// Ordinary relevance regressions: reuse the full Item helper below.
+for (const fixture of [
+  {
+    name: "active tag match precedes status boost and all lower signals",
+    context: { activeTags: ["focus"], activeStatusBoosts: ["active"] },
+    first: { isTask: true, taskStatus: "done", tags: ["focus"], manualRelevance: -10 },
+    second: { isTask: true, taskStatus: "active", manualRelevance: 100, updatedAt: date("12:00") }
+  },
+  {
+    name: "enabled status boost precedes active tasks and all lower signals",
+    context: { activeTags: [], activeStatusBoosts: ["done"] },
+    first: { isTask: true, taskStatus: "done", manualRelevance: -10 },
+    second: { isTask: true, taskStatus: "active", manualRelevance: 100, updatedAt: date("12:00") }
+  },
+  {
+    name: "active tasks precede notes despite lower relevance and older updates",
+    context: { activeTags: [], activeStatusBoosts: [] },
+    first: { isTask: true, taskStatus: "active", manualRelevance: -10 },
+    second: { isTask: false, manualRelevance: 100, updatedAt: date("12:00") }
+  },
+  {
+    name: "notes precede inactive tasks despite lower relevance and older updates",
+    context: { activeTags: [], activeStatusBoosts: [] },
+    first: { isTask: false, manualRelevance: -10 },
+    second: { isTask: true, taskStatus: "later", manualRelevance: 100, updatedAt: date("12:00") }
+  },
+  {
+    name: "higher manual relevance precedes newer updates",
+    context: { activeTags: [], activeStatusBoosts: [] },
+    first: { manualRelevance: 6 },
+    second: { manualRelevance: 5, updatedAt: date("12:00") }
+  },
+  {
+    name: "newer updatedAt breaks otherwise equal ranks",
+    context: { activeTags: [], activeStatusBoosts: [] },
+    first: { updatedAt: date("12:00") },
+    second: { updatedAt: date("09:00") }
+  }
+] satisfies { name: string; context: Pick<RelevanceContext, "activeTags" | "activeStatusBoosts">; first: Partial<Item>; second: Partial<Item> }[]) {
+  test(`relevance precedence: ${fixture.name}`, () => {
+    const first = item({ ...fixture.first, id: "first" });
+    const second = item({ ...fixture.second, id: "second" });
+    const context = { now, ...fixture.context };
+    assert.ok(compareItems(first, second, context) < 0);
+    assert.deepEqual(sortItemsByRelevance([second, first], context), [first, second]);
+  });
+}
+
+test("relevance sort and inbox agree with a stable comparator sort on 500 seeded random lists", () => {
+  let seed = 0x3e36aa94;
+  const random = () => {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    return seed / 4294967296;
+  };
+  const pick = <T,>(values: readonly T[]): T => values[Math.floor(random() * values.length)]!;
+  const taskStatuses = ["active", "later", "done", "cancelled"] as const;
+  const statuses = [...taskStatuses, null];
+  const tags = ["focus", "home", "work", ""];
+  const contextKinds = new Set<string>();
+  for (let trial = 0; trial < 500; trial += 1) {
+    const context: RelevanceContext = {
+      now,
+      activeTags: random() < 0.5 ? [] : [pick(tags), pick(tags)],
+      activeStatusBoosts: random() < 0.5 ? [] : [pick(taskStatuses), pick(taskStatuses)]
+    };
+    contextKinds.add(`${context.activeTags.length > 0}/${context.activeStatusBoosts.length > 0}`);
+    const items = Array.from({ length: Math.floor(random() * 13) }, (_, index) => item({
+      id: `${trial}-${index}`, isTask: random() < 0.5, taskStatus: pick(statuses),
+      tags: Array.from({ length: Math.floor(random() * 4) }, () => pick(tags)),
+      manualRelevance: pick([-5, 0, 1, 5, 10]),
+      updatedAt: pick([date("08:00"), date("12:00"), "2026-09-24T10:00:00+02:00", "2026-09-23T23:00:00-05:00"])
+    }));
+    const snapshot = structuredClone(items);
+    // Native Array.sort is stable; this independently exercises compareItems
+    // rather than the decorated sort's cached signal/membership path.
+    const expected = [...items].sort((a, b) => compareItems(a, b, context));
+    const actual = sortItemsByRelevance(items, context);
+    assert.deepEqual(actual, expected, `seed 0x3e36aa94, trial ${trial}`);
+    assert.notEqual(actual, items, `trial ${trial}: new array even for empty inputs`);
+    assert.deepEqual(buildInboxEntries(items, context), expected, `trial ${trial}: inbox`);
+    assert.deepEqual(items, snapshot, `trial ${trial}: no mutation`);
+    assert.ok(actual.every((entry, index) => entry === expected[index]), "original item identities");
+
+    const comparisons = items.map((a) => items.map((b) => compareItems(a, b, context)));
+    for (let a = 0; a < items.length; a += 1) {
+      for (let b = 0; b < items.length; b += 1) {
+        assert.equal(Math.sign(comparisons[a][b]) + Math.sign(comparisons[b][a]), 0,
+          `trial ${trial}: antisymmetry ${a}/${b}`);
+        for (let c = 0; c < items.length; c += 1) {
+          if (comparisons[a][b] <= 0 && comparisons[b][c] <= 0) {
+            assert.ok(comparisons[a][c] <= 0, `trial ${trial}: transitivity ${a}/${b}/${c}`);
+          }
+        }
+      }
+    }
+  }
+  assert.equal(contextKinds.size, 4, "seed covers empty/non-empty tags and boosts in all combinations");
+});
+
+test("relevance full ties retain input order without using IDs as a tiebreaker", () => {
+  const items = ["z", "a", "m"].map((id) => item({ id }));
+  const context: RelevanceContext = { now, activeTags: [], activeStatusBoosts: [] };
+  assert.equal(compareItems(items[0], items[1], context), 0);
+  assert.deepEqual(sortItemsByRelevance(items, context), items);
+  assert.deepEqual(sortItemsByRelevance([...items].reverse(), context), [...items].reverse());
+});
+
+test("collectTags de-duplicates, drops empty tags, and sorts", () => {
+  assert.deepEqual(collectTags([
+    item({ tags: ["z", "a", "", "a"] }), item({ tags: ["m", "z", ""] }), item({ tags: [] })
+  ]), ["a", "m", "z"]);
+  assert.deepEqual(collectTags([]), []);
+});
+
+test("archive, parked, and library predicates cover every task status and notes", () => {
+  for (const taskStatus of ["active", "later", "done", "cancelled", null] as const) {
+    for (const isTask of [true, false]) {
+      const entry = item({ isTask, taskStatus });
+      const label = `${isTask ? "task" : "note"}/${taskStatus}`;
+      const archived = isTask && (taskStatus === "done" || taskStatus === "cancelled");
+      assert.equal(isArchivedTask(entry), archived, label);
+      assert.equal(isParkedTask(entry), isTask && taskStatus === "later", label);
+      assert.equal(isLibraryItem(entry), !archived, label);
+    }
+  }
+});
+
+test("search trims and matches title or body case-insensitively, newest update first", () => {
+  const title = item({ id: "title", title: "A NEEDLE here", updatedAt: date("09:00") });
+  const body = item({ id: "body", title: "Other", body: "A Needle in the body", updatedAt: date("12:00") });
+  const nonMatch = item({ id: "non-match", tags: ["needle"] });
+  const items = [title, nonMatch, body];
+  const snapshot = structuredClone(items);
+  assert.deepEqual(searchItems(items, "  nEeDlE \n"), [body, title]);
+  assert.deepEqual(searchItems(items, "absent"), []);
+  assert.deepEqual(searchItems(items, ""), []);
+  assert.deepEqual(searchItems(items, " \t\n "), []);
+  assert.deepEqual(items, snapshot);
+});
+
+for (const mode of ["relevance", "search"] as const) {
+  test(`current behavior: ${mode} compares updatedAt strings rather than UTC-offset instants`, () => {
+    const earlier = item({ id: "earlier-instant", title: "match", updatedAt: "2026-09-24T10:00:00+02:00" });
+    const later = item({ id: "later-instant", title: "match", updatedAt: "2026-09-24T08:30:00Z" });
+    assert.ok(Date.parse(earlier.updatedAt) < Date.parse(later.updatedAt));
+    const context: RelevanceContext = { now, activeTags: [], activeStatusBoosts: [] };
+    assert.ok(compareItems(earlier, later, context) < 0);
+    const result = mode === "relevance"
+      ? sortItemsByRelevance([later, earlier], context)
+      : searchItems([later, earlier], "match");
+    assert.deepEqual(result, [earlier, later]);
+  });
+}
 
 test("relevance sort matches direct comparator ordering without changing items or input", () => {
   const items = [

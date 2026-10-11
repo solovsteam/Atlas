@@ -221,6 +221,26 @@ test("Brain handoff orders work blocks by actual time across UTC offsets", () =>
   assert.equal(firstFeasibleWorkBlock([later, earlier], [], 15, new Date(date("07:00"))), "earlier");
 });
 
+test("scheduler sorts equivalent offset starts chronologically and preserves ties in its full result", () => {
+  const later = interval("later", "2026-09-24T09:00:00Z", "2026-09-24T10:00:00Z");
+  const offsetFirst = interval("offset-first", "2026-09-24T10:00:00+02:00", "2026-09-24T11:00:00+02:00");
+  const sameInstant = interval("same-instant", "2026-09-24T08:00:00Z", "2026-09-24T08:30:00Z");
+  const allDayTie = { ...interval("all-day-tie", "2026-09-24T08:00:00Z", "2026-09-24T09:00:00Z"), kind: "allDay" as const };
+  const result = runScheduler([task("work", 45)], [later, offsetFirst, sameInstant, allDayTie],
+    mergeSchedulerConfig(now, { strategy: "earliest_fit" }));
+
+  assert.deepEqual(result, {
+    assignments: [{ taskId: "work", intervalId: "offset-first" }],
+    unassigned: [],
+    metrics: {
+      totalPostponement: postponementCost(task("work", 45), new Date("2026-09-24T10:00:00+02:00"), mergeSchedulerConfig(now, { strategy: "earliest_fit" })),
+      contextSwitches: 0,
+      assignedCount: 1,
+      unassignedCount: 0
+    }
+  });
+});
+
 test("all-day capacity uses the actual elapsed time across daylight-saving transitions", () => {
   const spring = { ...interval("spring", "2026-03-29T00:00:00+01:00", "2026-03-30T00:00:00+02:00"), kind: "allDay" };
   const autumn = { ...interval("autumn", "2026-10-25T00:00:00+02:00", "2026-10-26T00:00:00+01:00"), kind: "allDay" };

@@ -45,11 +45,9 @@ function placementBenefit(
 function openIntervals(intervals: IntervalInput[], config: SchedulerConfig): IntervalInput[] {
   return intervals
     .filter((interval) => intervalIsOpen(interval, config))
-    .sort((a, b) => {
-      const aStart = intervalRange(a)?.start.getTime() ?? 0;
-      const bStart = intervalRange(b)?.start.getTime() ?? 0;
-      return aStart - bStart;
-    });
+    .map((interval, index) => ({ interval, index, start: intervalRange(interval)?.start.getTime() ?? 0 }))
+    .sort((a, b) => a.start - b.start || a.index - b.index)
+    .map(({ interval }) => interval);
 }
 
 function remainingFor(

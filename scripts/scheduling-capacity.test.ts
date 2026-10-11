@@ -7,7 +7,7 @@ import { runScheduler, mergeSchedulerConfig, type IntervalInput, type TaskSchedu
 import { appointmentOverlapMinutes, constraintMode, intervalCapacityMinutes, intervalIsOpen, taskFitsInterval, resolvedDuration } from "../shared/scheduling/constraints";
 import { eligibleTasks } from "../shared/scheduling/eligible";
 import { nowMotivation, postponementCost, waitHorizon } from "../shared/scheduling/deferral";
-import { bufferedMinutes } from "../shared/scheduling/math";
+import { bufferedMinutes, valueScore } from "../shared/scheduling/math";
 import { placementBenefit, taskBenefitConstants } from "../shared/scheduling/scoring";
 import { createScheduleInputResolver, itemToScheduleInput, itemsToScheduleInputs } from "../shared/scheduling/resolve";
 import { buildReview } from "../shared/review";
@@ -292,6 +292,42 @@ test("earliest fit matches the direct motivation comparator across varied task i
     const intervals = [interval("short-block", date("09:00"), date("10:00")), interval("long-block", date("11:00"), date("13:00"))];
     const config = mergeSchedulerConfig(now, { strategy: "earliest_fit" });
     assert.deepEqual(runScheduler(tasks, intervals, config), directComparatorReference(tasks, intervals, config));
+  }
+});
+
+test("slider importance 2–10 matches equivalent raw values across full scheduler and Now results", () => {
+  const strategies = ["earliest_fit", "delta_cost", "delta_cost_switch"] as const;
+  const deadlineAt = date("10:00");
+  const baseTasks = [
+    { ...task("deadline", 45), importance: 2, dueAt: deadlineAt },
+    { ...task("flexible", 45), importance: 9 },
+    { ...task("leftover", 90), importance: 4 }
+  ];
+  const blocks = [interval("morning", date("09:00"), date("10:00"))];
+
+  for (let slider = 2; slider <= 10; slider += 1) {
+    assert.equal(valueScore(slider), slider * 10, `slider ${slider} maps to ${slider * 10}`);
+    assert.equal(valueScore(slider * 10), slider * 10, `raw ${slider * 10} remains unchanged`);
+
+    const sliderTasks = baseTasks.map((entry) => entry.id === "deadline" ? { ...entry, importance: slider } : entry);
+    const rawTasks = sliderTasks.map((entry) => ({ ...entry, importance: entry.importance * 10 }));
+    for (const strategy of strategies) {
+      const config = mergeSchedulerConfig(now, { strategy });
+      assert.notEqual(
+        nowMotivation(sliderTasks[0]!, config),
+        nowMotivation(sliderTasks[1]!, config),
+        `${strategy}, slider ${slider}: deadline and flexible scores are distinct`
+      );
+      assert.deepEqual(
+        sliderTasks.map((entry) => nowMotivation(entry, config)),
+        rawTasks.map((entry) => nowMotivation(entry, config)),
+        `${strategy}, slider ${slider}: Now motivation`
+      );
+      const sliderResult = runScheduler(sliderTasks, blocks, config);
+      assert.equal(sliderResult.assignments.length, 1, `${strategy}, slider ${slider}: assignment fixture`);
+      assert.equal(sliderResult.unassigned.length, 2, `${strategy}, slider ${slider}: leftover fixture`);
+      assert.deepEqual(sliderResult, runScheduler(rawTasks, blocks, config), `${strategy}, slider ${slider}: full result`);
+    }
   }
 });
 

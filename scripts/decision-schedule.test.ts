@@ -855,6 +855,66 @@ test("calendar event selection includes scheduled intervals and active appointme
   assert.equal(events[1].description, "Atlas appointment");
 });
 
+for (const kind of ["fixed", "allDay", "appointment"] as const) {
+  test(`calendar ${kind} events overlap a half-open local-day horizon and retain input order`, () => {
+    const timestamp = new Date(2026, 8, 24, 12);
+    const dayCount = 2;
+    const start = new Date(2026, 8, 24).getTime();
+    const end = new Date(2026, 8, 26).getTime();
+    const makeEvent = (id: string, from: number, to: number): Item => kind === "appointment"
+      ? { ...task(id, 30), taskFixedStartsAt: new Date(from).toISOString(), taskFixedEndsAt: new Date(to).toISOString() }
+      : { ...block(id, new Date(from).toISOString(), new Date(to).toISOString()), intervalKind: kind };
+    // Deliberately put the latest event first; selection is not chronological.
+    const fixtures: [string, number, number, boolean][] = [
+      ["ends-at-range-end", end - 1, end, true],
+      ["ends-at-range-start", start - 1, start, false],
+      ["spans-horizon", new Date(2026, 8, 23).getTime(), new Date(2026, 8, 27).getTime(), true],
+      ["starts-at-range-end", end, end + 1, false],
+      ["starts-at-range-start", start, start + 1, true],
+      ["ends-just-inside", start - 1, start + 1, true],
+      ["starts-just-inside", end - 1, end + 1, true],
+      ["before-horizon", start - 2, start - 1, false],
+      ["after-horizon", end + 1, end + 2, false]
+    ];
+    const items = fixtures.map(([id, from, to]) => makeEvent(id, from, to));
+    if (kind !== "appointment") {
+      items.splice(2, 0, { ...makeEvent("archived-span", start - 1, end + 1), intervalStatus: "archived" });
+    }
+    const prefix = kind === "appointment" ? "atlas-appt-" : "atlas-interval-";
+    const expected = fixtures.filter(([, , , included]) => included).map(([id, from, to]) => ({
+      uid: `${prefix}${id}@atlas`, start: new Date(from), end: new Date(to)
+    }));
+    for (const reversed of [false, true]) {
+      const events = selectCalendarEvents(reversed ? [...items].reverse() : items, [], timestamp, dayCount);
+      assert.deepEqual(events.map(({ uid, start, end }) => ({ uid, start, end })), reversed ? [...expected].reverse() : expected);
+    }
+    // The horizon begins at midnight, not at now; overlapping events keep
+    // their full endpoints rather than being clipped to the export horizon.
+  });
+}
+
+test("calendar selection compares offset timestamps by instant at both horizon boundaries", () => {
+  const timestamp = new Date(2026, 8, 24, 12);
+  const dayCount = 2;
+  const start = new Date(2026, 8, 24).getTime();
+  const end = new Date(2026, 8, 26).getTime();
+  const offsetTime = (instant: number, hours: number) =>
+    new Date(instant + hours * 3_600_000).toISOString().replace("Z", hours === 2 ? "+02:00" : "-05:00");
+  const items = [
+    block("offset-late", offsetTime(end - 1, 2), offsetTime(end + 1, -5)),
+    { ...task("offset-ends-at-start", 30), taskFixedStartsAt: offsetTime(start - 1, 2), taskFixedEndsAt: offsetTime(start, -5) },
+    { ...task("offset-early", 30), taskFixedStartsAt: offsetTime(start, 2), taskFixedEndsAt: offsetTime(start + 1, -5) },
+    block("offset-starts-at-end", offsetTime(end, -5), offsetTime(end + 1, 2)),
+    { ...block("offset-archived", offsetTime(start - 1, 2), offsetTime(end + 1, -5)), intervalStatus: "archived" },
+    block("offset-ends-at-start", offsetTime(start - 1, 2), offsetTime(start, -5)),
+    { ...task("offset-starts-at-end", 30), taskFixedStartsAt: offsetTime(end, -5), taskFixedEndsAt: offsetTime(end + 1, 2) }
+  ];
+  assert.deepEqual(selectCalendarEvents(items, [], timestamp, dayCount).map(({ uid, start, end }) => ({ uid, start, end })), [
+    { uid: "atlas-interval-offset-late@atlas", start: new Date(end - 1), end: new Date(end + 1) },
+    { uid: "atlas-appt-offset-early@atlas", start: new Date(start), end: new Date(start + 1) }
+  ]);
+});
+
 function freezeCalendarInput(value: unknown): void {
   if (value !== null && typeof value === "object") {
     Object.values(value).forEach(freezeCalendarInput);

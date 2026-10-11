@@ -80,6 +80,63 @@ test("Now prepares intervals once while preserving current half-open boundaries 
   assert.equal(atEnd.primary?.reason, "Committed today");
 });
 
+test("Now matches the link-scan result for overlapping intervals, orphan and duplicate links", () => {
+  const currentA = block("overlap-a", "2026-09-24T07:30:00Z", "2026-09-24T09:00:00Z");
+  const currentB = block("overlap-b", "2026-09-24T07:00:00Z", "2026-09-24T09:00:00Z");
+  const active = task("linked", 30);
+  const inactive = { ...task("inactive", 30), taskStatus: "done" as const };
+  const links = [
+    { kind: "scheduled_in", fromId: active.id, toId: currentB.id },
+    { kind: "scheduled_in", fromId: "orphan", toId: currentA.id },
+    { kind: "context", fromId: "wrong-kind", toId: currentA.id },
+    { kind: "scheduled_in", fromId: active.id, toId: currentA.id },
+    { kind: "scheduled_in", fromId: inactive.id, toId: currentA.id },
+    { kind: "scheduled_in", fromId: active.id, toId: currentB.id }
+  ] as ItemLink[];
+  const items = [currentA, currentB, active, inactive];
+  const reference = items.flatMap((interval) => {
+    if (!interval.isInterval || interval.intervalStatus === "archived") return [];
+    const start = Date.parse(interval.intervalStartsAt!);
+    const end = Date.parse(interval.intervalEndsAt!);
+    return now.getTime() >= start && now.getTime() < end ? [interval] : [];
+  }).flatMap((interval) => links
+    .filter((link) => link.kind === "scheduled_in" && link.toId === interval.id)
+    .map((link) => items.find((item) => item.id === link.fromId))
+    .filter((item): item is Item => Boolean(item?.isTask && item.taskStatus === "active")));
+
+  const [first, ...rest] = reference;
+  assert.deepEqual(buildNowFocus(items, links, now), {
+    primary: { item: first!, reason: `In ${currentA.title}` },
+    committed: rest.map((item) => ({ item, reason: "Also in this interval" })),
+    suggestion: null
+  });
+});
+
+test("Now keeps appointment priority and today link deduplication", () => {
+  const futureBlock = block("later-today", "2026-09-24T10:00:00Z", "2026-09-24T11:00:00Z");
+  const committedTask = task("today-committed", 30);
+  const appointment = {
+    ...task("live-appointment", 30),
+    taskFixedStartsAt: "2026-09-24T07:45:00Z",
+    taskFixedEndsAt: "2026-09-24T08:30:00Z"
+  };
+  const links = [
+    { kind: "scheduled_in", fromId: committedTask.id, toId: futureBlock.id },
+    { kind: "scheduled_in", fromId: committedTask.id, toId: futureBlock.id }
+  ] as ItemLink[];
+
+  assert.deepEqual(buildNowFocus([futureBlock, committedTask, appointment], links, now), {
+    primary: { item: appointment, reason: "Fixed appointment now" },
+    committed: [],
+    suggestion: null
+  });
+  assert.deepEqual(buildNowFocus([futureBlock, committedTask], links, now), {
+    primary: { item: committedTask, reason: "Committed today" },
+    committed: [],
+    suggestion: null
+  });
+});
+
 test("Now preserves encounter order for equal motivation and exact suggestion metadata", () => {
   const firstTask = task("tie-first", 30);
   const secondTask = task("tie-second", 30);

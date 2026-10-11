@@ -1,6 +1,6 @@
 import type { Item } from "../item";
 import { isQuickDuration } from "../duration";
-import { scheduledTaskIds, tasksScheduledIn, type ItemLink } from "../links";
+import { scheduledTaskIds, type ItemLink } from "../links";
 import {
   calendarIntervalFromItem,
   endOfDay,
@@ -116,10 +116,19 @@ export function buildNowFocus(items: Item[], links: ItemLink[], now: Date): NowF
     };
   }
 
+  const scheduledInByInterval = new Map<string, string[]>();
+  for (const link of links) {
+    if (link.kind !== "scheduled_in") continue;
+    const taskIds = scheduledInByInterval.get(link.toId);
+    if (taskIds) taskIds.push(link.fromId);
+    else scheduledInByInterval.set(link.toId, [link.fromId]);
+  }
+  const tasksIn = (intervalId: string) => scheduledInByInterval.get(intervalId) ?? [];
+
   const preparedIntervals = prepareIntervals(items);
   const current = currentIntervals(preparedIntervals, now);
   const currentTasks = current
-    .flatMap((interval) => tasksScheduledIn(interval.id, links))
+    .flatMap((interval) => tasksIn(interval.id))
     .map((id) => byId.get(id))
     .filter((item): item is Item => item !== undefined && isActiveTask(item));
 
@@ -136,7 +145,7 @@ export function buildNowFocus(items: Item[], links: ItemLink[], now: Date): NowF
   const seen = new Set<string>();
   const todayTasks: Item[] = [];
   for (const interval of todaysIntervals(preparedIntervals, now)) {
-    for (const taskId of tasksScheduledIn(interval.id, links)) {
+    for (const taskId of tasksIn(interval.id)) {
       if (seen.has(taskId)) {
         continue;
       }

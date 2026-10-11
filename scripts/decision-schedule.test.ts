@@ -8,6 +8,7 @@ import type { Item } from "../shared/item";
 import { taskCountInInterval, type ItemLink } from "../shared/links";
 import { indexTaskCountsByInterval } from "../shared/intervalTaskCounts";
 import { byDueThenTitle } from "../shared/review";
+import { dueAtForPreset, isDueSameLocalDay, isDueThisWeek, isOverdue } from "../shared/due";
 import { nominalWorkWindow, workBlockForNow, workBlockOverlapsExisting } from "../shared/workBlocks";
 import type { ScheduleSlot } from "../shared/schedule";
 import {
@@ -84,6 +85,102 @@ test("locale parsing refactor preserves the frozen parser across a seeded corpus
 });
 
 const now = new Date("2026-09-24T08:00:00Z");
+
+test("due presets and membership use local midnight and Monday weeks, including DST and leap day", () => {
+  const originalTimezone = process.env.TZ;
+  try {
+    // Explicit civil boundaries with Berlin offsets; UTC repeats the same calendar dates as a control.
+    const cases = [
+      ["Monday", "2026-09-21", "2026-09-22", "2026-09-21", "2026-09-27", "2026-09-28", "+02:00", "+02:00", "+02:00", "+02:00"],
+      ["Sunday", "2026-09-27", "2026-09-28", "2026-09-21", "2026-09-27", "2026-09-28", "+02:00", "+02:00", "+02:00", "+02:00"],
+      ["leap day", "2024-02-29", "2024-03-01", "2024-02-26", "2024-03-03", "2024-03-04", "+01:00", "+01:00", "+01:00", "+01:00"],
+      ["spring DST", "2026-03-29", "2026-03-30", "2026-03-23", "2026-03-29", "2026-03-30", "+01:00", "+02:00", "+01:00", "+02:00"],
+      ["fall DST", "2026-10-25", "2026-10-26", "2026-10-19", "2026-10-25", "2026-10-26", "+02:00", "+01:00", "+02:00", "+01:00"]
+    ] as const;
+    for (const timezone of ["UTC", "Europe/Berlin"]) {
+      process.env.TZ = timezone;
+      for (const [label, day, nextDay, monday, sunday, nextMonday, dayOffset, endOffset, mondayOffset, nextMondayOffset] of cases) {
+        const offset = (berlin: string) => timezone === "UTC" ? "Z" : berlin;
+        const dayStart = new Date(`${day}T00:00:00${offset(dayOffset)}`).getTime();
+        const dayEnd = new Date(`${nextDay}T00:00:00${offset(endOffset)}`).getTime();
+        const weekStart = new Date(`${monday}T00:00:00${offset(mondayOffset)}`).getTime();
+        const weekEnd = new Date(`${nextMonday}T00:00:00${offset(nextMondayOffset)}`).getTime();
+        const todayDue = new Date(`${day}T23:59:59.000${offset(endOffset)}`).toISOString();
+        const weekDue = new Date(`${sunday}T23:59:59.000${offset(nextMondayOffset)}`).toISOString();
+        const context = `${timezone}: ${label}`;
+        const expectedDayHours = timezone === "UTC" ? 24 : label === "spring DST" ? 23 : label === "fall DST" ? 25 : 24;
+        assert.equal((dayEnd - dayStart) / 3_600_000, expectedDayHours, context);
+        assert.equal((weekEnd - weekStart) / 3_600_000, 144 + expectedDayHours, context);
+        for (const timestamp of [dayStart, dayStart + 1, dayEnd - 1]) {
+          const reference = new Date(timestamp);
+          assert.equal(dueAtForPreset(reference, "today"), todayDue, context);
+          assert.equal(reference.getTime(), timestamp, "today preset must not mutate now");
+          assert.equal(dueAtForPreset(reference, "week"), weekDue, context);
+          assert.equal(reference.getTime(), timestamp, "week preset must not mutate now");
+          for (const [boundary, predicate] of [
+            [[dayStart, dayEnd], isDueSameLocalDay],
+            [[weekStart, weekEnd], isDueThisWeek]
+          ] as const) {
+            const [start, end] = boundary;
+            for (const [due, expected] of [
+              [start - 1, false], [start, true], [start + 1, true],
+              [end - 1, true], [end, false], [end + 1, false]
+            ] as const) {
+              assert.equal(predicate(new Date(due).toISOString(), reference), expected, `${context}: ${predicate.name} @ ${due}`);
+              assert.equal(reference.getTime(), timestamp, "membership must not mutate now");
+            }
+          }
+        }
+        // Crossing midnight leaves today's due date; Sunday also leaves the current week.
+        const nextReference = new Date(dayEnd);
+        assert.equal(isDueSameLocalDay(todayDue, nextReference), false, context);
+        assert.equal(isDueThisWeek(weekDue, nextReference), day !== sunday, context);
+        assert.equal(nextReference.getTime(), dayEnd);
+      }
+    }
+  } finally {
+    if (originalTimezone === undefined) delete process.env.TZ;
+    else process.env.TZ = originalTimezone;
+  }
+});
+
+test("overdue compares exact instants and Berlin repeated hours remain in the same local day", () => {
+  const originalTimezone = process.env.TZ;
+  try {
+    for (const timezone of ["UTC", "Europe/Berlin"]) {
+      process.env.TZ = timezone;
+      for (const due of [
+        "2024-02-29T23:59:59.000Z", "2026-09-21T00:00:00Z", "2026-09-27T23:59:59.000Z",
+        "2026-03-29T01:00:00Z", "2026-10-25T02:30:00+02:00", "2026-10-25T02:30:00+01:00"
+      ]) {
+        const deadline = new Date(due).getTime();
+        for (const delta of [-1, 0, 1]) {
+          const reference = new Date(deadline + delta);
+          assert.equal(isOverdue(due, reference), delta > 0, `${timezone}: ${due} ${delta}ms`);
+          assert.equal(isOverdue(new Date(deadline).toISOString(), reference), delta > 0);
+          assert.equal(reference.getTime(), deadline + delta);
+        }
+      }
+      const reference = new Date("2026-10-25T02:30:00+01:00");
+      for (const absent of [null, undefined, "", "not-a-date"]) {
+        for (const predicate of [isOverdue, isDueSameLocalDay, isDueThisWeek]) {
+          assert.equal(predicate(absent, reference), false);
+          assert.equal(reference.toISOString(), "2026-10-25T01:30:00.000Z");
+        }
+      }
+    }
+    process.env.TZ = "Europe/Berlin";
+    const secondHour = new Date("2026-10-25T02:30:00+01:00");
+    const firstHour = "2026-10-25T02:30:00+02:00";
+    assert.equal(isDueSameLocalDay(firstHour, secondHour), true);
+    assert.equal(isDueThisWeek(firstHour, secondHour), true);
+    assert.equal(isOverdue(firstHour, secondHour), true);
+    assert.equal(secondHour.toISOString(), "2026-10-25T01:30:00.000Z");
+  } finally {
+    if (originalTimezone === undefined) delete process.env.TZ;
+    else process.env.TZ = originalTimezone;
+  }
+});
 
 test("interval task count index matches direct counts, including duplicate scheduled links", () => {
   const links = [

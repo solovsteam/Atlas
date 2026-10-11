@@ -37,13 +37,22 @@ export function itemToScheduleInput(item: Item, items: Item[]): TaskScheduleInpu
   return toScheduleInput(item, parent);
 }
 
-export function itemsToScheduleInputs(items: Item[]): TaskScheduleInput[] {
+/** Build a per-call resolver while preserving Array.find's first-match parent semantics. */
+export function createScheduleInputResolver(items: Item[]): (item: Item) => TaskScheduleInput {
   const firstItemById = new Map<string, Item>();
   for (const item of items) {
     if (!firstItemById.has(item.id)) firstItemById.set(item.id, item);
   }
 
+  return (item) => toScheduleInput(
+    item,
+    item.parentTaskId ? firstItemById.get(item.parentTaskId) : undefined
+  );
+}
+
+export function itemsToScheduleInputs(items: Item[]): TaskScheduleInput[] {
+  const resolve = createScheduleInputResolver(items);
   return items
     .filter((item) => item.isTask && item.taskStatus === "active")
-    .map((item) => toScheduleInput(item, item.parentTaskId ? firstItemById.get(item.parentTaskId) : undefined));
+    .map(resolve);
 }

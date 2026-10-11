@@ -3,7 +3,7 @@ import { isOverdue } from "./due";
 import type { Item } from "./item";
 import { scheduledTaskIds, type ItemLink } from "./links";
 import { constraintMode, hasMissingInfo } from "./scheduling/constraints";
-import { itemToScheduleInput } from "./scheduling/resolve";
+import { createScheduleInputResolver } from "./scheduling/resolve";
 
 export type ReviewBuckets = {
   overdue: Item[];
@@ -28,6 +28,7 @@ export function byDueThenTitle(a: Item, b: Item): number {
 /** GTD-style weekly look: hard dates that slipped, next actions not on the calendar, someday/maybe. */
 export function buildReview(items: Item[], links: ItemLink[], now: Date): ReviewBuckets {
   const scheduled = scheduledTaskIds(links);
+  const resolveScheduleInput = createScheduleInputResolver(items);
   const overdue: Item[] = [];
   const unscheduled: Item[] = [];
   const later: Item[] = [];
@@ -47,7 +48,7 @@ export function buildReview(items: Item[], links: ItemLink[], now: Date): Review
       overdue.push(item);
       continue;
     }
-    const input = itemToScheduleInput(item, items);
+    const input = resolveScheduleInput(item);
     if (constraintMode(input) === "fixed" || hasMissingInfo(input) || isQuickDuration(item.expectedDurationMinutes)) {
       continue;
     }

@@ -9,7 +9,9 @@ import { eligibleTasks } from "../shared/scheduling/eligible";
 import { nowMotivation, postponementCost, waitHorizon } from "../shared/scheduling/deferral";
 import { bufferedMinutes } from "../shared/scheduling/math";
 import { placementBenefit, taskBenefitConstants } from "../shared/scheduling/scoring";
-import { itemToScheduleInput, itemsToScheduleInputs } from "../shared/scheduling/resolve";
+import { createScheduleInputResolver, itemToScheduleInput, itemsToScheduleInputs } from "../shared/scheduling/resolve";
+import { buildReview } from "../shared/review";
+import { buildNowFocus } from "../shared/scheduling/now";
 import { calendarIntervalFromItem, isArchivedSlot } from "../shared/schedule";
 import { proposeSchedule } from "../src/services/scheduling";
 import { compareItems, sortItemsByRelevance, type RelevanceContext } from "../shared/relevance";
@@ -239,6 +241,38 @@ test("schedule input indexing preserves immediate parent semantics and item orde
     id: "orphan", title: "Item", createdAt: now.toISOString(), importance: 0, durationMinutes: null,
     dueAt: null, fixedStartsAt: null, fixedEndsAt: null, parentTaskId: "missing", tags: []
   });
+});
+
+test("per-call schedule resolver matches linear resolution for duplicate, missing, and self parents", () => {
+  const firstParent = item({ id: "parent", expectedDurationMinutes: 35, taskDueAt: "2026-09-25T10:00:00Z" });
+  const duplicateParent = item({ id: "parent", expectedDurationMinutes: 80, taskDueAt: "" });
+  const selfParent = item({ id: "self", isTask: true, parentTaskId: "self", expectedDurationMinutes: null });
+  const child = item({ id: "child", isTask: true, parentTaskId: "parent", expectedDurationMinutes: null });
+  const orphan = item({ id: "orphan", isTask: true, parentTaskId: "missing", expectedDurationMinutes: null });
+  const items = [firstParent, duplicateParent, selfParent, child, orphan];
+  const firstCall = createScheduleInputResolver(items);
+  const secondCall = createScheduleInputResolver([duplicateParent, firstParent, selfParent, child, orphan]);
+
+  for (const entry of items) {
+    assert.deepEqual(firstCall(entry), itemToScheduleInput(entry, items));
+  }
+  assert.equal(firstCall(child).durationMinutes, 35);
+  assert.equal(secondCall(child).durationMinutes, 80);
+  assert.equal(firstCall(selfParent).durationMinutes, null);
+  assert.equal(firstCall(orphan).durationMinutes, null);
+});
+
+test("review and now resolve parent inputs independently per invocation", () => {
+  const parent = item({ id: "parent", expectedDurationMinutes: 35, taskDueAt: "" });
+  const child = item({ id: "child", title: "Child", isTask: true, parentTaskId: "parent", expectedDurationMinutes: null });
+  const missing = item({ id: "missing-child", isTask: true, parentTaskId: "absent", expectedDurationMinutes: null });
+  const items = [child, parent, missing];
+  const review = buildReview(items, [], now);
+  assert.deepEqual(review.unscheduled.map(({ id }) => id), ["child", "missing-child"]);
+  assert.deepEqual(buildReview([parent, child, missing], [], now), review);
+
+  const firstNow = buildNowFocus(items, [], now);
+  assert.deepEqual(buildNowFocus([parent, child, missing], [], now), firstNow);
 });
 
 const workBlock = (id: string, start = date("09:00"), end = date("09:45")) => item({

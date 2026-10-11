@@ -12,7 +12,7 @@ import {
 import { constraintMode, hasMissingInfo } from "./constraints";
 import { nowMotivation } from "./deferral";
 import { parseTime } from "./math";
-import { itemToScheduleInput } from "./resolve";
+import { createScheduleInputResolver } from "./resolve";
 import { mergeSchedulerConfig } from "./types";
 
 export type NowEntry = {
@@ -74,14 +74,15 @@ function todaysIntervals(intervals: PreparedInterval[], now: Date): Item[] {
 
 export function buildNowFocus(items: Item[], links: ItemLink[], now: Date): NowFocus {
   const config = mergeSchedulerConfig(now);
+  const resolveScheduleInput = createScheduleInputResolver(items);
   const byId = new Map(items.map((item) => [item.id, item]));
   const active = items.filter(isActiveTask);
-  const resolvedInputs = new Map<Item, ReturnType<typeof itemToScheduleInput>>();
+  const resolvedInputs = new Map<Item, ReturnType<ReturnType<typeof createScheduleInputResolver>>>();
   const motivations = new Map<Item, number>();
   const scheduleInputFor = (item: Item) => {
     let input = resolvedInputs.get(item);
     if (!input) {
-      input = itemToScheduleInput(item, items);
+      input = resolveScheduleInput(item);
       resolvedInputs.set(item, input);
     }
     return input;

@@ -18,6 +18,25 @@ function icsEscape(value: string): string {
   return value.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\n/g, "\\n");
 }
 
+function foldContentLine(line: string): string {
+  const physicalLines: string[] = [];
+  const encoder = new TextEncoder();
+  let physicalLine = "";
+  let octets = 0;
+  for (const codePoint of line) {
+    const codePointOctets = encoder.encode(codePoint).length;
+    if (octets + codePointOctets > 75) {
+      physicalLines.push(physicalLine);
+      physicalLine = " ";
+      octets = 1;
+    }
+    physicalLine += codePoint;
+    octets += codePointOctets;
+  }
+  physicalLines.push(physicalLine);
+  return physicalLines.join("\r\n");
+}
+
 export type CalendarEvent = {
   uid: string;
   start: Date;
@@ -41,7 +60,7 @@ export function serializeVevent(event: CalendarEvent, timestamp: Date): string {
     `DESCRIPTION:${icsEscape(event.summary)}`,
     "END:VALARM",
     "END:VEVENT"
-  ].join("\r\n");
+  ].map(foldContentLine).join("\r\n");
 }
 
 /** OS calendars already interrupt people. This is how Atlas borrows that, without Atlas staying open. */

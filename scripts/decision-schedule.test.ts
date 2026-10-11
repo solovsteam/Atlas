@@ -282,3 +282,24 @@ test("VEVENT serialization escapes text and uses its supplied timestamp", () => 
   assert.match(serialized, /SUMMARY:A\\, B\\; C\\\\D/);
   assert.match(serialized, /DESCRIPTION:First\\nSecond/);
 });
+
+test("VEVENT serialization folds long UTF-8 lines and unfolds to the original content", () => {
+  const event = {
+    uid: "folding-event@atlas", start: now, end: new Date(now.getTime() + 60_000),
+    summary: `${"A".repeat(68)}😀${"e\u0301".repeat(24)}`,
+    description: `${"description ".repeat(12)}🙂${"x".repeat(90)}`
+  };
+  const serialized = serializeVevent(event, now);
+  const physicalLines = serialized.split("\r\n");
+  const unfoldedLines = serialized.replace(/\r\n /g, "").split("\r\n");
+
+  assert.ok(physicalLines.every((line) => new TextEncoder().encode(line).length <= 75));
+  assert.ok(physicalLines.some((line) => line.startsWith(" ")));
+  assert.deepEqual(unfoldedLines, [
+    "BEGIN:VEVENT", "UID:folding-event@atlas", "DTSTAMP:20260924T080000Z",
+    "DTSTART:20260924T080000Z", "DTEND:20260924T080100Z",
+    `SUMMARY:${event.summary}`, `DESCRIPTION:${event.description}`,
+    "BEGIN:VALARM", "TRIGGER:-PT10M", "ACTION:DISPLAY",
+    `DESCRIPTION:${event.summary}`, "END:VALARM", "END:VEVENT"
+  ]);
+});

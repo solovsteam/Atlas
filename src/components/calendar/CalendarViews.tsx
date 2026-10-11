@@ -20,14 +20,13 @@ import {
 function BoxCard({
   slot,
   links,
-  itemsById
+  itemTitles
 }: {
   slot: ScheduleSlot;
   links: ItemLink[];
-  itemsById: Map<string, Item>;
+  itemTitles: Map<string, string>;
 }) {
-  const titles = new Map([...itemsById.entries()].map(([id, item]) => [id, item.title]));
-  const label = boxDisplayLabel(slot, links, titles);
+  const label = boxDisplayLabel(slot, links, itemTitles);
   const archived = isArchivedSlot(slot);
   const href = slot.id.startsWith("appt:") ? `/item/${slot.id.slice(5)}` : `/item/${slot.id}`;
   const assignmentCount = taskCountInInterval(slot.id, links);
@@ -60,6 +59,7 @@ export function CalendarDayView({
   links: ItemLink[];
   itemsById: Map<string, Item>;
 }) {
+  const itemTitles = new Map([...itemsById.entries()].map(([id, item]) => [id, item.title]));
   const daySlots = boxesForDay(slots, day);
   const allDay = allDayBoxesOnDay(daySlots, day);
   const layout = layoutBoxesOnDay(daySlots, day);
@@ -74,7 +74,7 @@ export function CalendarDayView({
         <div className="mb-4 space-y-2">
           <p className="text-xs uppercase tracking-wide text-neutral-500">All day</p>
           {allDay.map((slot) => (
-            <BoxCard itemsById={itemsById} key={slot.id} links={links} slot={slot} />
+            <BoxCard itemTitles={itemTitles} key={slot.id} links={links} slot={slot} />
           ))}
         </div>
       ) : null}
@@ -97,7 +97,7 @@ export function CalendarDayView({
               key={slot.id}
               style={{ top: `${topPct}%`, height: `${Math.max(heightPct, 4)}%` }}
             >
-              <BoxCard itemsById={itemsById} links={links} slot={slot} />
+              <BoxCard itemTitles={itemTitles} links={links} slot={slot} />
             </div>
           ))}
         </div>
@@ -117,6 +117,7 @@ export function CalendarWeekView({
   links: ItemLink[];
   itemsById: Map<string, Item>;
 }) {
+  const itemTitles = new Map([...itemsById.entries()].map(([id, item]) => [id, item.title]));
   const weekDays = Array.from({ length: 7 }, (_, index) => addDays(weekStart, index));
 
   return (
@@ -134,7 +135,7 @@ export function CalendarWeekView({
               <ul className="space-y-2">
                 {daySlots.map((slot) => (
                   <li key={slot.id}>
-                    <BoxCard itemsById={itemsById} links={links} slot={slot} />
+                    <BoxCard itemTitles={itemTitles} links={links} slot={slot} />
                   </li>
                 ))}
               </ul>

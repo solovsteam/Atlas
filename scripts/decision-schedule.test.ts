@@ -185,6 +185,36 @@ test("calendar event selection includes scheduled intervals and active appointme
   assert.equal(events[1].description, "Atlas appointment");
 });
 
+test("calendar interval descriptions preserve scheduled link order, duplicates, and orphan filtering", () => {
+  const firstBlock = block("first-calendar-block", "2026-09-24T09:00:00Z", "2026-09-24T10:00:00Z");
+  const secondBlock = block("second-calendar-block", "2026-09-24T10:00:00Z", "2026-09-24T11:00:00Z");
+  const firstTask = { ...task("shared-task", 30), title: "Old duplicate" };
+  const lastTask = { ...task("shared-task", 30), title: "Current task" };
+  const emptyTitleTask = { ...task("empty-title", 30), title: "" };
+  const anotherTask = { ...task("another-task", 30), title: "Second task" };
+  const links = [
+    { kind: "scheduled_in", fromId: "shared-task", toId: firstBlock.id },
+    { kind: "context", fromId: "another-task", toId: firstBlock.id },
+    { kind: "scheduled_in", fromId: "missing-task", toId: firstBlock.id },
+    { kind: "scheduled_in", fromId: "another-task", toId: firstBlock.id },
+    { kind: "scheduled_in", fromId: "shared-task", toId: firstBlock.id },
+    { kind: "scheduled_in", fromId: "empty-title", toId: firstBlock.id },
+    { kind: "scheduled_in", fromId: "another-task", toId: secondBlock.id },
+    { kind: "scheduled_in", fromId: "missing-task", toId: secondBlock.id }
+  ] as ItemLink[];
+
+  const events = selectCalendarEvents(
+    [firstBlock, secondBlock, firstTask, lastTask, emptyTitleTask, anotherTask],
+    links,
+    now
+  );
+
+  assert.deepEqual(events.map(({ uid, description }) => [uid, description]), [
+    ["atlas-interval-first-calendar-block@atlas", "Current task, Second task, Current task"],
+    ["atlas-interval-second-calendar-block@atlas", "Second task"]
+  ]);
+});
+
 test("VEVENT serialization escapes text and uses its supplied timestamp", () => {
   const serialized = serializeVevent({
     uid: "event@atlas", start: new Date("2026-09-24T09:00:00Z"), end: new Date("2026-09-24T10:00:00Z"),

@@ -1,5 +1,5 @@
 import type { Item } from "./item";
-import { tasksScheduledIn, type ItemLink } from "./links";
+import type { ItemLink } from "./links";
 import {
   addDays,
   calendarIntervalFromItem,
@@ -57,6 +57,22 @@ export function selectCalendarEvents(items: Item[], links: ItemLink[], now: Date
   const rangeStart = startOfDay(now);
   const rangeEnd = addDays(rangeStart, dayCount);
   const byId = new Map(items.map((item) => [item.id, item]));
+  const titlesByInterval = new Map<string, string[]>();
+  for (const link of links) {
+    if (link.kind !== "scheduled_in") {
+      continue;
+    }
+    const title = byId.get(link.fromId)?.title;
+    if (!title) {
+      continue;
+    }
+    const titles = titlesByInterval.get(link.toId);
+    if (titles) {
+      titles.push(title);
+    } else {
+      titlesByInterval.set(link.toId, [title]);
+    }
+  }
   const events: CalendarEvent[] = [];
 
   for (const item of items) {
@@ -70,9 +86,7 @@ export function selectCalendarEvents(items: Item[], links: ItemLink[], now: Date
       if (!start || !end || end <= rangeStart || start >= rangeEnd) {
         continue;
       }
-      const committed = tasksScheduledIn(item.id, links)
-        .map((id) => byId.get(id)?.title)
-        .filter((title): title is string => Boolean(title));
+      const committed = titlesByInterval.get(item.id) ?? [];
       events.push({
         uid: `atlas-interval-${item.id}@atlas`,
         start,

@@ -175,6 +175,56 @@ test("relevance sort membership handles duplicate tags, statuses, null status, a
   assert.deepEqual(context, originalContext);
 });
 
+test("relevance comparator laws hold across item and context signals", () => {
+  const statuses = ["active", "later", "done", "cancelled", null] as const;
+  const items = statuses.flatMap((status, statusIndex) => [false, true].map((isTask) => ({
+    id: `${isTask ? "task" : "note"}-${statusIndex}`,
+    isTask,
+    taskStatus: isTask ? status : null,
+    tags: statusIndex % 2 === 0 ? ["focus"] : [],
+    manualRelevance: statusIndex % 2,
+    updatedAt: `2026-09-24T${String(8 + Math.floor(statusIndex / 2)).padStart(2, "0")}:00:00Z`
+  } as unknown as Item)));
+  const contexts: RelevanceContext[] = [
+    { now, activeTags: [], activeStatusBoosts: [] },
+    { now, activeTags: ["focus"], activeStatusBoosts: [] },
+    { now, activeTags: [], activeStatusBoosts: ["later"] },
+    { now, activeTags: ["focus"], activeStatusBoosts: ["active", "later"] }
+  ];
+
+  for (const context of contexts) {
+    for (const a of items) {
+      for (const b of items) {
+        const ab = Math.sign(compareItems(a, b, context));
+        const ba = Math.sign(compareItems(b, a, context));
+        assert.equal(ab + ba, 0, `antisymmetry failed for ${a.id}, ${b.id}`);
+      }
+    }
+    for (const a of items) {
+      for (const b of items) {
+        for (const c of items) {
+          if (compareItems(a, b, context) <= 0 && compareItems(b, c, context) <= 0) {
+            assert.ok(compareItems(a, c, context) <= 0, `transitivity failed for ${a.id}, ${b.id}, ${c.id}`);
+          }
+        }
+      }
+    }
+
+    // Equal rank signals and timestamps leave a comparator tie; sorting must
+    // preserve those object references and their input order without mutation.
+    const tied = ["tie-a", "tie-b", "tie-c"].map((id) => ({
+      id, isTask: true, taskStatus: "active", tags: ["focus"],
+      manualRelevance: 4, updatedAt: "2026-09-24T12:00:00Z"
+    } as unknown as Item));
+    const input = [...items, ...tied];
+    const snapshot = structuredClone(input);
+    const sorted = sortItemsByRelevance(input, context);
+    assert.deepEqual(input, snapshot);
+    assert.ok(sorted.every((item) => input.includes(item)), "sort must return original item objects");
+    assert.deepEqual(sorted.filter((item) => tied.includes(item)).map(({ id }) => id), ["tie-a", "tie-b", "tie-c"]);
+  }
+});
+
 function task(id: string, minutes = 30, fixedStart?: string, fixedEnd?: string): TaskScheduleInput {
   return {
     id, title: id, createdAt: now.toISOString(), importance: 5, durationMinutes: minutes,

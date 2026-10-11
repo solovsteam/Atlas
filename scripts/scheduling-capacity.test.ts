@@ -19,6 +19,7 @@ import { proposeSchedule } from "../src/services/scheduling";
 import { buildInboxEntries, collectTags, compareItems, isArchivedTask, isLibraryItem, isParkedTask, searchItems, sortItemsByRelevance, type RelevanceContext } from "../shared/relevance";
 import { calculateSchedulerMetrics } from "../shared/scheduling/metrics";
 import { intervalRange } from "../shared/scheduling/constraints";
+import { buildNudges, nextPendingNudge } from "../shared/nudges";
 
 type OraclePlan = { assignments: { taskId: string; intervalId: string }[]; unassigned: string[]; metrics: { totalPostponement: number; contextSwitches: number; assignedCount: number } };
 
@@ -1728,5 +1729,229 @@ for (const strategy of ["earliest_fit", "delta_cost", "delta_cost_switch"] as co
     const deadlines = [4, 1, 2].map((days) => ({ ...task(`due-${days}`), dueAt: new Date(config.now.getTime() + days * 86_400_000).toISOString() }));
     assert.deepEqual([...deadlines].sort((a, b) => nowMotivation(b, config) - nowMotivation(a, config)).map(({ id }) => id), ["due-1", "due-2", "due-4"]);
     assert.deepEqual([...deadlines].sort((a, b) => postponementCost(b, config.now, config) - postponementCost(a, config.now, config)).map(({ id }) => id), ["due-1", "due-2", "due-4"]);
+  });
+}
+
+// Clock regressions use literal instants/local wall times and hand-computed
+// expectations, independently of the production lead/horizon constants.
+const nudgeAppointment = (id: string, start = date("14:00"), end = date("15:00")) => item({
+  id, title: "Meet Tonio", isTask: true, taskStatus: "active",
+  taskFixedStartsAt: start, taskFixedEndsAt: end
+});
+
+test("appointment nudges require an active task and two parseable fixed endpoints", () => {
+  const active = nudgeAppointment("active");
+  const rejected: Item[] = [
+    ...(["done", "later", "cancelled"] as const).map((taskStatus) => ({ ...active, id: taskStatus, taskStatus })),
+    { ...active, id: "note", isTask: false },
+    { ...active, id: "no-start", taskFixedStartsAt: "" },
+    { ...active, id: "no-end", taskFixedEndsAt: "" },
+    { ...active, id: "bad-start", taskFixedStartsAt: "not a time" },
+    { ...active, id: "bad-end", taskFixedEndsAt: "not a time" }
+  ];
+  assert.deepEqual(buildNudges([active, ...rejected], [], new Date(date("13:00"))), [
+    { id: "appt:active:2026-09-24T14:00:00.000Z:soon", kind: "appointment_soon",
+      fireAt: Date.parse(date("13:50")), expiresAt: Date.parse(date("14:00")),
+      title: "Appointment in 10 minutes", body: "Meet Tonio" },
+    { id: "appt:active:2026-09-24T14:00:00.000Z:start", kind: "appointment_start",
+      fireAt: Date.parse(date("14:00")), expiresAt: Date.parse(date("14:05")),
+      title: "Appointment now", body: "Meet Tonio" }
+  ]);
+  const untitled = { ...active, title: "" };
+  assert.deepEqual(buildNudges([untitled], [], new Date(date("13:00"))).map(({ body }) => body), ["Untitled", "Untitled"]);
+});
+
+test("appointment lead and start expiry boundaries are strict and rescheduling changes both IDs", () => {
+  const appointment = nudgeAppointment("clock");
+  for (const [at, expected] of [
+    ["13:49:59.999", ["appointment_soon", "appointment_start"]],
+    ["13:50:00.000", ["appointment_soon", "appointment_start"]],
+    ["13:59:59.999", ["appointment_soon", "appointment_start"]],
+    ["14:00:00.000", ["appointment_start"]],
+    ["14:04:59.999", ["appointment_start"]],
+    ["14:05:00.000", []]
+  ] as const) {
+    assert.deepEqual(buildNudges([appointment], [], new Date(`2026-09-24T${at}Z`)).map(({ kind }) => kind), expected, at);
+  }
+  const rescheduled = nudgeAppointment("clock", "2026-09-24T16:00:00+02:00", date("15:30"));
+  assert.deepEqual(buildNudges([rescheduled], [], new Date(date("13:00"))).map(({ id }) => id), [
+    "appt:clock:2026-09-24T14:00:00.000Z:soon", "appt:clock:2026-09-24T14:00:00.000Z:start"
+  ], "equivalent offset spelling keeps identity");
+  rescheduled.taskFixedStartsAt = date("14:30");
+  assert.deepEqual(buildNudges([rescheduled], [], new Date(date("13:00"))).map(({ id }) => id), [
+    "appt:clock:2026-09-24T14:30:00.000Z:soon", "appt:clock:2026-09-24T14:30:00.000Z:start"
+  ]);
+});
+
+test("work-block nudges use the first committed active task in link order or fallback", () => {
+  const block = { ...workBlock("work", date("14:00"), date("15:00")), title: "Deep work" };
+  const fallback = { ...workBlock("fallback", date("16:00"), date("17:00")), title: "" };
+  const first = { ...scheduledTask("first", 30), title: "First commitment" };
+  const second = { ...scheduledTask("second", 30), title: "Second commitment" };
+  const inactive = (["done", "later", "cancelled"] as const).map((taskStatus) => ({
+    ...scheduledTask(taskStatus, 30), taskStatus
+  }));
+  const note = item({ id: "note", title: "Not a task" });
+  const items = [block, fallback, second, ...inactive, note, first,
+    { ...block, id: "archived", intervalStatus: "archived" },
+    { ...block, id: "no-endpoints", intervalStartsAt: "", intervalEndsAt: "" },
+    { ...block, id: "not-interval", isInterval: false }];
+  const links = [link("missing", "missing", "work"), ...inactive.map(({ id }) => link(id, id, "work")),
+    link("note", "note", "work"), { ...link("context", "second", "work"), kind: "context" as const },
+    link("first", "first", "work"), link("second", "second", "work"),
+    ...inactive.map(({ id }) => link(`fallback-${id}`, id, "fallback"))];
+  assert.deepEqual(buildNudges(items, links, new Date(date("13:00"))), [
+    { id: "block:work:2026-09-24T14:00:00.000Z:soon", kind: "block_soon",
+      fireAt: Date.parse(date("13:50")), expiresAt: Date.parse(date("14:00")),
+      title: "Deep work in 10 minutes", body: "First commitment" },
+    { id: "block:work:2026-09-24T14:00:00.000Z:start", kind: "block_start",
+      fireAt: Date.parse(date("14:00")), expiresAt: Date.parse(date("14:05")),
+      title: "Deep work now", body: "First commitment" },
+    { id: "block:fallback:2026-09-24T16:00:00.000Z:soon", kind: "block_soon",
+      fireAt: Date.parse(date("15:50")), expiresAt: Date.parse(date("16:00")),
+      title: "Work block in 10 minutes", body: "Nothing committed yet — open Now" },
+    { id: "block:fallback:2026-09-24T16:00:00.000Z:start", kind: "block_start",
+      fireAt: Date.parse(date("16:00")), expiresAt: Date.parse(date("16:05")),
+      title: "Work block now", body: "Nothing committed yet — open Now" }
+  ]);
+});
+
+test("current behavior: one-endpoint intervals generate block nudges at that endpoint", () => {
+  for (const patch of [{ intervalStartsAt: "" }, { intervalEndsAt: "" }]) {
+    const block = { ...workBlock("single", date("14:00"), date("14:00")), ...patch };
+    assert.deepEqual(buildNudges([block], [], new Date(date("13:00"))).map(({ id, fireAt, expiresAt }) => ({ id, fireAt, expiresAt })), [
+      { id: "block:single:2026-09-24T14:00:00.000Z:soon", fireAt: Date.parse(date("13:50")), expiresAt: Date.parse(date("14:00")) },
+      { id: "block:single:2026-09-24T14:00:00.000Z:start", fireAt: Date.parse(date("14:00")), expiresAt: Date.parse(date("14:05")) }
+    ]);
+  }
+});
+
+test("current behavior: a blank first active commitment uses fallback rather than the next title", () => {
+  const block = workBlock("work", date("14:00"), date("15:00"));
+  const items = [block, { ...scheduledTask("blank", 30), title: "" }, { ...scheduledTask("named", 30), title: "Named" }];
+  assert.deepEqual(buildNudges(items, [link("blank", "blank", "work"), link("named", "named", "work")], new Date(date("13:00")))
+    .map(({ body }) => body), ["Nothing committed yet — open Now", "Nothing committed yet — open Now"]);
+});
+
+for (const day of ["2026-03-28", "2026-03-29", "2026-03-30", "2026-10-24", "2026-10-25", "2026-10-26"]) {
+  test(`empty morning uses the local date and 08:50–09:10 window around DST: ${day}`, () => {
+    const at = new Date(`${day}T08:50:00`);
+    const snapshot = at.getTime();
+    const expected = { id: `empty-morning:${day}`, kind: "empty_morning",
+      fireAt: new Date(`${day}T08:50:00`).getTime(), expiresAt: new Date(`${day}T09:10:00`).getTime(),
+      title: "No morning block", body: "Block morning so work has a place to land." };
+    assert.deepEqual(buildNudges([], [], at), [expected]);
+    assert.deepEqual(buildNudges([], [], new Date(`${day}T00:05:00`)), [expected],
+      "local date key near midnight, when Berlin and UTC dates differ");
+    assert.equal(at.getTime(), snapshot);
+    assert.deepEqual(buildNudges([], [], new Date(`${day}T09:09:59.999`)), [expected]);
+    assert.deepEqual(buildNudges([], [], new Date(`${day}T09:10:00`)), []);
+    // Independent offset table pins Berlin's transition rather than assuming a
+    // day is 24 elapsed hours. The same suite also runs in UTC.
+    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const offset = zone === "Europe/Berlin"
+      ? (["2026-03-28", "2026-10-25", "2026-10-26"].includes(day) ? "+01:00" : "+02:00") : "Z";
+    if (zone === "Europe/Berlin" || zone === "UTC") {
+      assert.equal(expected.fireAt, Date.parse(`${day}T08:50:00${offset}`));
+      assert.equal(expected.expiresAt, Date.parse(`${day}T09:10:00${offset}`));
+    }
+  });
+}
+
+test("empty morning is suppressed by non-archived overlap but ignores archived and endpoint-less intervals", () => {
+  const at = new Date("2026-09-24T08:50:00");
+  const morning = (items: Item[]) => buildNudges(items, [], at).filter(({ kind }) => kind === "empty_morning");
+  const block = workBlock("morning", "2026-09-24T10:00:00", "2026-09-24T11:00:00");
+  assert.deepEqual(morning([block]), []);
+  assert.equal(morning([{ ...block, intervalStatus: "archived" }]).length, 1);
+  assert.equal(morning([{ ...block, intervalStartsAt: "", intervalEndsAt: "" }]).length, 1);
+  assert.equal(morning([{ ...block, isInterval: false }]).length, 1);
+  assert.equal(morning([workBlock("after", "2026-09-24T12:00:00", "2026-09-24T13:00:00")]).length, 1,
+    "starting at 12:00 only touches the boundary");
+  assert.deepEqual(morning([workBlock("before-noon", "2026-09-24T11:59:59.999", "2026-09-24T13:00:00")]), []);
+  assert.equal(morning([workBlock("early", "2026-09-24T08:00:00", "2026-09-24T08:59:59.999")]).length, 1);
+});
+
+test("current behavior: an interval ending exactly at 09:00 suppresses empty morning", () => {
+  assert.deepEqual(buildNudges([workBlock("touch", "2026-09-24T08:00:00", "2026-09-24T09:00:00")], [],
+    new Date("2026-09-24T08:50:00")).filter(({ kind }) => kind === "empty_morning"), []);
+});
+
+test("nudge horizon excludes fireAt exactly 24 elapsed hours away and includes one millisecond before", () => {
+  const at = new Date(date("13:00"));
+  for (const [start, expectedKinds] of [
+    ["2026-09-25T12:59:59.999Z", ["appointment_soon", "appointment_start"]],
+    ["2026-09-25T13:00:00.000Z", ["appointment_soon"]],
+    ["2026-09-25T13:09:59.999Z", ["appointment_soon"]],
+    ["2026-09-25T13:10:00.000Z", []]
+  ] as const) {
+    assert.deepEqual(buildNudges([nudgeAppointment("horizon", start, "2026-09-25T14:00:00Z")], [], at)
+      .map(({ kind }) => kind), expectedKinds, start);
+  }
+});
+
+for (const fixture of [
+  { name: "spring forward", at: "2026-03-28T13:00:00+01:00", start: "2026-03-29T14:00:00+02:00", end: "2026-03-29T15:00:00+02:00" },
+  { name: "fall back", at: "2026-10-24T13:00:00+02:00", start: "2026-10-25T12:00:00+01:00", end: "2026-10-25T13:00:00+01:00" }
+]) {
+  test(`nudge horizon is 24 elapsed hours across Berlin ${fixture.name}`, () => {
+    const appointment = nudgeAppointment("dst", fixture.start, fixture.end);
+    const at = new Date(fixture.at);
+    assert.deepEqual(buildNudges([appointment], [], at).map(({ kind }) => kind), ["appointment_soon"]);
+    assert.deepEqual(buildNudges([appointment], [], new Date(at.getTime() + 1)).map(({ kind }) => kind), ["appointment_soon", "appointment_start"]);
+  });
+}
+
+test("nudges sort by fireAt then ID and leave items, links and now unchanged", () => {
+  const items = [nudgeAppointment("z"), workBlock("b", date("14:00"), date("15:00")), nudgeAppointment("a"), nudgeAppointment("early", date("13:30"))];
+  const links = [link("z", "z", "b"), link("a", "a", "b")];
+  const at = new Date(date("13:00"));
+  const snapshot = structuredClone({ items, links, at });
+  const result = buildNudges(items, links, at);
+  assert.deepEqual(result.map(({ id }) => id), [
+    "appt:early:2026-09-24T13:30:00.000Z:soon", "appt:early:2026-09-24T13:30:00.000Z:start",
+    "appt:a:2026-09-24T14:00:00.000Z:soon", "appt:z:2026-09-24T14:00:00.000Z:soon", "block:b:2026-09-24T14:00:00.000Z:soon",
+    "appt:a:2026-09-24T14:00:00.000Z:start", "appt:z:2026-09-24T14:00:00.000Z:start", "block:b:2026-09-24T14:00:00.000Z:start"
+  ]);
+  assert.deepEqual({ items, links, at }, snapshot);
+});
+
+test("nextPendingNudge skips fired IDs and exact-expiry nudges, returns null, and preserves inputs", () => {
+  const nudges = buildNudges([nudgeAppointment("a"), nudgeAppointment("b")], [], new Date(date("13:00")));
+  const at = new Date(date("14:00"));
+  const fired = new Set(["appt:a:2026-09-24T14:00:00.000Z:start"]);
+  const snapshot = structuredClone({ nudges, at, fired });
+  assert.strictEqual(nextPendingNudge(nudges, at, fired), nudges[3]);
+  assert.deepEqual({ nudges, at, fired }, snapshot);
+  fired.add(nudges[3].id);
+  assert.equal(nextPendingNudge(nudges, at, fired), null);
+  assert.equal(nextPendingNudge(nudges, new Date(date("14:05")), new Set()), null);
+  assert.equal(nextPendingNudge([], at, new Set()), null);
+});
+
+test("current behavior: nextPendingNudge returns future nudges and follows input order", () => {
+  const nudges = buildNudges([nudgeAppointment("a")], [], new Date(date("13:00")));
+  const at = new Date(date("13:00"));
+  assert.strictEqual(nextPendingNudge(nudges, at, new Set()), nudges[0]);
+  assert.strictEqual(nextPendingNudge([nudges[1], nudges[0]], at, new Set()), nudges[1]);
+});
+
+for (const fixture of [
+  { name: "spring jump", start: "2026-03-29T03:00:00+02:00", end: "2026-03-29T04:00:00+02:00",
+    at: "2026-03-29T00:45:00Z", soon: "2026-03-29T00:50:00Z", startUtc: "2026-03-29T01:00:00.000Z", expiry: "2026-03-29T01:05:00Z" },
+  { name: "repeated autumn hour", start: "2026-10-25T02:00:00+01:00", end: "2026-10-25T03:00:00+01:00",
+    at: "2026-10-25T00:45:00Z", soon: "2026-10-25T00:50:00Z", startUtc: "2026-10-25T01:00:00.000Z", expiry: "2026-10-25T01:05:00Z" }
+]) {
+  test(`appointment and block leads span the Berlin ${fixture.name} in elapsed minutes`, () => {
+    const items = [nudgeAppointment("transition", fixture.start, fixture.end), workBlock("transition", fixture.start, fixture.end)];
+    const clocks = (at: string) => buildNudges(items, [], new Date(at)).filter(({ kind }) => kind !== "empty_morning");
+    assert.deepEqual(clocks(fixture.at).map(({ id, fireAt, expiresAt }) => ({ id, fireAt, expiresAt })), [
+      { id: `appt:transition:${fixture.startUtc}:soon`, fireAt: Date.parse(fixture.soon), expiresAt: Date.parse(fixture.startUtc) },
+      { id: `block:transition:${fixture.startUtc}:soon`, fireAt: Date.parse(fixture.soon), expiresAt: Date.parse(fixture.startUtc) },
+      { id: `appt:transition:${fixture.startUtc}:start`, fireAt: Date.parse(fixture.startUtc), expiresAt: Date.parse(fixture.expiry) },
+      { id: `block:transition:${fixture.startUtc}:start`, fireAt: Date.parse(fixture.startUtc), expiresAt: Date.parse(fixture.expiry) }
+    ]);
+    assert.deepEqual(clocks(fixture.startUtc).map(({ kind }) => kind), ["appointment_start", "block_start"]);
+    assert.deepEqual(clocks(fixture.expiry), []);
   });
 }

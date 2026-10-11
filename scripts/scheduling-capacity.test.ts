@@ -1095,6 +1095,83 @@ test("schedule input indexing preserves immediate parent semantics and item orde
   });
 });
 
+test("schedule inputs inherit only raw immediate-parent values across three levels and shared parents", () => {
+  const grandparent = item({ id: "grandparent", isTask: true, manualRelevance: 9,
+    expectedDurationMinutes: 90, taskDueAt: "2026-09-25T18:00:00Z",
+    taskFixedStartsAt: "2026-09-25T09:00:00Z", taskFixedEndsAt: "2026-09-25T10:00:00Z",
+    tags: ["grandparent"] });
+  const parent = item({ id: "parent", isTask: true, parentTaskId: "grandparent", manualRelevance: 0,
+    taskFixedStartsAt: "2026-09-25T11:00:00Z", tags: ["parent"] });
+  const child = item({ id: "child", isTask: true, parentTaskId: "parent", manualRelevance: 0, tags: ["child"] });
+  const sibling = item({ id: "sibling", isTask: true, parentTaskId: "grandparent", manualRelevance: 3,
+    expectedDurationMinutes: 0, taskDueAt: "2026-09-25T16:00:00Z",
+    taskFixedStartsAt: "2026-09-25T12:00:00Z", taskFixedEndsAt: "2026-09-25T13:00:00Z" });
+  // Children precede their shared parent so batch resolution cannot rely on traversal order.
+  const items = [child, sibling, parent, grandparent];
+  const before = structuredClone(items);
+  for (const entry of items) {
+    Object.freeze(entry.tags);
+    Object.freeze(entry);
+  }
+  Object.freeze(items);
+  const expected: TaskScheduleInput[] = [
+    { id: "child", title: "Item", createdAt: now.toISOString(), importance: 0, durationMinutes: null,
+      dueAt: null, fixedStartsAt: "2026-09-25T11:00:00Z", fixedEndsAt: null,
+      parentTaskId: "parent", tags: ["child"] },
+    { id: "sibling", title: "Item", createdAt: now.toISOString(), importance: 3, durationMinutes: 0,
+      dueAt: "2026-09-25T16:00:00Z", fixedStartsAt: "2026-09-25T12:00:00Z", fixedEndsAt: "2026-09-25T13:00:00Z",
+      parentTaskId: "grandparent", tags: [] },
+    { id: "parent", title: "Item", createdAt: now.toISOString(), importance: 9, durationMinutes: 90,
+      dueAt: "2026-09-25T18:00:00Z", fixedStartsAt: "2026-09-25T11:00:00Z", fixedEndsAt: "2026-09-25T10:00:00Z",
+      parentTaskId: "grandparent", tags: ["parent"] },
+    { id: "grandparent", title: "Item", createdAt: now.toISOString(), importance: 9, durationMinutes: 90,
+      dueAt: "2026-09-25T18:00:00Z", fixedStartsAt: "2026-09-25T09:00:00Z", fixedEndsAt: "2026-09-25T10:00:00Z",
+      parentTaskId: "", tags: ["grandparent"] }
+  ];
+
+  assert.deepEqual(items.map((entry) => itemToScheduleInput(entry, items)), expected);
+  assert.deepEqual(items, before, "single-item resolution must not materialize inheritance into items");
+  assert.deepEqual(itemsToScheduleInputs(items), expected);
+  assert.deepEqual(items, before, "batch resolution must not mutate shared parents or children");
+});
+
+test("schedule inputs resolve self references, cycles and absent parents without traversal or mutation", () => {
+  const self = item({ id: "self", isTask: true, parentTaskId: "self", manualRelevance: 0 });
+  const first = item({ id: "first", isTask: true, parentTaskId: "second", manualRelevance: 0,
+    taskDueAt: "2026-09-25T15:00:00Z", taskFixedEndsAt: "2026-09-25T14:00:00Z" });
+  const second = item({ id: "second", isTask: true, parentTaskId: "first", manualRelevance: 7,
+    expectedDurationMinutes: 25, taskFixedStartsAt: "2026-09-25T13:00:00Z" });
+  const orphan = item({ id: "orphan", isTask: true, parentTaskId: "absent", manualRelevance: 0 });
+  const ownOrphan = item({ id: "own-orphan", isTask: true, parentTaskId: "absent", manualRelevance: 2,
+    expectedDurationMinutes: 10, taskDueAt: "2026-09-25T17:00:00Z", tags: ["own"] });
+  const items = [self, first, second, orphan, ownOrphan];
+  const before = structuredClone(items);
+  for (const entry of items) {
+    Object.freeze(entry.tags);
+    Object.freeze(entry);
+  }
+  Object.freeze(items);
+  const expected: TaskScheduleInput[] = [
+    { id: "self", title: "Item", createdAt: now.toISOString(), importance: 0, durationMinutes: null,
+      dueAt: null, fixedStartsAt: null, fixedEndsAt: null, parentTaskId: "self", tags: [] },
+    { id: "first", title: "Item", createdAt: now.toISOString(), importance: 7, durationMinutes: 25,
+      dueAt: "2026-09-25T15:00:00Z", fixedStartsAt: "2026-09-25T13:00:00Z", fixedEndsAt: "2026-09-25T14:00:00Z",
+      parentTaskId: "second", tags: [] },
+    { id: "second", title: "Item", createdAt: now.toISOString(), importance: 7, durationMinutes: 25,
+      dueAt: "2026-09-25T15:00:00Z", fixedStartsAt: "2026-09-25T13:00:00Z", fixedEndsAt: "2026-09-25T14:00:00Z",
+      parentTaskId: "first", tags: [] },
+    { id: "orphan", title: "Item", createdAt: now.toISOString(), importance: 0, durationMinutes: null,
+      dueAt: null, fixedStartsAt: null, fixedEndsAt: null, parentTaskId: "absent", tags: [] },
+    { id: "own-orphan", title: "Item", createdAt: now.toISOString(), importance: 2, durationMinutes: 10,
+      dueAt: "2026-09-25T17:00:00Z", fixedStartsAt: null, fixedEndsAt: null, parentTaskId: "absent", tags: ["own"] }
+  ];
+
+  assert.deepEqual(items.map((entry) => itemToScheduleInput(entry, items)), expected);
+  assert.deepEqual(items, before);
+  assert.deepEqual(itemsToScheduleInputs(items), expected);
+  assert.deepEqual(items, before);
+});
+
 test("per-call schedule resolver matches linear resolution for duplicate, missing, and self parents", () => {
   const firstParent = item({ id: "parent", expectedDurationMinutes: 35, taskDueAt: "2026-09-25T10:00:00Z" });
   const duplicateParent = item({ id: "parent", expectedDurationMinutes: 80, taskDueAt: "" });

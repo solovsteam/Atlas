@@ -62,6 +62,18 @@ function remainingFor(
   );
 }
 
+function initializeRemaining(
+  intervals: IntervalInput[],
+  appointments: TaskScheduleInput[],
+  reservedMinutesByInterval: Map<string, number>,
+  config: SchedulerConfig
+): Map<string, number> {
+  return new Map(intervals.map((interval) => [
+    interval.id,
+    remainingFor(interval, appointments, reservedMinutesByInterval, config)
+  ]));
+}
+
 function metricsFor(
   assignments: Assignment[],
   unassigned: UnassignedTask[],
@@ -133,10 +145,7 @@ function runEarliestFit(
   config: SchedulerConfig,
   reservedMinutesByInterval: Map<string, number>
 ): { assignments: Assignment[]; leftover: TaskScheduleInput[] } {
-  const remaining = new Map<string, number>();
-  for (const interval of intervals) {
-    remaining.set(interval.id, remainingFor(interval, appointments, reservedMinutesByInterval, config));
-  }
+  const remaining = initializeRemaining(intervals, appointments, reservedMinutesByInterval, config);
   const ordered = candidates
     .map((task, index) => ({ task, index, motivation: nowMotivation(task, config) }))
     .sort((a, b) => b.motivation - a.motivation || a.index - b.index)
@@ -172,10 +181,7 @@ function runDeltaCost(
   config: SchedulerConfig,
   reservedMinutesByInterval: Map<string, number>
 ): { assignments: Assignment[]; leftover: TaskScheduleInput[] } {
-  const remaining = new Map<string, number>();
-  for (const interval of intervals) {
-    remaining.set(interval.id, remainingFor(interval, appointments, reservedMinutesByInterval, config));
-  }
+  const remaining = initializeRemaining(intervals, appointments, reservedMinutesByInterval, config);
   const open = new Set(candidates.map((task) => task.id));
   const byId = new Map(candidates.map((task) => [task.id, task]));
   const constantsById = new Map(candidates.map((task) => [task.id, {

@@ -220,6 +220,43 @@ for (const strategy of ["earliest_fit", "delta_cost", "delta_cost_switch"] as co
   });
 }
 
+for (const strategy of ["earliest_fit", "delta_cost"] as const) {
+  test(`${strategy}: full scheduler result preserves clipped, occupied, and reserved capacity`, () => {
+    const tasks = [
+      task("appointment-a", 60, date("09:30"), date("10:30")),
+      task("appointment-b", 60, date("10:00"), date("11:00")),
+      { ...task("deadline", 60), dueAt: date("11:00"), importance: 2 },
+      { ...task("other", 20), importance: 10 }
+    ];
+    const intervals = [interval("clipped", date("09:00"), date("12:00"))];
+    const reservations = new Map([["clipped", 5]]);
+    const originalTasks = structuredClone(tasks);
+    const originalIntervals = structuredClone(intervals);
+    const originalReservations = new Map(reservations);
+
+    const result = runScheduler(tasks, intervals,
+      mergeSchedulerConfig(now, { strategy, horizonDays: 0.1 }), reservations);
+
+    assert.deepEqual(result, {
+      assignments: [{ taskId: "other", intervalId: "clipped" }],
+      unassigned: [
+        { taskId: "appointment-a", reason: "excluded" },
+        { taskId: "appointment-b", reason: "excluded" },
+        { taskId: "deadline", reason: "no_feasible_interval" }
+      ],
+      metrics: {
+        totalPostponement: 67.12830134218501,
+        contextSwitches: 0,
+        assignedCount: 1,
+        unassignedCount: 3
+      }
+    });
+    assert.deepEqual(tasks, originalTasks);
+    assert.deepEqual(intervals, originalIntervals);
+    assert.deepEqual(reservations, originalReservations);
+  });
+}
+
 test("Atlas preview and Brain handoff reserve duplicate scheduled links once", () => {
   const items = [workBlock("block"), scheduledTask("existing", 20), scheduledTask("new", 15)];
   const links = [link("a", "existing", "block"), link("b", "existing", "block")];

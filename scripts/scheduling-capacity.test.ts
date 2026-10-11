@@ -1204,6 +1204,66 @@ for (const strategy of ["earliest_fit", "delta_cost", "delta_cost_switch"] as co
   });
 }
 
+for (const strategy of ["earliest_fit", "delta_cost", "delta_cost_switch"] as const) {
+  for (const secondFits of [false, true]) {
+    test(`${strategy}: buffered task ${secondFits ? "fits only the second block" : "fits combined capacity but neither block"} without splitting`, () => {
+      const config = mergeSchedulerConfig(now, { strategy });
+      const large = task("large", 60);
+      const small = { ...task("small", 40), importance: 4 };
+      const blocks = [
+        interval("current", date("07:00"), date("09:00")),
+        interval("second", date("10:00"), date(secondFits ? "11:25" : "11:00"))
+      ];
+      const reservations = new Map([["current", 10], ["second", 10]]);
+      // Independent capacity arithmetic: elapsed time removes 60 minutes
+      // from the current block, then reservations leave 50 and 50/75.
+      const capacities = [50, secondFits ? 75 : 50];
+      assert.equal(bufferedMinutes(60, config), 75);
+      assert.equal(bufferedMinutes(40, config), 50);
+      blocks.forEach((block, index) => {
+        assert.equal(intervalCapacityMinutes(block, config) - reservations.get(block.id)!, capacities[index]);
+      });
+      assert.ok(75 <= capacities[0] + capacities[1], "combined room is sufficient");
+      assert.ok(75 > capacities[0], "the whole task cannot fit the current block");
+      assert.equal(75 <= capacities[1], secondFits);
+
+      const result = runScheduler([large, small], blocks, config, reservations);
+      const expectedAssignments = [
+        { taskId: "small", intervalId: "current" },
+        ...(secondFits ? [{ taskId: "large", intervalId: "second" }] : [])
+      ];
+      // Earliest-fit emits in task priority order; delta strategies emit
+      // in block order. Both must assign the same whole tasks to blocks.
+      if (secondFits && strategy === "earliest_fit") expectedAssignments.reverse();
+      assert.deepEqual(result.assignments, expectedAssignments);
+      assert.deepEqual(result.unassigned, secondFits ? [] : [
+        { taskId: "large", reason: "no_feasible_interval" }
+      ]);
+      assert.equal(new Set(result.assignments.map(({ taskId }) => taskId)).size, result.assignments.length,
+        "each task occurs in at most one block");
+      // Small fills the current block exactly: a failed/partial large-task
+      // placement must not consume any of its capacity. Large uses all 75
+      // minutes in the second block or none at all.
+      for (const [index, block] of blocks.entries()) {
+        const used = result.assignments.filter(({ intervalId }) => intervalId === block.id)
+          .reduce((sum, { taskId }) => sum + (taskId === "large" ? 75 : 50), 0);
+        assert.equal(used, index === 0 ? 50 : secondFits ? 75 : 0);
+        assert.ok(used <= capacities[index]);
+      }
+      // Default flexible cost: value * delayHours / (168 + delayHours).
+      // Small starts at clipped now (zero cost); large is delayed two hours
+      // if assigned, or the full 21-day horizon if left unassigned.
+      assert.ok(Math.abs(result.metrics.totalPostponement - (secondFits ? 50 * 2 / 170 : 50 * 21 / 28)) < 1e-10);
+      assert.deepEqual({ ...result.metrics, totalPostponement: 0 }, {
+        totalPostponement: 0, contextSwitches: 0,
+        assignedCount: secondFits ? 2 : 1, unassignedCount: secondFits ? 0 : 1
+      });
+      assert.equal(result.metrics.assignedCount + result.metrics.unassignedCount, 2);
+      assert.deepEqual([...reservations], [["current", 10], ["second", 10]]);
+    });
+  }
+}
+
 test("elapsed-time translations preserve fixed-interval scheduler decisions across Berlin DST", () => {
   const baseNow = new Date("2026-03-28T00:30:00.000Z");
   const elapsedOffsets = [0, 24 * 60 * 60_000, 7 * 24 * 60 * 60_000];

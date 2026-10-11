@@ -1136,3 +1136,70 @@ test("scheduler metrics preserve repeated assignment and per-call clipped interv
     });
   }
 });
+
+// Each block has two unrelated transitions and three related transitions.
+// Distinct block prefixes make the boundary unrelated too: counting it would
+// incorrectly give five switches instead of four. Do not use switchCost as an oracle.
+const transitionBlocks = [
+  interval("switch-one", date("09:00"), date("10:18")),
+  interval("switch-two", date("11:00"), date("12:18"))
+];
+const transitionSequences = transitionBlocks.map((block, index) => {
+  const parent = { ...task(`${block.id}-parent`, 10) };
+  const child = { ...task(`${block.id}-child`, 10), parentTaskId: parent.id };
+  const sibling = { ...task(`${block.id}-sibling`, 10), parentTaskId: parent.id, tags: [block.id] };
+  return [
+    task(`${block.id}-unrelated-start`, 10),
+    ...(index === 0 ? [parent, child] : [child, parent]),
+    sibling,
+    { ...task(`${block.id}-tagged`, 10), tags: [block.id] },
+    task(`${block.id}-unrelated-end`, 10)
+  ];
+});
+
+for (const strategy of ["earliest_fit", "delta_cost", "delta_cost_switch"] as const) {
+  test(`${strategy}: known transition metrics restart in each interval`, () => {
+    const config = mergeSchedulerConfig(now, { strategy });
+    const tasks = transitionSequences.flat();
+    const byId = new Map(tasks.map((entry) => [entry.id, entry]));
+    const intervalById = new Map(transitionBlocks.map((entry) => [entry.id, entry]));
+    const sequences = transitionSequences.map((entries, index) => entries.map((entry) => ({
+      taskId: entry.id, intervalId: transitionBlocks[index]!.id
+    })));
+    const switches = (assignments: typeof sequences[number]) =>
+      calculateSchedulerMetrics(assignments, [], byId, intervalById, config, new Set()).contextSwitches;
+
+    // First block: unrelated → parent (1), parent → child (0),
+    // child → sibling (0), sibling → shared tag (0), tag → unrelated (1).
+    // Second block reverses child/parent: both directions remain related.
+    assert.equal(switches(sequences[0]!), 2);
+    assert.equal(switches(sequences[1]!), 2);
+    assert.equal(switches(sequences.flat()), 2 + 2);
+    // Assignment interleaving must preserve each interval's own predecessor.
+    const interleaved = sequences[0]!.flatMap((entry, index) => [entry, sequences[1]![index]!]);
+    assert.equal(switches(interleaved), 2 + 2);
+  });
+}
+
+for (const strategy of ["earliest_fit", "delta_cost"] as const) {
+  test(`${strategy}: scheduler counts transitions without applying a switch penalty to scores`, () => {
+    const config = mergeSchedulerConfig(now, { strategy });
+    // Equal task values retain input order for these strategies. Each block
+    // holds exactly six tasks: ceil(10 × 1.25) × 6 = 78 minutes.
+    const result = runScheduler(transitionSequences.flat(), transitionBlocks, config);
+    assert.deepEqual(result.assignments, transitionSequences.flatMap((entries, index) => entries.map((entry) => ({
+      taskId: entry.id, intervalId: transitionBlocks[index]!.id
+    }))));
+    assert.deepEqual(result.unassigned, []);
+    assert.equal(result.metrics.contextSwitches, 2 + 2);
+    assert.equal(result.metrics.assignedCount, 12);
+    assert.equal(result.metrics.unassignedCount, 0);
+    // Independent flexible-task postponement arithmetic: importance 5 gives
+    // value 50; six tasks are charged at each block's start, with gamma = 1.
+    const expectedPostponement = transitionBlocks.reduce((sum, block) => {
+      const days = (Date.parse(block.startsAt) - now.getTime()) / 86_400_000;
+      return sum + 6 * 50 * (1 - 1 / (1 + days / 7));
+    }, 0);
+    assert.ok(Math.abs(result.metrics.totalPostponement - expectedPostponement) < 1e-10);
+  });
+}

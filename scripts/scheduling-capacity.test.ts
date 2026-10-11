@@ -107,6 +107,39 @@ test("earliest fit matches the direct motivation comparator across varied task i
   }
 });
 
+test("scheduler result fixtures preserve metrics across strategies, intervals, and leftovers", () => {
+  const tasks = [
+    { ...task("a1"), parentTaskId: "project", tags: ["a"] },
+    { ...task("b1"), importance: 5.1, tags: ["b"] },
+    { ...task("a2"), parentTaskId: "project", tags: ["a"] },
+    task("left"),
+    task("last")
+  ];
+  const intervals = [
+    interval("one", date("09:00"), date("11:00")),
+    interval("two", "2026-09-25T09:00:00.000Z", "2026-09-25T10:00:00.000Z")
+  ];
+  const expected = {
+    assignments: [
+      { taskId: "b1", intervalId: "one" },
+      { taskId: "a1", intervalId: "one" },
+      { taskId: "a2", intervalId: "one" },
+      { taskId: "left", intervalId: "two" }
+    ],
+    unassigned: [{ taskId: "last", reason: "no_feasible_interval" }],
+    metrics: {
+      totalPostponement: 44.870175062084186,
+      contextSwitches: 1,
+      assignedCount: 4,
+      unassignedCount: 1
+    }
+  };
+
+  for (const strategy of ["earliest_fit", "delta_cost", "delta_cost_switch"] as const) {
+    assert.deepEqual(runScheduler(tasks, intervals, mergeSchedulerConfig(now, { strategy })), expected);
+  }
+});
+
 test("eligible task classification preserves fixed and missing-info precedence", () => {
   const fixedDue = { ...task("fixed-due", 30, date("09:00"), date("10:00")), dueAt: date("11:00") };
   const halfFixed = task("half-fixed", 30, date("09:00"));

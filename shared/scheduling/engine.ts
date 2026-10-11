@@ -11,11 +11,11 @@ import { nowMotivation, postponementCost, waitHorizon } from "./deferral";
 import { bufferedMinutes, valueScore } from "./math";
 import { switchCost } from "./switching";
 import { eligibleTasks } from "./eligible";
+import { calculateSchedulerMetrics } from "./metrics";
 import type {
   Assignment,
   IntervalInput,
   SchedulerConfig,
-  SchedulerMetrics,
   SchedulerResult,
   TaskScheduleInput,
   UnassignedTask
@@ -72,70 +72,6 @@ function initializeRemaining(
     interval.id,
     remainingFor(interval, appointments, reservedMinutesByInterval, config)
   ]));
-}
-
-function metricsFor(
-  assignments: Assignment[],
-  unassigned: UnassignedTask[],
-  byId: Map<string, TaskScheduleInput>,
-  intervalById: Map<string, IntervalInput>,
-  config: SchedulerConfig,
-  remainingCandidates: Set<string>
-): SchedulerMetrics {
-  let totalPostponement = 0;
-  const assignedInInterval = new Map<string, string[]>();
-
-  for (const assignment of assignments) {
-    const task = byId.get(assignment.taskId);
-    const interval = intervalById.get(assignment.intervalId);
-    if (!task) {
-      continue;
-    }
-    const range = interval ? intervalRange(interval, config) : null;
-    const at = range?.start ?? config.now;
-    totalPostponement += postponementCost(task, at, config);
-    const list = assignedInInterval.get(assignment.intervalId) ?? [];
-    list.push(assignment.taskId);
-    assignedInInterval.set(assignment.intervalId, list);
-  }
-
-  for (const taskId of remainingCandidates) {
-    const task = byId.get(taskId);
-    if (!task) {
-      continue;
-    }
-    totalPostponement += postponementCost(task, waitHorizon(task, config), config);
-  }
-
-  let contextSwitches = 0;
-  if (config.strategy === "delta_cost_switch") {
-    for (const taskIds of assignedInInterval.values()) {
-      for (let index = 1; index < taskIds.length; index += 1) {
-        const prev = byId.get(taskIds[index - 1]!);
-        const next = byId.get(taskIds[index]!);
-        if (prev && next && switchCost(prev, next, config.switchPenalty) > 0) {
-          contextSwitches += 1;
-        }
-      }
-    }
-  } else {
-    for (const taskIds of assignedInInterval.values()) {
-      for (let index = 1; index < taskIds.length; index += 1) {
-        const prev = byId.get(taskIds[index - 1]!);
-        const next = byId.get(taskIds[index]!);
-        if (prev && next && switchCost(prev, next, config.switchPenalty) > 0) {
-          contextSwitches += 1;
-        }
-      }
-    }
-  }
-
-  return {
-    totalPostponement,
-    contextSwitches,
-    assignedCount: assignments.length,
-    unassignedCount: unassigned.length
-  };
 }
 
 function runEarliestFit(
@@ -257,6 +193,6 @@ export function runScheduler(
   return {
     assignments: packed.assignments,
     unassigned: allUnassigned,
-    metrics: metricsFor(packed.assignments, allUnassigned, byId, intervalById, config, leftoverIds)
+    metrics: calculateSchedulerMetrics(packed.assignments, allUnassigned, byId, intervalById, config, leftoverIds)
   };
 }

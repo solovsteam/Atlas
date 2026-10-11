@@ -8,6 +8,8 @@ import type { Item } from "../shared/item";
 import { taskCountInInterval, type ItemLink } from "../shared/links";
 import { indexTaskCountsByInterval } from "../shared/intervalTaskCounts";
 import { byDueThenTitle } from "../shared/review";
+import { nominalWorkWindow, workBlockForNow, workBlockOverlapsExisting } from "../shared/workBlocks";
+import type { ScheduleSlot } from "../shared/schedule";
 import {
   DATE_PLACEHOLDER, DATE_TIME_PLACEHOLDER, formatEuropeanDate, formatEuropeanDateTime,
   isoFromEuropeanDate, isoFromEuropeanDateTime, normalizeEuropeanDate, normalizeEuropeanDateTime,
@@ -193,6 +195,116 @@ function task(id: string, minutes: number): Item {
 
 const first = block("first", "2026-09-24T09:00:00Z", "2026-09-24T09:45:00Z");
 const second = block("second", "2026-09-24T11:00:00Z", "2026-09-24T12:00:00Z");
+
+test("work windows preserve nominal hours and input dates at remaining-time boundaries", () => {
+  for (const [kind, label, startHour, endHour] of [
+    ["morning", "Morning", 9, 12], ["afternoon", "Afternoon", 13, 17]
+  ] as const) {
+    const start = new Date(2026, 8, 24, startHour);
+    const end = new Date(2026, 8, 24, endHour);
+    const threshold = end.getTime() - 20 * 60_000;
+    for (const [timestamp, expectedStart] of [
+      [start.getTime() - 1, start.getTime()],
+      [start.getTime(), start.getTime()],
+      [start.getTime() + 1, start.getTime() + 1],
+      [threshold, threshold],
+      [threshold + 1, null],
+      [end.getTime(), null],
+      [end.getTime() + 1, null]
+    ] as const) {
+      const input = new Date(timestamp);
+      const context = `${kind} at ${input.toISOString()}`;
+      assert.deepEqual(nominalWorkWindow(input, kind), { startsAt: start, endsAt: end }, context);
+      assert.equal(input.getTime(), timestamp, context);
+      const spec = workBlockForNow(input, kind);
+      assert.deepEqual(spec, expectedStart === null ? null : {
+        kind, label, startsAt: new Date(expectedStart), endsAt: end
+      }, context);
+      assert.equal(input.getTime(), timestamp, context);
+      if (spec) assert.notStrictEqual(spec.startsAt, input);
+    }
+  }
+});
+
+test("work block overlap preserves asymmetric touching boundaries and ignores archived slots", () => {
+  const spec = {
+    kind: "morning" as const, label: "Morning",
+    startsAt: new Date("2026-09-24T09:00:00Z"), endsAt: new Date("2026-09-24T12:00:00Z")
+  };
+  const snapshot = structuredClone(spec);
+  const cases = [
+    // Existing overlap contract includes a slot ending at start, but excludes one starting at end.
+    ["ends at start", "08:00:00.000", "09:00:00.000", true],
+    ["ends 1ms before start", "08:00:00.000", "08:59:59.999", false],
+    ["starts at end", "12:00:00.000", "13:00:00.000", false],
+    ["overlaps start by 1ms", "08:00:00.000", "09:00:00.001", true],
+    ["overlaps end by 1ms", "11:59:59.999", "13:00:00.000", true],
+    ["identical", "09:00:00.000", "12:00:00.000", true],
+    ["contained", "10:00:00.000", "11:00:00.000", true],
+    ["enclosing", "08:00:00.000", "13:00:00.000", true]
+  ] as const;
+  assert.equal(workBlockOverlapsExisting(spec, []), false);
+  const activeSlots: ScheduleSlot[] = [];
+  for (const [label, start, end, overlaps] of cases) {
+    const slot: ScheduleSlot = {
+      id: label, ownerId: "owner", kind: "fixed", label,
+      startsAt: `2026-09-24T${start}Z`, endsAt: `2026-09-24T${end}Z`,
+      slotStatus: "scheduled", createdAt: "", updatedAt: ""
+    };
+    activeSlots.push(slot);
+    for (const slotStatus of ["scheduled", "archived"] as const) {
+      const slots = [{ ...slot, slotStatus }];
+      const before = structuredClone(slots);
+      assert.equal(workBlockOverlapsExisting(spec, slots), overlaps && slotStatus === "scheduled", `${label}: ${slotStatus}`);
+      assert.deepEqual(slots, before);
+      assert.deepEqual(spec, snapshot);
+    }
+  }
+  assert.equal(workBlockOverlapsExisting(spec, activeSlots.map(slot => ({ ...slot, slotStatus: "archived" }))), false);
+  assert.equal(workBlockOverlapsExisting(spec, [
+    ...activeSlots.map(slot => ({ ...slot, slotStatus: "archived" as const })),
+    activeSlots[1], activeSlots[2], activeSlots[6]
+  ]), true);
+});
+
+test("work windows follow Berlin civil hours across spring and fall DST transitions", () => {
+  const originalTimezone = process.env.TZ;
+  try {
+    process.env.TZ = "Europe/Berlin";
+    // Midnight is still on the old offset on transition days; work hours use the new offset.
+    for (const [date, midnightOffset, workOffset, morningStart, morningEnd, afternoonStart, afternoonEnd] of [
+      ["2026-03-28", "+01:00", -60, "08:00", "11:00", "12:00", "16:00"],
+      ["2026-03-29", "+01:00", -120, "07:00", "10:00", "11:00", "15:00"],
+      ["2026-03-30", "+02:00", -120, "07:00", "10:00", "11:00", "15:00"],
+      ["2026-10-24", "+02:00", -120, "07:00", "10:00", "11:00", "15:00"],
+      ["2026-10-25", "+02:00", -60, "08:00", "11:00", "12:00", "16:00"],
+      ["2026-10-26", "+01:00", -60, "08:00", "11:00", "12:00", "16:00"]
+    ] as const) {
+      const input = new Date(`${date}T00:00:00${midnightOffset}`);
+      const timestamp = input.getTime();
+      for (const [kind, label, start, end, localStart, localEnd] of [
+        ["morning", "Morning", morningStart, morningEnd, 9, 12],
+        ["afternoon", "Afternoon", afternoonStart, afternoonEnd, 13, 17]
+      ] as const) {
+        const expected = {
+          startsAt: new Date(`${date}T${start}:00Z`), endsAt: new Date(`${date}T${end}:00Z`)
+        };
+        const window = nominalWorkWindow(input, kind);
+        assert.deepEqual(window, expected, `${date}: ${kind}`);
+        assert.equal(input.getTime(), timestamp);
+        assert.deepEqual(workBlockForNow(input, kind), { kind, label, ...expected });
+        assert.equal(input.getTime(), timestamp);
+        assert.equal(window.startsAt.getHours(), localStart);
+        assert.equal(window.endsAt.getHours(), localEnd);
+        assert.equal(window.startsAt.getTimezoneOffset(), workOffset);
+        assert.equal(window.endsAt.getTimezoneOffset(), workOffset);
+      }
+    }
+  } finally {
+    if (originalTimezone === undefined) delete process.env.TZ;
+    else process.env.TZ = originalTimezone;
+  }
+});
 
 test("proposes the first future block with buffered room", () => {
   assert.equal(firstFeasibleWorkBlock([first, second], [], 30, now), "first");

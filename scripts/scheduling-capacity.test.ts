@@ -237,6 +237,66 @@ function interval(id: string, start = date("09:00"), end = date("12:00")): Inter
   return { id, title: id, kind: "fixed", startsAt: start, endsAt: end, archived: false };
 }
 
+for (const strategy of ["earliest_fit", "delta_cost", "delta_cost_switch"] as const) {
+  // Pin every knob explicitly; expected sizes below use independent arithmetic,
+  // never the production resolvedDuration/bufferedMinutes/fit helpers.
+  const config = {
+    now, horizonDays: 21, gamma: 1, durationBuffer: 1.25,
+    defaultDurationMinutes: 30, switchPenalty: 12, wsptWeight: 8,
+    urgencyWeight: 0.6, valueWeight: 0.4, strategy
+  };
+  const capacityBlock = (minutes: number) => interval("capacity", date("09:00"),
+    new Date(new Date(date("09:00")).getTime() + minutes * 60_000).toISOString());
+
+  test(`${strategy}: zero, null and negative durations use the buffered fallback`, () => {
+    // Default: 30 × 1.25 = 37.5, rounded up to 38.
+    // Override: 7 × 1.25 = 8.75, rounded up to 9.
+    for (const [defaultDurationMinutes, required] of [[30, 38], [7, 9]] as const) {
+      for (const durationMinutes of [0, null, -5]) {
+        const candidate = { ...task("fallback"), durationMinutes };
+        const explicitConfig = { ...config, defaultDurationMinutes };
+        for (const capacity of [required - 1, required]) {
+          const result = runScheduler([candidate], [capacityBlock(capacity)], explicitConfig);
+          const fits = capacity === required;
+          const context = `${durationMinutes}, fallback ${defaultDurationMinutes}, capacity ${capacity}`;
+          assert.deepEqual(result.assignments, fits ? [{ taskId: "fallback", intervalId: "capacity" }] : [], context);
+          assert.deepEqual(result.unassigned, fits ? [] : [{ taskId: "fallback", reason: "no_feasible_interval" }], context);
+        }
+      }
+    }
+  });
+
+  test(`${strategy}: exactly two minutes is quick; just above two needs calendar capacity`, () => {
+    for (const capacity of [2, 3, 38]) {
+      const result = runScheduler([task("quick", 2), task("calendar", 2.01)], [capacityBlock(capacity)], config);
+      // 2.01 × 1.25 = 2.5125, rounded up to 3. Quick work consumes no room.
+      assert.deepEqual(result.assignments, capacity >= 3 ? [{ taskId: "calendar", intervalId: "capacity" }] : []);
+      assert.deepEqual(result.unassigned, capacity >= 3
+        ? [{ taskId: "quick", reason: "quick" }]
+        : [{ taskId: "quick", reason: "quick" }, { taskId: "calendar", reason: "no_feasible_interval" }]);
+    }
+  });
+
+  test(`${strategy}: fractional buffering rounds up and accepts exact buffered fits`, () => {
+    // 10.5 × 1.25 = 13.125 -> 14; 12 × 1.25 = 15 exactly.
+    for (const [duration, required] of [[10.5, 14], [12, 15]] as const) {
+      for (const capacity of [required - 1, required]) {
+        const result = runScheduler([task("rounded", duration)], [capacityBlock(capacity)], config);
+        assert.deepEqual(result.assignments, capacity === required ? [{ taskId: "rounded", intervalId: "capacity" }] : []);
+        assert.deepEqual(result.unassigned, capacity === required ? [] : [{ taskId: "rounded", reason: "no_feasible_interval" }]);
+      }
+    }
+    // Round each task before packing: 14 + 14 = 28, rather than rounding 26.25.
+    for (const capacity of [27, 28]) {
+      const result = runScheduler([task("a", 10.5), task("b", 10.5)], [capacityBlock(capacity)], config);
+      assert.deepEqual(result.assignments, capacity === 28
+        ? [{ taskId: "a", intervalId: "capacity" }, { taskId: "b", intervalId: "capacity" }]
+        : [{ taskId: "a", intervalId: "capacity" }]);
+      assert.deepEqual(result.unassigned, capacity === 28 ? [] : [{ taskId: "b", reason: "no_feasible_interval" }]);
+    }
+  });
+}
+
 function directComparatorReference(
   tasks: TaskScheduleInput[], intervals: IntervalInput[], config: ReturnType<typeof mergeSchedulerConfig>
 ) {

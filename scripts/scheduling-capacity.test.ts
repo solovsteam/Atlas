@@ -331,6 +331,41 @@ test("slider importance 2–10 matches equivalent raw values across full schedul
   }
 });
 
+test("task titles and creation age do not change Now motivation or scheduler results", () => {
+  const tasks: TaskScheduleInput[] = [
+    { ...task("deadline-high", 45), importance: 9, dueAt: date("10:00"), parentTaskId: "project-a", tags: ["writing"] },
+    { ...task("flex-mid", 45), importance: 6, parentTaskId: "project-a", tags: ["writing"] },
+    { ...task("flex-low", 90), importance: 2, tags: ["admin"] },
+    { ...task("fixed-outside", 30, date("15:00"), date("15:30")), importance: 4 }
+  ];
+  const alteredTasks = tasks.map((entry, index) => ({
+    ...entry,
+    title: `Renamed ${entry.id}`,
+    createdAt: ["0001-01-01T00:00:00.000Z", "9999-12-31T23:59:59.999Z", "1900-01-01T00:00:00.000Z", "2500-12-31T23:59:59.999Z"][index]!
+  }));
+  const intervals = [interval("morning", date("09:00"), date("11:00"))];
+
+  for (const strategy of ["earliest_fit", "delta_cost", "delta_cost_switch"] as const) {
+    const config = mergeSchedulerConfig(now, { strategy });
+    const motivations = tasks.map((entry) => nowMotivation(entry, config));
+    assert.equal(new Set(motivations).size, motivations.length, `${strategy}: fixture has no motivation ties`);
+    assert.deepEqual(
+      alteredTasks.map((entry) => nowMotivation(entry, config)),
+      motivations,
+      `${strategy}: title and creation age leave Now motivation unchanged`
+    );
+
+    const baseline = runScheduler(tasks, intervals, config);
+    assert.ok(baseline.assignments.length > 0, `${strategy}: fixture assigns work`);
+    assert.ok(baseline.unassigned.length > 0, `${strategy}: fixture has unassigned work`);
+    assert.deepEqual(
+      runScheduler(alteredTasks, intervals, config),
+      baseline,
+      `${strategy}: assignments, unassigned reasons, and metrics are invariant`
+    );
+  }
+});
+
 test("scheduler result fixtures preserve metrics across strategies, intervals, and leftovers", () => {
   const tasks = [
     { ...task("a1"), parentTaskId: "project", tags: ["a"] },

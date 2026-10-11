@@ -764,6 +764,70 @@ test("Now parses active appointments once and preserves overlap priority and hal
   });
 });
 
+for (const equalEnds of [true, false]) {
+  test(`Now appointments with ${equalEnds ? "equal" : "different"} ends beat quick work and current commitments at exact boundaries`, () => {
+    const current = block("current-focus", "2026-09-24T07:00:00Z", "2026-09-24T10:00:00Z");
+    const firstCommitted = task("first-committed", 30);
+    const secondCommitted = task("second-committed", 30);
+    const quick = { ...task("unscheduled-quick", 2), manualRelevance: 100 };
+    const later = {
+      ...task("z-later-appointment", 30),
+      taskFixedStartsAt: "2026-09-24T08:00:00Z",
+      taskFixedEndsAt: "2026-09-24T09:00:00Z"
+    };
+    const earlier = {
+      ...task("a-earlier-appointment", 30),
+      taskFixedStartsAt: "2026-09-24T08:00:00Z",
+      taskFixedEndsAt: equalEnds ? "2026-09-24T09:00:00Z" : "2026-09-24T08:30:00Z"
+    };
+    // Link order, rather than task encounter order or motivation, selects
+    // current commitments. Neither can displace a live appointment.
+    const links = [
+      { kind: "scheduled_in", fromId: firstCommitted.id, toId: current.id },
+      { kind: "scheduled_in", fromId: secondCommitted.id, toId: current.id }
+    ] as ItemLink[];
+    const currentOutput = {
+      primary: { item: firstCommitted, reason: "In current-focus" },
+      committed: [{ item: secondCommitted, reason: "Also in this interval" }],
+      suggestion: null
+    };
+
+    for (const appointments of [[later, earlier], [earlier, later]]) {
+      const items = [quick, secondCommitted, current, ...appointments, firstCommitted];
+      // Reversal changes equal-end ties, but never earliest-end priority.
+      const [primary, secondary] = equalEnds ? appointments : [earlier, later];
+      const liveOutput = {
+        primary: { item: primary, reason: "Fixed appointment now" },
+        committed: [{ item: secondary, reason: "Also in range" }],
+        suggestion: null
+      };
+      const context = `${equalEnds ? "equal" : "different"} ends, ${appointments[0].id} first`;
+      for (const [timestamp, expected] of [
+        ["2026-09-24T07:59:59.999Z", currentOutput],
+        ["2026-09-24T08:00:00Z", liveOutput],
+        ["2026-09-24T08:29:59.999Z", liveOutput],
+        ["2026-09-24T08:30:00Z", equalEnds ? liveOutput : {
+          primary: { item: later, reason: "Fixed appointment now" },
+          committed: [], suggestion: null
+        }],
+        ["2026-09-24T08:59:59.999Z", equalEnds ? liveOutput : {
+          primary: { item: later, reason: "Fixed appointment now" },
+          committed: [], suggestion: null
+        }],
+        ["2026-09-24T09:00:00Z", currentOutput],
+        ["2026-09-24T09:59:59.999Z", currentOutput],
+        ["2026-09-24T10:00:00Z", {
+          primary: { item: firstCommitted, reason: "Committed today" },
+          committed: [{ item: secondCommitted, reason: "Also today" }],
+          suggestion: { item: quick, reason: "Two minutes or less — do it now, don’t calendar it" }
+        }]
+      ] as const) {
+        assert.deepEqual(buildNowFocus(items, links, new Date(timestamp)), expected, `${context} at ${timestamp}`);
+      }
+    }
+  });
+}
+
 test("Now preserves encounter order for equal motivation and exact suggestion metadata", () => {
   const firstTask = task("tie-first", 30);
   const secondTask = task("tie-second", 30);

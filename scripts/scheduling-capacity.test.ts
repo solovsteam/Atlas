@@ -1191,6 +1191,98 @@ test("per-call schedule resolver matches linear resolution for duplicate, missin
   assert.equal(firstCall(orphan).durationMinutes, null);
 });
 
+function ordinaryReviewFixture() {
+  const past = "2026-09-24T07:00:00Z";
+  const fixed = { taskFixedStartsAt: "2026-09-24T09:00:00Z", taskFixedEndsAt: "2026-09-24T10:00:00Z" };
+  const task = (id: string, fields: Partial<Item> = {}) => item({
+    id, title: id, isTask: true, expectedDurationMinutes: 30, ...fields
+  });
+  const items = [
+    task("scheduled"), task("unscheduled"),
+    task("later-overdue", { taskStatus: "later", taskDueAt: past, ...fixed, expectedDurationMinutes: 2 }),
+    task("later-missing", { taskStatus: "later", taskFixedEndsAt: fixed.taskFixedEndsAt }),
+    task("later-ordinary", { taskStatus: "later" }),
+    task("done-overdue", { taskStatus: "done", taskDueAt: past }),
+    task("cancelled-overdue", { taskStatus: "cancelled", taskDueAt: past }),
+    task("note-overdue", { isTask: false, taskStatus: "later", taskDueAt: past }),
+    task("overdue-scheduled", { taskDueAt: past }),
+    task("overdue-fixed", { taskDueAt: past, ...fixed }),
+    task("overdue-missing", { taskDueAt: past, taskFixedStartsAt: fixed.taskFixedStartsAt }),
+    task("overdue-quick", { taskDueAt: past, expectedDurationMinutes: 1 }),
+    task("fixed", fixed),
+    task("missing-start", { taskFixedEndsAt: fixed.taskFixedEndsAt }),
+    task("missing-end", { taskFixedStartsAt: fixed.taskFixedStartsAt }),
+    task("quick-one", { expectedDurationMinutes: 1 }),
+    task("quick-two", { expectedDurationMinutes: 2 }),
+    task("ordinary-three", { expectedDurationMinutes: 3 }),
+    task("unknown-duration", { expectedDurationMinutes: null }),
+    task("due-now", { taskDueAt: now.toISOString() }),
+    task("future-due", { taskDueAt: "2026-09-25T12:00:00Z" })
+  ];
+  const links: ItemLink[] = ["scheduled", "later-overdue", "overdue-scheduled"].map((fromId) => ({
+    id: `link-${fromId}`, ownerId: "owner", fromId, toId: "work", kind: "scheduled_in",
+    createdAt: now.toISOString(), updatedAt: now.toISOString()
+  }));
+  links.push({ ...links[0], id: "context", fromId: "unscheduled", kind: "context" });
+  return { items, links };
+}
+
+test("ordinary review buckets preserve status, overdue, exclusion and scheduling precedence", () => {
+  const { items, links } = ordinaryReviewFixture();
+  const review = buildReview(items, links, now);
+  // Later wins even over overdue/fixed/quick/scheduled; inactive and non-tasks
+  // are excluded. Active overdue wins over all calendar eligibility exclusions.
+  // Only ordinary non-overdue work reaches the scheduled-link filter.
+  assert.deepEqual(review.later.map(({ id }) => id).sort(), ["later-missing", "later-ordinary", "later-overdue"]);
+  assert.deepEqual(review.overdue.map(({ id }) => id).sort(), [
+    "overdue-fixed", "overdue-missing", "overdue-quick", "overdue-scheduled"
+  ]);
+  assert.deepEqual(review.unscheduled.map(({ id }) => id).sort(), [
+    "due-now", "future-due", "ordinary-three", "unknown-duration", "unscheduled"
+  ]);
+  const memberships = Object.values(review).flat().map(({ id }) => id);
+  assert.equal(memberships.length, 12);
+  assert.equal(new Set(memberships).size, memberships.length, "each task appears in at most one bucket");
+});
+
+test("ordinary review orders overdue by instant/title, unscheduled by relevance/title and later by update", () => {
+  const task = (id: string, fields: Partial<Item>) => item({ id, isTask: true, expectedDurationMinutes: 30, ...fields });
+  const items = [
+    task("overdue-z", { title: "Zulu", taskDueAt: "2026-09-24T07:00:00Z" }),
+    task("later-old", { taskStatus: "later", updatedAt: "2026-09-22T12:00:00Z" }),
+    task("work-z", { title: "Zulu", manualRelevance: 5 }),
+    task("overdue-early", { title: "Zulu", taskDueAt: "2026-09-24T06:00:00Z" }),
+    task("work-a", { title: "Alpha", manualRelevance: 5 }),
+    task("later-new", { taskStatus: "later", updatedAt: "2026-09-24T12:00:00Z" }),
+    task("work-high", { title: "Zulu", manualRelevance: 9 }),
+    task("overdue-a", { title: "Alpha", taskDueAt: "2026-09-24T09:00:00+02:00" })
+  ];
+  // Literal expected IDs are independent of the production comparator; the
+  // equivalent offset deadlines exercise the existing title fallback.
+  for (const ordered of [items, [...items].reverse()]) {
+    const review = buildReview(ordered, [], now);
+    assert.deepEqual(review.overdue.map(({ id }) => id), ["overdue-early", "overdue-a", "overdue-z"]);
+    assert.deepEqual(review.unscheduled.map(({ id }) => id), ["work-high", "work-a", "work-z"]);
+    assert.deepEqual(review.later.map(({ id }) => id), ["later-new", "later-old"]);
+  }
+});
+
+test("ordinary review preserves input item values/order, links and reference date", () => {
+  const { items, links } = ordinaryReviewFixture();
+  const reference = new Date(now);
+  const inputs = { items, links, reference };
+  const before = structuredClone(inputs);
+  const identities = items.slice();
+  const first = buildReview(items, links, reference);
+  assert.deepEqual(inputs, before);
+  items.forEach((entry, index) => assert.strictEqual(entry, identities[index]));
+  for (const entry of Object.values(first).flat()) {
+    assert.strictEqual(entry, identities.find(({ id }) => id === entry.id));
+  }
+  assert.deepEqual(buildReview(items, links, reference), first);
+  assert.deepEqual(inputs, before, "repeated review preserves nested values and Date internals");
+});
+
 test("review and now resolve parent inputs independently per invocation", () => {
   const parent = item({ id: "parent", expectedDurationMinutes: 35, taskDueAt: "" });
   const child = item({ id: "child", title: "Child", isTask: true, parentTaskId: "parent", expectedDurationMinutes: null });

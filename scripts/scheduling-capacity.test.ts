@@ -1401,6 +1401,79 @@ const link = (id: string, fromId: string, toId: string): ItemLink => ({
   createdAt: now.toISOString(), updatedAt: now.toISOString()
 });
 
+for (const kind of ["context", "documentation", "generates"] as const) {
+  test(`${kind} link insertion, removal and reordering preserve scheduling outputs`, () => {
+    const items = [
+      workBlock("early", date("09:00"), date("10:00")),
+      workBlock("late", date("10:00"), date("12:00")),
+      scheduledTask("committed-first", 20),
+      scheduledTask("committed-second", 20),
+      scheduledTask("candidate", 30),
+      scheduledTask("too-large", 300),
+      { ...scheduledTask("overdue", 30), taskDueAt: "2026-09-23T12:00:00Z" },
+      { ...scheduledTask("later", 30), taskStatus: "later" as const },
+      item({ id: "document", isDocumentation: true }),
+      item({ id: "context-note" })
+    ];
+    const scheduled = [
+      link("commit-first", "committed-first", "early"),
+      link("commit-second", "committed-second", "early")
+    ];
+    // Include task-to-block edges: treating these as reservations or commitments
+    // would exclude candidates, consume capacity, or change Now's first task.
+    // All endpoints exist, with explicit kinds and complete ItemLink records.
+    const extras: ItemLink[] = [
+      { ...link(`${kind}-candidate`, "candidate", "early"), kind },
+      { ...link(`${kind}-large`, "too-large", "late"), kind },
+      { ...link(`${kind}-document`, "committed-first", "document"), kind },
+      { ...link(`${kind}-note`, "context-note", "candidate"), kind }
+    ];
+    const inserted = [extras[0], scheduled[0], extras[1], extras[2], scheduled[1], extras[3]];
+    const variants = [
+      { name: "insert", links: inserted },
+      { name: "reorder non-scheduling links", links: [extras[3], extras[2], scheduled[0], extras[1], scheduled[1], extras[0]] },
+      { name: "remove one", links: [extras[0], scheduled[0], extras[2], scheduled[1], extras[3]] },
+      { name: "remove all", links: [...scheduled] }
+    ];
+    const before = structuredClone({ items, scheduled, extras, variants });
+    // Before, during and after the blocks exercise today's commitments, current
+    // commitments and the unscheduled suggestion path without changing fixtures.
+    for (const at of [now, new Date(date("09:05")), new Date(date("12:05"))]) {
+      const focus = buildNowFocus(items, scheduled, at);
+      const review = buildReview(items, scheduled, at);
+      const feasible = firstFeasibleWorkBlock(items, scheduled, 15, at);
+      assert.deepEqual(review.overdue.map(({ id }) => id), ["overdue"]);
+      assert.deepEqual(review.unscheduled.map(({ id }) => id).sort(), ["candidate", "too-large"]);
+      assert.deepEqual(review.later.map(({ id }) => id), ["later"]);
+      if (at === now) {
+        assert.equal(feasible, "late", "two buffered commitments leave early too small");
+        assert.equal(focus.primary?.item.id, "committed-first");
+        assert.equal(focus.primary?.reason, "Committed today");
+      } else if (at.getTime() === Date.parse(date("09:05"))) {
+        assert.equal(focus.primary?.item.id, "committed-first");
+        assert.equal(focus.primary?.reason, "In Item");
+        assert.deepEqual(focus.committed.map(({ item }) => item.id), ["committed-second"]);
+      }
+      for (const strategy of ["earliest_fit", "delta_cost", "delta_cost_switch"] as const) {
+        const plan = proposeSchedule(items, at, strategy, { links: scheduled });
+        assert.ok(plan.unassigned.some(({ taskId, reason }) => taskId === "too-large" && reason === "no_feasible_interval"));
+        if (at === now) assert.ok(plan.assignments.some(({ taskId }) => taskId === "candidate"));
+        for (const variant of variants) {
+          const label = `${kind}: ${variant.name}, ${strategy}, ${at.toISOString()}`;
+          assert.deepEqual(variant.links.filter(({ kind }) => kind === "scheduled_in"), scheduled, label);
+          // Compare complete results, including assignment order/IDs, unassigned
+          // reasons, every metric, Now reasons and ordered review bucket contents.
+          assert.deepEqual(proposeSchedule(items, at, strategy, { links: variant.links }), plan, label);
+          assert.equal(firstFeasibleWorkBlock(items, variant.links, 15, at), feasible, label);
+          assert.deepEqual(buildNowFocus(items, variant.links, at), focus, label);
+          assert.deepEqual(buildReview(items, variant.links, at), review, label);
+        }
+      }
+    }
+    assert.deepEqual({ items, scheduled, extras, variants }, before, "read-only helpers preserve fixture values and link order");
+  });
+}
+
 function directFirstFeasibleReference(items: Item[], links: ItemLink[], duration: number, at: Date): string | null {
   if (!Number.isFinite(duration) || duration <= 2) return null;
   const config = mergeSchedulerConfig(at);

@@ -22,6 +22,125 @@ import { intervalRange } from "../shared/scheduling/constraints";
 import { buildNudges, nextPendingNudge } from "../shared/nudges";
 import { serializeVevent } from "../shared/ics";
 
+// Mulberry32: a fixed seed makes every generated case reproducible without
+// dependencies, wall-clock input, or logging from the suite.
+function mulberry32(seed: number): () => number {
+  return () => {
+    seed = (seed + 0x6d2b79f5) | 0;
+    let value = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    value ^= value + Math.imul(value ^ (value >>> 7), 61 | value);
+    return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+test("seeded scheduler invariants: 1500 instances across all three strategies", () => {
+  const seed = 0xf24df1b3;
+  const random = mulberry32(seed);
+  const integer = (limit: number) => Math.floor(random() * limit);
+  const pick = <T,>(values: readonly T[]): T => values[integer(values.length)]!;
+  for (let caseIndex = 0; caseIndex < 1500; caseIndex += 1) {
+    const now = new Date(pick(["2026-03-29T00:30:00Z", "2026-10-25T00:30:00Z", "2026-09-24T09:00:00Z"]));
+    const horizonDays = 1 + integer(3);
+    const horizonMinutes = horizonDays * 1440;
+    // Offset spelling changes, but never changes the underlying instant.
+    const stamp = (minutes: number, offset = pick([0, 60, 120])) => {
+      const iso = new Date(now.getTime() + (minutes + offset) * 60_000).toISOString();
+      return offset === 0 ? iso : `${iso.slice(0, -1)}+0${offset / 60}:00`;
+    };
+    const tasks: TaskScheduleInput[] = Array.from({ length: integer(13) }, (_, index) => {
+      const fixed = integer(5);
+      const start = pick([-120, -30, 0, 30, 90, horizonMinutes + 30]);
+      return {
+        id: `task-${index}`, title: `Task ${index}`, createdAt: stamp(-1440 - integer(10080)),
+        importance: 1 + integer(10), durationMinutes: pick([null, 0, 1, 2, 3, 15, 30, 90]),
+        dueAt: pick([null, stamp(-30), stamp(integer(horizonMinutes + 1)), stamp(horizonMinutes + 1440)]),
+        fixedStartsAt: fixed === 1 || fixed === 2 ? stamp(start) : null,
+        fixedEndsAt: fixed === 1 || fixed === 3 ? stamp(start + pick([0, 15, 30, 90])) : null,
+        parentTaskId: pick(["", "external-parent", `task-${integer(12)}`]),
+        tags: pick([[], ["work"], ["home"], ["work", "shared"]])
+      };
+    });
+    const intervals: IntervalInput[] = Array.from({ length: integer(7) }, (_, index) => {
+      const start = pick([-180, -30, 0, 30, 90, horizonMinutes - 30, horizonMinutes + 60]);
+      const length = pick([-30, 0, 15, 30, 90, 180, 1440]);
+      return {
+        id: `interval-${index}`, title: `Interval ${index}`, kind: pick(["fixed", "allDay"]),
+        startsAt: stamp(start), endsAt: integer(8) === 0 ? "invalid-end" : stamp(start + length),
+        archived: integer(4) === 0
+      };
+    });
+    const reservedMinutesByInterval = new Map<string, number>();
+    for (const block of intervals) {
+      if (integer(3) !== 0) reservedMinutesByInterval.set(block.id, pick([0, 1, 15, 30, 90, 2000]) + random());
+    }
+    reservedMinutesByInterval.set("nonexistent-interval", integer(100));
+
+    for (const strategy of ["earliest_fit", "delta_cost", "delta_cost_switch"] as const) {
+      const config = mergeSchedulerConfig(now, { strategy, horizonDays });
+      const inputs = { tasks, intervals, config, reservedMinutesByInterval };
+      const snapshot = structuredClone(inputs);
+      try {
+        const result = runScheduler(tasks, intervals, config, reservedMinutesByInterval);
+        assert.deepEqual(inputs, snapshot, "inputs must not be mutated");
+        assert.deepEqual(runScheduler(tasks, intervals, config, reservedMinutesByInterval), result, "determinism");
+        assert.deepEqual(inputs, snapshot, "repeat run must not mutate inputs");
+        const ids = [...result.assignments, ...result.unassigned].map(({ taskId }) => taskId);
+        assert.deepEqual([...ids].sort(), tasks.map(({ id }) => id).sort(), "every input id exactly once");
+        for (const entry of tasks) {
+          const rejected = result.unassigned.find(({ taskId }) => taskId === entry.id);
+          const reason = entry.fixedStartsAt && entry.fixedEndsAt ? "excluded"
+            : Boolean(entry.fixedStartsAt) !== Boolean(entry.fixedEndsAt) ? "missing_info"
+              : entry.durationMinutes !== null && entry.durationMinutes > 0 && entry.durationMinutes <= 2 ? "quick" : null;
+          if (reason) assert.equal(rejected?.reason, reason, "eligibility reason and precedence");
+          else if (rejected) assert.equal(rejected.reason, "no_feasible_interval", "candidate rejection reason");
+        }
+        const usedMinutes = new Map<string, number>();
+        for (const assignment of result.assignments) {
+          const entry = tasks.find(({ id }) => id === assignment.taskId)!;
+          const block = intervals.find(({ id }) => id === assignment.intervalId);
+          assert.ok(block && intervalIsOpen(block, config) && !block.archived, "assignment targets an existing open interval");
+          usedMinutes.set(block.id, (usedMinutes.get(block.id) ?? 0) + bufferedMinutes(resolvedDuration(entry, config), config));
+          if (entry.dueAt) {
+            assert.ok(intervalRange(block)!.end.getTime() <= Date.parse(entry.dueAt), "unclamped end must meet deadline");
+          }
+        }
+        for (const block of intervals) {
+          const range = intervalRange(block, config);
+          let occupied = 0;
+          if (range) {
+            // Independent endpoint partition oracle: charge each segment once
+            // even when multiple fixed appointments overlap it.
+            const spans = tasks.filter((entry) => entry.fixedStartsAt && entry.fixedEndsAt).map((entry) => [
+              Math.max(range.start.getTime(), Date.parse(entry.fixedStartsAt!)),
+              Math.min(range.end.getTime(), Date.parse(entry.fixedEndsAt!))
+            ]).filter(([start, end]) => end! > start!);
+            const endpoints = [...new Set(spans.flat())].sort((a, b) => a - b);
+            for (let index = 1; index < endpoints.length; index += 1) {
+              const left = endpoints[index - 1]!;
+              const right = endpoints[index]!;
+              if (spans.some(([start, end]) => start! <= left && end! >= right)) occupied += (right - left) / 60_000;
+            }
+          }
+          const capacity = range ? (range.end.getTime() - range.start.getTime()) / 60_000 : 0;
+          const available = Math.max(0, capacity - occupied - (reservedMinutesByInterval.get(block.id) ?? 0));
+          assert.ok((usedMinutes.get(block.id) ?? 0) <= available + 1e-6, "buffered capacity after appointment union and reservations");
+        }
+        assert.equal(result.metrics.assignedCount, result.assignments.length, "assignedCount");
+        assert.equal(result.metrics.unassignedCount, result.unassigned.length, "unassignedCount");
+        for (const name of ["totalPostponement", "contextSwitches"] as const) {
+          assert.ok(Number.isFinite(result.metrics[name]) && result.metrics[name] >= 0, `${name} finite and non-negative`);
+        }
+        if (!intervals.some((block) => intervalIsOpen(block, config))) {
+          assert.equal(result.assignments.length, 0, "no open intervals means no assignments");
+        }
+      } catch (error) {
+        // Only failure diagnostics carry inputs; successful runs print nothing.
+        throw new Error(`seed=0x${seed.toString(16)} case=${caseIndex} strategy=${strategy} inputs=${JSON.stringify({ ...snapshot, reservedMinutesByInterval: [...snapshot.reservedMinutesByInterval] })}`, { cause: error });
+      }
+    }
+  }
+});
+
 type OraclePlan = { assignments: { taskId: string; intervalId: string }[]; unassigned: string[]; metrics: { totalPostponement: number; contextSwitches: number; assignedCount: number } };
 
 // Deliberately tiny reference enumerator: each task occurs in at most one block,

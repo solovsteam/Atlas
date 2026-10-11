@@ -4,8 +4,10 @@ import type { Item } from "../shared/item";
 import type { ItemLink } from "../shared/links";
 import { firstFeasibleWorkBlock } from "../shared/decisionSchedule";
 import { runScheduler, mergeSchedulerConfig, type IntervalInput, type TaskScheduleInput } from "../shared/scheduling";
-import { intervalCapacityMinutes } from "../shared/scheduling/constraints";
+import { intervalCapacityMinutes, intervalIsOpen, taskFitsInterval, resolvedDuration } from "../shared/scheduling/constraints";
 import { eligibleTasks } from "../shared/scheduling/eligible";
+import { nowMotivation, postponementCost, waitHorizon } from "../shared/scheduling/deferral";
+import { bufferedMinutes } from "../shared/scheduling/math";
 import { proposeSchedule } from "../src/services/scheduling";
 
 const date = (hour: string) => `2026-09-24T${hour}:00.000Z`;
@@ -22,6 +24,64 @@ function task(id: string, minutes = 30, fixedStart?: string, fixedEnd?: string):
 function interval(id: string, start = date("09:00"), end = date("12:00")): IntervalInput {
   return { id, title: id, kind: "fixed", startsAt: start, endsAt: end, archived: false };
 }
+
+function directComparatorReference(
+  tasks: TaskScheduleInput[], intervals: IntervalInput[], config: ReturnType<typeof mergeSchedulerConfig>
+) {
+  const classified = eligibleTasks(tasks);
+  const ordered = [...classified.candidates].sort((a, b) => nowMotivation(b, config) - nowMotivation(a, config));
+  const remaining = new Map(intervals.filter((entry) => intervalIsOpen(entry, config))
+    .map((entry) => [entry.id, intervalCapacityMinutes(entry, config)]));
+  const assignments: { taskId: string; intervalId: string }[] = [];
+  const leftover: TaskScheduleInput[] = [];
+  for (const candidate of ordered) {
+    let placed = false;
+    for (const entry of intervals) {
+      const left = remaining.get(entry.id) ?? 0;
+      if (!taskFitsInterval(candidate, entry, left, config)) continue;
+      remaining.set(entry.id, left - bufferedMinutes(resolvedDuration(candidate, config), config));
+      assignments.push({ taskId: candidate.id, intervalId: entry.id });
+      placed = true;
+      break;
+    }
+    if (!placed) leftover.push(candidate);
+  }
+  const unassigned = [...classified.unassigned, ...leftover.map(({ id }) => ({ taskId: id, reason: "no_feasible_interval" as const }))];
+  const byId = new Map(tasks.map((entry) => [entry.id, entry]));
+  const metrics = {
+    totalPostponement: assignments.reduce((total, assignment) => {
+      const candidate = byId.get(assignment.taskId)!;
+      const entry = intervals.find(({ id }) => id === assignment.intervalId)!;
+      return total + postponementCost(candidate, new Date(entry.startsAt), config);
+    }, leftover.reduce((total, candidate) => total + postponementCost(candidate, waitHorizon(candidate, config), config), 0)),
+    contextSwitches: 0,
+    assignedCount: assignments.length,
+    unassignedCount: unassigned.length
+  };
+  return { assignments, unassigned, metrics };
+}
+
+test("earliest fit matches the direct motivation comparator across varied task inputs", () => {
+  const scenarios = [
+    [
+      { ...task("tie-a", 30), importance: 7, tags: ["writing"] },
+      { ...task("tie-b", 30), importance: 7, tags: ["admin"] },
+      { ...task("due-today", 45), importance: 3, dueAt: date("10:00") },
+      { ...task("overdue", 20), importance: 2, dueAt: date("07:00") }
+    ],
+    [
+      { ...task("large", 70), importance: 10, tags: ["project", "deep"] },
+      { ...task("short", 15), importance: 5, tags: ["quick"] },
+      { ...task("tomorrow", 25), importance: 8, dueAt: date("2026-09-25T09:00:00.000Z") },
+      { ...task("week", 35), importance: 8, dueAt: "2026-10-01T09:00:00.000Z" }
+    ]
+  ];
+  for (const tasks of scenarios) {
+    const intervals = [interval("short-block", date("09:00"), date("10:00")), interval("long-block", date("11:00"), date("13:00"))];
+    const config = mergeSchedulerConfig(now, { strategy: "earliest_fit" });
+    assert.deepEqual(runScheduler(tasks, intervals, config), directComparatorReference(tasks, intervals, config));
+  }
+});
 
 test("eligible task classification preserves fixed and missing-info precedence", () => {
   const fixedDue = { ...task("fixed-due", 30, date("09:00"), date("10:00")), dueAt: date("11:00") };

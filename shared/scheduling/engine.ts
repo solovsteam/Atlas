@@ -139,7 +139,10 @@ function runEarliestFit(
   for (const interval of intervals) {
     remaining.set(interval.id, remainingFor(interval, appointments, reservedMinutesByInterval, config));
   }
-  const ordered = [...candidates].sort((a, b) => nowMotivation(b, config) - nowMotivation(a, config));
+  const ordered = candidates
+    .map((task, index) => ({ task, index, motivation: nowMotivation(task, config) }))
+    .sort((a, b) => b.motivation - a.motivation || a.index - b.index)
+    .map(({ task }) => task);
   const assignments: Assignment[] = [];
   const leftover: TaskScheduleInput[] = [];
 

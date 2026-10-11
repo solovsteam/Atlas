@@ -96,6 +96,14 @@ function occursOn(rule: RecurrenceRule, anchor: Date, day: Date): boolean {
 }
 
 export function occurrenceKeysInHorizon(rule: RecurrenceRule, anchor: Date, now: Date): string[] {
+  if (
+    !FREQUENCIES.includes(rule.frequency) ||
+    !Number.isFinite(rule.interval) || rule.interval < 1 || rule.interval > 365 ||
+    !Number.isFinite(rule.horizonDays) || rule.horizonDays < 1 || rule.horizonDays > 365
+  ) {
+    return [];
+  }
+
   if (!Number.isFinite(anchor.getTime()) || !Number.isFinite(now.getTime())) {
     return [];
   }

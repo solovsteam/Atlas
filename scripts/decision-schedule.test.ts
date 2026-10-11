@@ -50,11 +50,22 @@ test("recurrence horizon rejects invalid dates and includes leap days", () => {
   assert.deepEqual(occurrenceKeysInHorizon(daily, new Date("invalid"), now), []);
   assert.deepEqual(occurrenceKeysInHorizon(daily, now, new Date("invalid")), []);
 
+  for (const interval of [0, Number.POSITIVE_INFINITY, Number.NaN]) {
+    assert.deepEqual(occurrenceKeysInHorizon(
+      { frequency: "daily", interval, horizonDays: 2 }, now, now
+    ), []);
+  }
+  for (const horizonDays of [0, Number.POSITIVE_INFINITY, Number.NaN]) {
+    assert.deepEqual(occurrenceKeysInHorizon(
+      { frequency: "daily", interval: 1, horizonDays }, now, now
+    ), []);
+  }
+
   assert.deepEqual(occurrenceKeysInHorizon(
-    { frequency: "monthly", interval: 12, horizonDays: 1462 },
+    { frequency: "monthly", interval: 12, horizonDays: 365 },
     new Date(2024, 1, 29),
     new Date(2024, 1, 28)
-  ), ["2024-02-29", "2028-02-29"]);
+  ), ["2024-02-29"]);
 });
 
 function block(id: string, start: string, end: string): Item {

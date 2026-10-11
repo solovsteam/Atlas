@@ -67,6 +67,17 @@ test("Now prepares intervals once while preserving current half-open boundaries 
   assert.equal(atEnd.primary?.reason, "Committed today");
 });
 
+test("Now preserves encounter order for equal motivation and exact suggestion metadata", () => {
+  const firstTask = task("tie-first", 30);
+  const secondTask = task("tie-second", 30);
+
+  assert.deepEqual(buildNowFocus([firstTask, secondTask], [], now), {
+    primary: { item: firstTask, reason: "Highest start-now motivation among unscheduled work" },
+    committed: [],
+    suggestion: null
+  });
+});
+
 test("calendar event selection includes scheduled intervals and active appointments, excluding archived and out-of-range items", () => {
   const workBlock = { ...block("work", "2026-09-24T09:00:00Z", "2026-09-24T10:00:00Z"), title: "Focus" };
   const archived = { ...workBlock, id: "archived", intervalStatus: "archived" };

@@ -85,6 +85,24 @@ export function buildNowFocus(items: Item[], links: ItemLink[], now: Date): NowF
   const config = mergeSchedulerConfig(now);
   const byId = new Map(items.map((item) => [item.id, item]));
   const active = items.filter(isActiveTask);
+  const resolvedInputs = new Map<Item, ReturnType<typeof itemToScheduleInput>>();
+  const motivations = new Map<Item, number>();
+  const scheduleInputFor = (item: Item) => {
+    let input = resolvedInputs.get(item);
+    if (!input) {
+      input = itemToScheduleInput(item, items);
+      resolvedInputs.set(item, input);
+    }
+    return input;
+  };
+  const motivationFor = (item: Item) => {
+    let motivation = motivations.get(item);
+    if (motivation === undefined) {
+      motivation = nowMotivation(scheduleInputFor(item), config);
+      motivations.set(item, motivation);
+    }
+    return motivation;
+  };
 
   const liveAppointments = active
     .filter((item) => appointmentContains(item, now))
@@ -136,7 +154,7 @@ export function buildNowFocus(items: Item[], links: ItemLink[], now: Date): NowF
     if (scheduled.has(item.id) || seen.has(item.id)) {
       return false;
     }
-    const input = itemToScheduleInput(item, items);
+    const input = scheduleInputFor(item);
     if (constraintMode(input) === "fixed" || hasMissingInfo(input)) {
       return false;
     }
@@ -148,9 +166,10 @@ export function buildNowFocus(items: Item[], links: ItemLink[], now: Date): NowF
   const quickPool = idle
     ? suggestionPool.filter((item) => isQuickDuration(item.expectedDurationMinutes))
     : [];
-  const rankedPool = (quickPool.length > 0 ? quickPool : suggestionPool).sort(
-    (a, b) => nowMotivation(itemToScheduleInput(b, items), config) - nowMotivation(itemToScheduleInput(a, items), config)
-  );
+  const rankedPool = (quickPool.length > 0 ? quickPool : suggestionPool)
+    .map((item, index) => ({ item, index, motivation: motivationFor(item) }))
+    .sort((a, b) => b.motivation - a.motivation || a.index - b.index)
+    .map(({ item }) => item);
   const suggestionItem = rankedPool[0] ?? null;
   const suggestion = suggestionItem
     ? {

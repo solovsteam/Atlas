@@ -5,9 +5,24 @@ import { buildNowFocus } from "../shared/scheduling/now";
 import { selectCalendarEvents, serializeVevent } from "../shared/ics";
 import { occurrenceKeysInHorizon } from "../shared/recurrence";
 import type { Item } from "../shared/item";
-import type { ItemLink } from "../shared/links";
+import { taskCountInInterval, type ItemLink } from "../shared/links";
+import { indexTaskCountsByInterval } from "../shared/intervalTaskCounts";
 
 const now = new Date("2026-09-24T08:00:00Z");
+
+test("interval task count index matches direct counts, including duplicate scheduled links", () => {
+  const links = [
+    { kind: "scheduled_in", fromId: "task-a", toId: "interval-a" },
+    { kind: "scheduled_in", fromId: "task-a", toId: "interval-a" },
+    { kind: "scheduled_in", fromId: "task-b", toId: "interval-b" },
+    { kind: "context", fromId: "task-c", toId: "interval-a" }
+  ] as ItemLink[];
+  const counts = indexTaskCountsByInterval(links);
+
+  for (const intervalId of ["interval-a", "interval-b", "interval-empty"]) {
+    assert.equal(counts.get(intervalId) ?? 0, taskCountInInterval(intervalId, links));
+  }
+});
 
 test("recurrence horizon rejects invalid dates and includes leap days", () => {
   const daily = { frequency: "daily", interval: 1, horizonDays: 2 } as const;

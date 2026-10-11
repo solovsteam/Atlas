@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import type { Item } from "@shared/item";
 import { taskCountInInterval, type ItemLink } from "@shared/links";
+import { indexTaskCountsByInterval } from "@shared/intervalTaskCounts";
 import {
   addDays,
   allDayBoxesOnDay,
@@ -161,6 +162,7 @@ export function CalendarMonthView({
   const gridDays = daysInMonthGrid(monthStart);
   const gridEnd = addDays(gridDays[gridDays.length - 1]!, 1);
   const monthSlots = slots.filter((slot) => slotOverlapsRange(slot, gridDays[0]!, gridEnd));
+  const taskCountsByInterval = indexTaskCountsByInterval(links);
 
   return (
     <div>
@@ -175,7 +177,7 @@ export function CalendarMonthView({
           const dayStart = startOfDay(day);
           const dayEnd = addDays(dayStart, 1);
           const daySlots = monthSlots.filter((slot) => slotOverlapsRange(slot, dayStart, dayEnd));
-          const withTasks = daySlots.filter((slot) => taskCountInInterval(slot.id, links) > 0).length;
+          const withTasks = daySlots.filter((slot) => (taskCountsByInterval.get(slot.id) ?? 0) > 0).length;
           const isToday = startOfDay(new Date()).getTime() === dayStart.getTime();
           return (
             <button

@@ -121,6 +121,8 @@ Now motivation: TMT with delay = days until due (0 if overdue); flexible tasks s
 
 Metrics: total postponement of the resulting assignment (unassigned tasks cost postponement at horizon), context-switch count inside intervals, assigned count.
 
+The ordinary scheduling-capacity tests include a bounded exhaustive oracle for at most four tasks and three fixed intervals. It enumerates every feasible per-interval task order and every leftover set, then computes postponement, context switches, and assigned count independently from the documented formulas. Three small hand-specified fixtures compare all strategies with the feasible set and its Pareto frontier. This is a regression aid for tiny cases, not a proof of global optimality: it omits appointment/reservation inputs, dynamic interval clipping, task eligibility edge cases, and instances above those bounds. The heuristics are expected to be feasible candidates; they need not lie on the frontier or be globally optimal.
+
 Metrics from `npm run test:scheduling` (after last-chance deadline bonus): see fixture names in `shared/scheduling/fixtures.ts`. Last-chance rule: if no later interval can fit a task, a deadline gets +500 and a flexible task +80, so due-tonight work wins a single morning block over high-importance open work.
 
 ## Out of scope

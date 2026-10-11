@@ -18,6 +18,120 @@ import { compareItems, sortItemsByRelevance, type RelevanceContext } from "../sh
 import { calculateSchedulerMetrics } from "../shared/scheduling/metrics";
 import { intervalRange } from "../shared/scheduling/constraints";
 
+type OraclePlan = { assignments: { taskId: string; intervalId: string }[]; unassigned: string[]; metrics: { totalPostponement: number; contextSwitches: number; assignedCount: number } };
+
+// Deliberately tiny reference enumerator: each task occurs in at most one block,
+// and each block's ordered task list must fit its buffered capacity.
+function exhaustivePlans(tasks: TaskScheduleInput[], intervals: IntervalInput[], config: ReturnType<typeof mergeSchedulerConfig>): OraclePlan[] {
+  if (tasks.length > 4 || intervals.length > 3) throw new Error("oracle bound exceeded");
+  const plans: OraclePlan[] = [];
+  const used = new Set<string>();
+  const assigned: { taskId: string; intervalId: string }[] = [];
+  const sequences: string[][] = intervals.map(() => []);
+  const durations = new Map(tasks.map((task) => [task.id, bufferedMinutes(resolvedDuration(task, config), config)]));
+  const capacities = intervals.map((entry) => intervalCapacityMinutes(entry, config));
+
+  function measure(): OraclePlan {
+    const byId = new Map(tasks.map((task) => [task.id, task]));
+    let totalPostponement = 0;
+    let contextSwitches = 0;
+    for (const assignment of assigned) {
+      const t = byId.get(assignment.taskId)!;
+      const block = intervals.find(({ id }) => id === assignment.intervalId)!;
+      const days = Math.max(0, (new Date(block.startsAt).getTime() - config.now.getTime()) / 86_400_000);
+      const value = Math.max(0, Math.min(100, t.importance * 10));
+      const due = t.dueAt ? new Date(t.dueAt).getTime() : NaN;
+      const cost = Number.isFinite(due)
+        ? config.urgencyWeight * (due <= new Date(block.startsAt).getTime() ? 100 : 100 / (1 + config.gamma * (due - new Date(block.startsAt).getTime()) / 86_400_000)) + config.valueWeight * value
+        : value * (1 - 1 / (1 + config.gamma * days / 7));
+      totalPostponement += cost;
+    }
+    for (const id of tasks.filter(({ id }) => !used.has(id)).map(({ id }) => id)) {
+      const t = byId.get(id)!;
+      const horizon = new Date(config.now.getTime() + config.horizonDays * 86_400_000);
+      const due = t.dueAt ? new Date(t.dueAt) : null;
+      const at = due && due < horizon ? due : horizon;
+      const days = Math.max(0, (at.getTime() - config.now.getTime()) / 86_400_000);
+      const value = Math.max(0, Math.min(100, t.importance * 10));
+      const cost = due
+        ? config.urgencyWeight * (at >= due ? 100 : 100 / (1 + config.gamma * (due.getTime() - at.getTime()) / 86_400_000)) + config.valueWeight * value
+        : value * (1 - 1 / (1 + config.gamma * days / 7));
+      totalPostponement += cost;
+    }
+    for (const sequence of sequences) for (let i = 1; i < sequence.length; i += 1) {
+      const a = byId.get(sequence[i - 1]!)!;
+      const b = byId.get(sequence[i]!)!;
+      if (!(a.parentTaskId && a.parentTaskId === b.parentTaskId) && !(b.parentTaskId && (b.parentTaskId === a.id || a.parentTaskId === b.id)) && !b.tags.some((tag) => tag && a.tags.includes(tag))) contextSwitches += 1;
+    }
+    return { assignments: [...assigned], unassigned: tasks.filter(({ id }) => !used.has(id)).map(({ id }) => id), metrics: { totalPostponement, contextSwitches, assignedCount: assigned.length } };
+  }
+  function addBlock(index: number) {
+    if (index === intervals.length) { plans.push(measure()); return; }
+    const block = intervals[index]!;
+    const seq = sequences[index]!;
+    const remaining = capacities[index]!;
+    function extend(left: number) {
+      addBlock(index + 1);
+      for (const task of tasks) {
+        if (used.has(task.id) || !taskFitsInterval(task, block, left, config)) continue;
+        const size = durations.get(task.id)!;
+        used.add(task.id); seq.push(task.id); assigned.push({ taskId: task.id, intervalId: block.id });
+        extend(left - size);
+        assigned.pop(); seq.pop(); used.delete(task.id);
+      }
+    }
+    extend(remaining);
+  }
+  addBlock(0);
+  return plans;
+}
+
+function paretoPlans(plans: OraclePlan[]): OraclePlan[] {
+  return plans.filter((candidate) => !plans.some((other) => other !== candidate &&
+    other.metrics.totalPostponement <= candidate.metrics.totalPostponement &&
+    other.metrics.contextSwitches <= candidate.metrics.contextSwitches &&
+    other.metrics.assignedCount >= candidate.metrics.assignedCount &&
+    (other.metrics.totalPostponement < candidate.metrics.totalPostponement || other.metrics.contextSwitches < candidate.metrics.contextSwitches || other.metrics.assignedCount > candidate.metrics.assignedCount)));
+}
+
+test("bounded exhaustive oracle enumerates tiny plans and compares heuristics to its Pareto frontier", () => {
+  const one = exhaustivePlans([task("a", 30), task("b", 30)], [interval("only", date("09:00"), date("10:30"))], mergeSchedulerConfig(now));
+  assert.equal(one.length, 5); // empty, either singleton, and both possible orders
+  assert.deepEqual(one.map(({ assignments }) => assignments.length).sort(), [0, 1, 1, 2, 2]);
+  const fixtures = [
+    { tasks: [task("a", 30), { ...task("b", 30), importance: 8, tags: ["x"] }, { ...task("c", 30), importance: 4, tags: ["x"] }], blocks: [interval("am", date("09:00"), date("10:30"))] },
+    { tasks: [{ ...task("urgent", 30), dueAt: date("10:00") }, task("flex", 30), task("left", 60)], blocks: [interval("am", date("09:00"), date("10:00")), interval("pm", date("11:00"), date("12:00"))] },
+    { tasks: [task("p", 30), { ...task("q", 30), tags: ["same"] }, { ...task("r", 30), tags: ["same"] }, task("s", 30)], blocks: [interval("a", date("09:00"), date("10:00")), interval("b", date("11:00"), date("12:00"))] }
+  ];
+  for (const fixture of fixtures) {
+    const configBase = mergeSchedulerConfig(now);
+    const frontier = paretoPlans(exhaustivePlans(fixture.tasks, fixture.blocks, configBase));
+    assert.ok(frontier.length > 0);
+    for (const strategy of ["earliest_fit", "delta_cost", "delta_cost_switch"] as const) {
+      const config = mergeSchedulerConfig(now, { strategy });
+      const result = runScheduler(fixture.tasks, fixture.blocks, config);
+      const oraclePlan = exhaustivePlans(fixture.tasks, fixture.blocks, config).find((plan) =>
+        JSON.stringify(plan.assignments) === JSON.stringify(result.assignments));
+      assert.ok(oraclePlan, `${strategy} assignment/order must be in the exhaustive feasible set`);
+      const usedIds = result.assignments.map(({ taskId }) => taskId);
+      assert.equal(new Set(usedIds).size, usedIds.length);
+      assert.ok(result.assignments.every(({ taskId, intervalId }) => {
+        const t = fixture.tasks.find(({ id }) => id === taskId)!;
+        const block = fixture.blocks.find(({ id }) => id === intervalId)!;
+        return !!t && !!block && taskFitsInterval(t, block, intervalCapacityMinutes(block, config), config);
+      }));
+      assert.equal(result.metrics.assignedCount, usedIds.length);
+      assert.ok(Math.abs(result.metrics.totalPostponement - oraclePlan.metrics.totalPostponement) < 1e-8);
+      assert.equal(result.metrics.contextSwitches, oraclePlan.metrics.contextSwitches);
+      assert.ok(frontier.every((candidate) => !frontier.some((other) => other !== candidate &&
+        other.metrics.totalPostponement <= candidate.metrics.totalPostponement &&
+        other.metrics.contextSwitches <= candidate.metrics.contextSwitches &&
+        other.metrics.assignedCount >= candidate.metrics.assignedCount &&
+        (other.metrics.totalPostponement < candidate.metrics.totalPostponement || other.metrics.contextSwitches < candidate.metrics.contextSwitches || other.metrics.assignedCount > candidate.metrics.assignedCount))));
+    }
+  }
+});
+
 const date = (hour: string) => `2026-09-24T${hour}:00.000Z`;
 const now = new Date(date("08:00"));
 

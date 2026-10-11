@@ -11,8 +11,7 @@ function inherit<T>(own: T | null | undefined, parent: T | null | undefined, emp
   return own ?? parent ?? empty;
 }
 
-export function itemToScheduleInput(item: Item, items: Item[]): TaskScheduleInput {
-  const parent = item.parentTaskId ? items.find((entry) => entry.id === item.parentTaskId) : undefined;
+function toScheduleInput(item: Item, parent: Item | undefined): TaskScheduleInput {
   const dueAt = inherit(item.taskDueAt, parent?.taskDueAt, "");
   const fixedStartsAt = inherit(item.taskFixedStartsAt, parent?.taskFixedStartsAt, "");
   const fixedEndsAt = inherit(item.taskFixedEndsAt, parent?.taskFixedEndsAt, "");
@@ -33,6 +32,18 @@ export function itemToScheduleInput(item: Item, items: Item[]): TaskScheduleInpu
   };
 }
 
+export function itemToScheduleInput(item: Item, items: Item[]): TaskScheduleInput {
+  const parent = item.parentTaskId ? items.find((entry) => entry.id === item.parentTaskId) : undefined;
+  return toScheduleInput(item, parent);
+}
+
 export function itemsToScheduleInputs(items: Item[]): TaskScheduleInput[] {
-  return items.filter((item) => item.isTask && item.taskStatus === "active").map((item) => itemToScheduleInput(item, items));
+  const firstItemById = new Map<string, Item>();
+  for (const item of items) {
+    if (!firstItemById.has(item.id)) firstItemById.set(item.id, item);
+  }
+
+  return items
+    .filter((item) => item.isTask && item.taskStatus === "active")
+    .map((item) => toScheduleInput(item, item.parentTaskId ? firstItemById.get(item.parentTaskId) : undefined));
 }

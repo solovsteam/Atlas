@@ -8,7 +8,7 @@ import { appointmentOverlapMinutes, constraintMode, intervalCapacityMinutes, int
 import { eligibleTasks } from "../shared/scheduling/eligible";
 import { nowMotivation, postponementCost, waitHorizon } from "../shared/scheduling/deferral";
 import { bufferedMinutes } from "../shared/scheduling/math";
-import { itemsToScheduleInputs } from "../shared/scheduling/resolve";
+import { itemToScheduleInput, itemsToScheduleInputs } from "../shared/scheduling/resolve";
 import { calendarIntervalFromItem, isArchivedSlot } from "../shared/schedule";
 import { proposeSchedule } from "../src/services/scheduling";
 import { compareItems, sortItemsByRelevance, type RelevanceContext } from "../shared/relevance";
@@ -164,6 +164,33 @@ function item(partial: Partial<Item>): Item {
     ...partial
   };
 }
+
+test("schedule input indexing preserves immediate parent semantics and item order", () => {
+  const firstParent = item({ id: "parent", taskDueAt: "first due", taskFixedStartsAt: "", taskFixedEndsAt: null as unknown as string,
+    expectedDurationMinutes: 45, manualRelevance: 0 });
+  const duplicateParent = item({ id: "parent", taskDueAt: "duplicate due", taskFixedStartsAt: "duplicate start",
+    taskFixedEndsAt: "duplicate end", expectedDurationMinutes: 90, manualRelevance: 8 });
+  const child = item({ id: "child", isTask: true, parentTaskId: "parent", taskDueAt: "", taskFixedStartsAt: null as unknown as string,
+    taskFixedEndsAt: "own end", expectedDurationMinutes: null, manualRelevance: 0 });
+  const absentParentChild = item({ id: "orphan", isTask: true, parentTaskId: "missing", taskDueAt: "",
+    taskFixedStartsAt: null as unknown as string, expectedDurationMinutes: null, manualRelevance: 0 });
+  const unrelated = item({ id: "note" });
+  const items = [child, unrelated, firstParent, duplicateParent, absentParentChild];
+
+  const actual = itemsToScheduleInputs(items);
+  assert.deepEqual(actual, items
+    .filter((entry) => entry.isTask && entry.taskStatus === "active")
+    .map((entry) => itemToScheduleInput(entry, items)));
+  assert.deepEqual(actual.map((entry) => entry.id), ["child", "orphan"]);
+  assert.deepEqual(actual[0], {
+    id: "child", title: "Item", createdAt: now.toISOString(), importance: 0, durationMinutes: 45,
+    dueAt: "first due", fixedStartsAt: null, fixedEndsAt: "own end", parentTaskId: "parent", tags: []
+  });
+  assert.deepEqual(actual[1], {
+    id: "orphan", title: "Item", createdAt: now.toISOString(), importance: 0, durationMinutes: null,
+    dueAt: null, fixedStartsAt: null, fixedEndsAt: null, parentTaskId: "missing", tags: []
+  });
+});
 
 const workBlock = (id: string, start = date("09:00"), end = date("09:45")) => item({
   id, isInterval: true, intervalKind: "fixed", intervalStatus: "scheduled",

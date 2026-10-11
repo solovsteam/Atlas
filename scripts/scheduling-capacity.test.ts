@@ -11,9 +11,31 @@ import { bufferedMinutes } from "../shared/scheduling/math";
 import { itemsToScheduleInputs } from "../shared/scheduling/resolve";
 import { calendarIntervalFromItem, isArchivedSlot } from "../shared/schedule";
 import { proposeSchedule } from "../src/services/scheduling";
+import { compareItems, sortItemsByRelevance, type RelevanceContext } from "../shared/relevance";
 
 const date = (hour: string) => `2026-09-24T${hour}:00.000Z`;
 const now = new Date(date("08:00"));
+
+test("relevance sort matches direct comparator ordering without changing items or input", () => {
+  const items = [
+    { id: "inactive", isTask: true, taskStatus: "later", tags: ["work"], manualRelevance: 9, updatedAt: "2026-09-24T10:00:00Z" },
+    { id: "note", isTask: false, taskStatus: null, tags: ["home"], manualRelevance: 3, updatedAt: "2026-09-24T11:00:00Z" },
+    { id: "active-tagged", isTask: true, taskStatus: "active", tags: ["work"], manualRelevance: 1, updatedAt: "2026-09-24T09:00:00Z" },
+    { id: "active-plain", isTask: true, taskStatus: "active", tags: [], manualRelevance: 5, updatedAt: "2026-09-24T08:00:00Z" },
+    { id: "active-plain-tie", isTask: true, taskStatus: "active", tags: [], manualRelevance: 5, updatedAt: "2026-09-24T08:00:00Z" }
+  ].map((item) => ({ ...item, updatedAt: item.updatedAt }) as unknown as Item);
+  const original = [...items];
+  const context: RelevanceContext = {
+    now, activeTags: ["work"], activeStatusBoosts: ["active"]
+  };
+  const direct = [...items].sort((a, b) => compareItems(a, b, context));
+  const sorted = sortItemsByRelevance(items, context);
+
+  assert.deepEqual(sorted, direct);
+  assert.deepEqual(items, original);
+  assert.ok(sorted.every((item, index) => item === direct[index]));
+  assert.ok(sorted.indexOf(items[3]) < sorted.indexOf(items[4]));
+});
 
 function task(id: string, minutes = 30, fixedStart?: string, fixedEnd?: string): TaskScheduleInput {
   return {

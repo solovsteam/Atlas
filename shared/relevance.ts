@@ -57,6 +57,17 @@ export function compareItems(a: Item, b: Item, ctx: RelevanceContext): number {
   const left = rankSignals(a, ctx);
   const right = rankSignals(b, ctx);
 
+  return compareRankSignals(left, right, a, b, ctx);
+}
+
+function compareRankSignals(
+  left: RankSignals,
+  right: RankSignals,
+  a: Item,
+  b: Item,
+  ctx: RelevanceContext
+): number {
+
   if (ctx.activeTags.length > 0) {
     const result = compareBooleanSignal(left.tagMatch, right.tagMatch);
     if (result !== 0) {
@@ -91,7 +102,11 @@ export function compareItems(a: Item, b: Item, ctx: RelevanceContext): number {
 }
 
 export function sortItemsByRelevance(items: Item[], ctx: RelevanceContext): Item[] {
-  return [...items].sort((a, b) => compareItems(a, b, ctx));
+  const decorated = items.map((item, index) => ({ item, index, signals: rankSignals(item, ctx) }));
+  decorated.sort((a, b) =>
+    compareRankSignals(a.signals, b.signals, a.item, b.item, ctx) || a.index - b.index
+  );
+  return decorated.map(({ item }) => item);
 }
 
 export function buildInboxEntries(items: Item[], ctx: RelevanceContext): InboxEntry[] {

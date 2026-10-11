@@ -449,6 +449,50 @@ test("ordinary recurrence fixtures follow local civil dates and include the hori
   }
 });
 
+const recurrenceSliceCases = [
+  { name: "daily, past anchor", frequency: "daily", interval: 3,
+    anchor: [2026, 6, 1], start: [2026, 6, 10], horizonDays: 20, splitDays: [1, 3, 11, 19] },
+  { name: "daily, future anchor", frequency: "daily", interval: 2,
+    anchor: [2026, 6, 15], start: [2026, 6, 10], horizonDays: 20, splitDays: [1, 5, 12, 19] },
+  { name: "weekly, past anchor", frequency: "weekly", interval: 2,
+    anchor: [2026, 6, 1], start: [2026, 6, 10], horizonDays: 40, splitDays: [1, 5, 20, 39] },
+  { name: "weekly, future anchor", frequency: "weekly", interval: 1,
+    anchor: [2026, 6, 15], start: [2026, 6, 10], horizonDays: 40, splitDays: [1, 5, 20, 39] },
+  { name: "monthly, past anchor with absent September 31", frequency: "monthly", interval: 1,
+    anchor: [2026, 7, 31], start: [2026, 8, 1], horizonDays: 91, splitDays: [1, 30, 60, 90],
+    expected: ["2026-08-31", "2026-10-31"] },
+  { name: "monthly, future anchor with absent September and November 31", frequency: "monthly", interval: 2,
+    anchor: [2026, 7, 31], start: [2026, 7, 1], horizonDays: 245, splitDays: [1, 30, 100, 244],
+    expected: ["2026-07-31", "2027-01-31"] }
+] as const;
+
+for (const fixture of recurrenceSliceCases) {
+  test(`recurrence adjacent civil-date slices agree with the bounded horizon: ${fixture.name}`, () => {
+    const civilDate = ([year, month, day]: readonly number[]) => new Date(year, month - 1, day, 12);
+    const anchor = civilDate(fixture.anchor);
+    const start = civilDate(fixture.start);
+    const rule = { frequency: fixture.frequency, interval: fixture.interval, horizonDays: fixture.horizonDays };
+    const whole = occurrenceKeysInHorizon(rule, anchor, start);
+    assert.ok(whole.length > 0, "the comparison must exercise actual occurrences");
+    if ("expected" in fixture) assert.deepEqual(whole, fixture.expected);
+
+    for (const splitDays of fixture.splitDays) {
+      const boundary = new Date(start);
+      boundary.setDate(boundary.getDate() + splitDays);
+      const boundaryKey = [boundary.getFullYear(), String(boundary.getMonth() + 1).padStart(2, "0"),
+        String(boundary.getDate()).padStart(2, "0")].join("-");
+      const left = occurrenceKeysInHorizon({ ...rule, horizonDays: splitDays }, anchor, start);
+      const right = occurrenceKeysInHorizon({ ...rule, horizonDays: rule.horizonDays - splitDays }, anchor, boundary);
+
+      // Both horizons include their endpoints; only an occurrence on the shared
+      // civil date may appear in both slices. Preserve order while deduplicating it.
+      assert.deepEqual(left, whole.filter((key) => key <= boundaryKey), `left slice at ${boundaryKey}`);
+      assert.deepEqual(right, whole.filter((key) => key >= boundaryKey), `right slice at ${boundaryKey}`);
+      assert.deepEqual([...new Set([...left, ...right])], whole, `union at ${boundaryKey}`);
+    }
+  });
+}
+
 function block(id: string, start: string, end: string): Item {
   return {
     id, title: id, isInterval: true, intervalKind: "fixed", intervalStatus: "scheduled",

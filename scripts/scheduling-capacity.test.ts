@@ -392,6 +392,46 @@ function interval(id: string, start = date("09:00"), end = date("12:00")): Inter
 }
 
 for (const strategy of ["earliest_fit", "delta_cost", "delta_cost_switch"] as const) {
+  test(`${strategy}: deadline boundaries remain hard filters with exact capacity and reservations`, () => {
+    const config = {
+      now: new Date(date("09:15")), horizonDays: 21, gamma: 1, durationBuffer: 1.25,
+      defaultDurationMinutes: 30, switchPenalty: 12, wsptWeight: 8,
+      urgencyWeight: 0.6, valueWeight: 0.4, strategy
+    };
+    const cases = [
+      { name: "end equals due", start: date("10:00"), end: date("10:30"), due: date("10:30"), fits: true },
+      // Shift both ends by 1ms to keep capacity exactly 30 minutes. Spare
+      // capacity cannot permit a block whose end exceeds the deadline.
+      { name: "end one millisecond late", start: "2026-09-24T10:00:00.001Z", end: "2026-09-24T10:30:00.001Z", due: date("10:30"), fits: false },
+      { name: "offset block equals UTC due", start: "2026-09-24T12:00:00+02:00", end: "2026-09-24T12:30:00+02:00", due: date("10:30"), fits: true },
+      { name: "UTC block equals offset due", start: date("10:00"), end: date("10:30"), due: "2026-09-24T05:30:00-05:00", fits: true },
+      { name: "malformed deadline", start: date("10:00"), end: date("10:30"), due: "not-a-date", fits: false },
+      { name: "elapsed block clipped at now", start: date("08:00"), end: date("09:45"), due: date("09:45"), fits: true },
+      // Even if this task could finish before due, allocation is to the whole
+      // interval; clipping its elapsed start does not relax the end-by-due rule.
+      { name: "clipped block ends after due", start: date("08:00"), end: date("09:45"), due: date("09:30"), fits: false }
+    ];
+    for (const entry of cases) {
+      const block = interval("boundary", entry.start, entry.end);
+      const candidate = { ...task("deadline", 12), dueAt: entry.due };
+      assert.equal(intervalCapacityMinutes(block, config), 30, entry.name);
+      // 12 × 1.25 = 15 buffered minutes. Reserving 15 leaves an exact fit;
+      // reserving 16 leaves 14, which must fail even at a valid deadline.
+      for (const reserved of [15, 16]) {
+        const fits = entry.fits && reserved === 15;
+        const context = `${entry.name}, reserved ${reserved}`;
+        assert.equal(taskFitsInterval(candidate, block, 30 - reserved, config), fits, context);
+        const result = runScheduler([candidate], [block], config, new Map([[block.id, reserved]]));
+        assert.deepEqual(result.assignments, fits ? [{ taskId: "deadline", intervalId: "boundary" }] : [], context);
+        assert.deepEqual(result.unassigned, fits ? [] : [{ taskId: "deadline", reason: "no_feasible_interval" }], context);
+        assert.equal(result.metrics.assignedCount, fits ? 1 : 0, context);
+        assert.equal(result.metrics.unassignedCount, fits ? 0 : 1, context);
+      }
+    }
+  });
+}
+
+for (const strategy of ["earliest_fit", "delta_cost", "delta_cost_switch"] as const) {
   // Pin every knob explicitly; expected sizes below use independent arithmetic,
   // never the production resolvedDuration/bufferedMinutes/fit helpers.
   const config = {

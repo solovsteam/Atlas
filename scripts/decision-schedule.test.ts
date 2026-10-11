@@ -10,13 +10,83 @@ import { indexTaskCountsByInterval } from "../shared/intervalTaskCounts";
 import { byDueThenTitle } from "../shared/review";
 import { dueAtForPreset, isDueSameLocalDay, isDueThisWeek, isOverdue } from "../shared/due";
 import { nominalWorkWindow, workBlockForNow, workBlockOverlapsExisting } from "../shared/workBlocks";
-import { boxDisplayLabel, layoutBoxesOnDay, type ScheduleSlot } from "../shared/schedule";
+import { boxDisplayLabel, boxesForDay, layoutBoxesOnDay, slotsInRange, type ScheduleSlot } from "../shared/schedule";
 import {
   DATE_PLACEHOLDER, DATE_TIME_PLACEHOLDER, formatEuropeanDate, formatEuropeanDateTime,
   isoFromEuropeanDate, isoFromEuropeanDateTime, normalizeEuropeanDate, normalizeEuropeanDateTime,
   parseEuropeanDate, parseEuropeanDateTime, parseFlexibleDate, parseFlexibleDateTime,
   validateEuropeanDate, validateEuropeanDateTime
 } from "../shared/locale";
+
+for (const scope of ["range", "day"] as const) {
+  test(`${scope === "range" ? "slotsInRange" : "boxesForDay"} preserves kind-specific boundaries, endpoints and input order`, () => {
+    // Local constructors make these fixtures valid under both UTC and Berlin.
+    const day = new Date(2026, 8, 24, 12);
+    const rangeStart = new Date(2026, 8, 24, scope === "range" ? 10 : 0);
+    const rangeEnd = scope === "range" ? new Date(2026, 8, 24, 14) : new Date(2026, 8, 25);
+    const start = rangeStart.getTime();
+    const end = rangeEnd.getTime();
+    const midnight = new Date(2026, 8, 24).getTime();
+    // Each row explicitly records [fixed, due, allDay] inclusion. Fixed overlap
+    // includes an end exactly at the lower bound, but excludes a start at the
+    // upper bound. Due uses endsAt (falling back to startsAt) in [start, end).
+    // All-day uses startsAt (falling back to endsAt), ignores span duration,
+    // and lowers the range's start to local midnight, even for an intraday range.
+    const fixtures: [string, number | null, number | null, [boolean, boolean, boolean]][] = [
+      ["ends-before-start", start - 2, start - 1, [false, false, scope === "range"]],
+      ["ends-at-start", start - 1, start, [true, true, scope === "range"]],
+      ["starts-at-start", start, start + 1, [true, true, true]],
+      ["ends-at-end", end - 1, end, [true, false, true]],
+      ["starts-at-end", end, end + 1, [false, false, false]],
+      ["starts-after-end", end + 1, end + 2, [false, false, false]],
+      ["spans-range", midnight - 1, end + 1, [true, false, false]],
+      ["start-only-before", start - 1, null, [false, false, scope === "range"]],
+      ["start-only-at-start", start, null, [true, true, true]],
+      ["start-only-before-end", end - 1, null, [true, true, true]],
+      ["start-only-at-end", end, null, [false, false, false]],
+      ["end-only-before", null, start - 1, [false, false, scope === "range"]],
+      ["end-only-at-start", null, start, [true, true, true]],
+      ["end-only-before-end", null, end - 1, [true, true, true]],
+      ["end-only-at-end", null, end, [false, false, false]],
+      ["no-endpoints", null, null, [false, false, false]],
+      ["anchored-at-midnight", midnight, start + 1, [true, true, true]],
+      ["anchored-before-midnight", midnight - 1, start + 1, [true, true, false]]
+    ];
+    const cases = fixtures.flatMap(([name, startsAt, endsAt, inclusion]) =>
+      (["fixed", "due", "allDay"] as const).map((kind, index) => ({
+        slot: {
+          id: `${kind}:${name}`, ownerId: "owner", kind,
+          startsAt: startsAt === null ? null : new Date(startsAt).toISOString(),
+          endsAt: endsAt === null ? null : new Date(endsAt).toISOString(),
+          slotStatus: "scheduled" as const, label: name,
+          createdAt: day.toISOString(), updatedAt: day.toISOString()
+        },
+        included: inclusion[index]
+      }))
+    );
+    const select = (slots: ScheduleSlot[]) => scope === "range"
+      ? slotsInRange(slots, rangeStart, rangeEnd)
+      : boxesForDay(slots, day);
+    const dateSnapshot = [day.getTime(), start, end];
+    for (const { slot, included } of cases) {
+      const before = structuredClone(slot);
+      assert.deepEqual(select([slot]).map(({ id }) => id), included ? [slot.id] : [], slot.id);
+      assert.deepEqual(slot, before, `${slot.id}: input must not change`);
+    }
+    // Deliberately nonchronological, interleaved kinds; reversing proves this
+    // filter preserves caller order rather than sorting by kind or timestamp.
+    for (const ordered of [cases, [...cases].reverse()]) {
+      const slots = ordered.map(({ slot }) => slot);
+      const before = structuredClone(slots);
+      const expected = ordered.filter(({ included }) => included).map(({ slot }) => slot);
+      const result = select(slots);
+      assert.deepEqual(result.map(({ id }) => id), expected.map(({ id }) => id));
+      result.forEach((slot, index) => assert.strictEqual(slot, expected[index], "original slot identity"));
+      assert.deepEqual(slots, before, "input values and order must not change");
+    }
+    assert.deepEqual([day.getTime(), rangeStart.getTime(), rangeEnd.getTime()], dateSnapshot, "date arguments must not change");
+  });
+}
 
 // Frozen private oracle copied from shared/locale.ts before the deduplication.
 const oracleStrictRe = /^(\d{1,2})\.(\d{1,2})\.(\d{4})(?:[,\s]+(\d{1,2}):(\d{2}))?$/;

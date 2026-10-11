@@ -1114,7 +1114,7 @@ test("scheduler sorts equivalent offset starts chronologically and preserves tie
   });
 });
 
-test("scheduler full output is invariant to equivalent timestamp offsets near midnight and at a clipped interval", () => {
+test("scheduler full output is invariant to equivalent offsets and distinct fixed-interval permutations", () => {
   const configNow = new Date("2026-03-29T00:15:00Z");
   const tasks: TaskScheduleInput[] = [
     { ...task("appointment", 45, "2026-03-29T00:05:00Z", "2026-03-29T00:50:00Z"), importance: 8 },
@@ -1155,6 +1155,29 @@ test("scheduler full output is invariant to equivalent timestamp offsets near mi
   assert.ok(Date.parse(changedTasks[0]!.fixedStartsAt!) === Date.parse(tasks[0]!.fixedStartsAt!));
   assert.ok(Date.parse(changedTasks[1]!.dueAt!) === Date.parse(tasks[1]!.dueAt!));
 
+  // Reuse the offset fixture, restricting the permutation premise to unique
+  // fixed intervals with distinct start instants (including the partial-past
+  // block). Keep tasks, config, and reservations identical for each permutation.
+  const fixedIntervals = [
+    ...intervals.filter((entry) => entry.kind === "fixed"),
+    interval("last", "2026-03-29T04:00:00Z", "2026-03-29T05:00:00Z")
+  ];
+  const offsetFixedIntervals = [
+    ...changedIntervals.filter((entry) => entry.kind === "fixed"),
+    interval("last", "2026-03-29T09:30:00+05:30", "2026-03-29T00:00:00-05:00")
+  ];
+  const reservations = new Map([["clipped", 20], ["later", 10], ["last", 5]]);
+  const permutations = [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]];
+  assert.equal(fixedIntervals.length, 3);
+  assert.equal(new Set(fixedIntervals.map(({ id }) => id)).size, 3);
+  assert.equal(new Set(fixedIntervals.map(({ startsAt }) => Date.parse(startsAt))).size, 3);
+  assert.ok(Date.parse(fixedIntervals[0]!.startsAt) < configNow.getTime());
+  assert.ok(Date.parse(fixedIntervals[0]!.endsAt) > configNow.getTime());
+  for (const [index, entry] of offsetFixedIntervals.entries()) {
+    assert.equal(Date.parse(entry.startsAt), Date.parse(fixedIntervals[index]!.startsAt));
+    assert.equal(Date.parse(entry.endsAt), Date.parse(fixedIntervals[index]!.endsAt));
+  }
+
   for (const strategy of ["earliest_fit", "delta_cost", "delta_cost_switch"] as const) {
     const config = mergeSchedulerConfig(configNow, { strategy, horizonDays: 0.2 });
     const baseline = runScheduler(tasks, intervals, config);
@@ -1165,6 +1188,37 @@ test("scheduler full output is invariant to equivalent timestamp offsets near mi
       baseline,
       `${strategy}: assignments, unassigned reasons, and metrics are invariant`
     );
+
+    const fixedBaseline = runScheduler(tasks, fixedIntervals, config, reservations);
+    assert.ok(new Set(fixedBaseline.assignments.map(({ intervalId }) => intervalId)).size > 1,
+      `${strategy}: permutation fixture assigns across multiple blocks`);
+    assert.ok(fixedBaseline.unassigned.some(({ reason }) => reason === "excluded"));
+    assert.ok(fixedBaseline.unassigned.some(({ reason }) => reason === "no_feasible_interval"));
+    for (const representation of [fixedIntervals, offsetFixedIntervals]) {
+      for (const order of permutations) {
+        assert.deepEqual(
+          runScheduler(tasks, order.map((index) => representation[index]!), config, reservations),
+          fixedBaseline,
+          `${strategy}: full result for ${representation === fixedIntervals ? "UTC" : "offset"} order ${order}`
+        );
+      }
+    }
+  }
+});
+
+test("equal-start fixed intervals retain encounter order outside the permutation premise", () => {
+  const first = interval("first", "2026-09-24T10:00:00+02:00", "2026-09-24T11:00:00+02:00");
+  const second = interval("second", date("08:00"), date("09:00"));
+  const tasks = [task("work", 45)];
+  assert.equal(Date.parse(first.startsAt), Date.parse(second.startsAt));
+  for (const strategy of ["earliest_fit", "delta_cost", "delta_cost_switch"] as const) {
+    const config = mergeSchedulerConfig(now, { strategy });
+    const baseline = runScheduler(tasks, [first, second], config);
+    assert.deepEqual(baseline.assignments, [{ taskId: "work", intervalId: "first" }]);
+    assert.deepEqual(runScheduler(tasks, [second, first], config), {
+      ...baseline,
+      assignments: [{ taskId: "work", intervalId: "second" }]
+    }, `${strategy}: ties follow encounter order with identical reasons and metrics`);
   }
 });
 

@@ -11,11 +11,16 @@ export type ReviewBuckets = {
   later: Item[];
 };
 
-function byDueThenTitle(a: Item, b: Item): number {
-  const aDue = a.taskDueAt || "9999";
-  const bDue = b.taskDueAt || "9999";
-  if (aDue !== bDue) {
-    return aDue.localeCompare(bDue);
+export function byDueThenTitle(a: Item, b: Item): number {
+  const aDue = a.taskDueAt ? Date.parse(a.taskDueAt) : Number.NaN;
+  const bDue = b.taskDueAt ? Date.parse(b.taskDueAt) : Number.NaN;
+  const aHasDue = Number.isFinite(aDue);
+  const bHasDue = Number.isFinite(bDue);
+  if (aHasDue !== bHasDue) {
+    return aHasDue ? -1 : 1;
+  }
+  if (aHasDue && bHasDue && aDue !== bDue) {
+    return aDue - bDue;
   }
   return a.title.localeCompare(b.title);
 }

@@ -7,6 +7,7 @@ import { occurrenceKeysInHorizon } from "../shared/recurrence";
 import type { Item } from "../shared/item";
 import { taskCountInInterval, type ItemLink } from "../shared/links";
 import { indexTaskCountsByInterval } from "../shared/intervalTaskCounts";
+import { byDueThenTitle } from "../shared/review";
 
 const now = new Date("2026-09-24T08:00:00Z");
 
@@ -22,6 +23,26 @@ test("interval task count index matches direct counts, including duplicate sched
   for (const intervalId of ["interval-a", "interval-b", "interval-empty"]) {
     assert.equal(counts.get(intervalId) ?? 0, taskCountInInterval(intervalId, links));
   }
+});
+
+test("review orders valid deadlines by instant and undated tasks deterministically", () => {
+  const reviewTask = (id: string, title: string, taskDueAt: string): Item => ({
+    id, title, isTask: true, taskStatus: "active", expectedDurationMinutes: 30,
+    taskDueAt, taskFixedStartsAt: "", taskFixedEndsAt: "", parentTaskId: "",
+    manualRelevance: 5, tags: [], createdAt: now.toISOString()
+  } as Item);
+  const tasks = [
+    reviewTask("later-offset", "Later", "2026-09-24T09:00:00Z"),
+    reviewTask("undated-z", "Zulu", ""),
+    reviewTask("earlier-offset", "Earlier", "2026-09-24T06:30:00Z"),
+    reviewTask("invalid", "Invalid", "not-a-date"),
+    reviewTask("equivalent", "Equivalent", "2026-09-24T08:30:00+02:00"),
+    reviewTask("undated-a", "Alpha", "")
+  ];
+
+  assert.deepEqual(tasks.sort(byDueThenTitle).map(({ id }) => id), [
+    "earlier-offset", "equivalent", "later-offset", "undated-a", "invalid", "undated-z"
+  ]);
 });
 
 test("recurrence horizon rejects invalid dates and includes leap days", () => {

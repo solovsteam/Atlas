@@ -995,6 +995,54 @@ for (const strategy of ["earliest_fit", "delta_cost"] as const) {
   });
 }
 
+for (const strategy of ["earliest_fit", "delta_cost", "delta_cost_switch"] as const) {
+  for (const selection of [
+    { name: "omitted taskIds", taskIds: undefined, expected: ["a", "b"], overflow: true },
+    { name: "empty selection", taskIds: [], expected: [], overflow: false },
+    { name: "subset including ineligible IDs", taskIds: ["a", "overflow", "reserved", "appointment-a", "done", "note"], expected: ["a"], overflow: true },
+    { name: "repeated IDs", taskIds: ["b", "b", "overflow", "overflow"], expected: ["b"], overflow: true },
+    { name: "absent IDs mixed with present IDs", taskIds: ["missing", "a", "overflow", "also-missing"], expected: ["a"], overflow: true },
+    { name: "only absent IDs", taskIds: ["missing", "also-missing"], expected: [], overflow: false }
+  ]) {
+    test(`Atlas preview ${strategy}: ${selection.name} retains appointments and reservations without mutation`, () => {
+      const items = [
+        workBlock("block", date("09:00"), date("11:00")),
+        scheduledTask("a", 20), scheduledTask("b", 20),
+        item({ ...scheduledTask("overflow", 60), manualRelevance: 10 }),
+        scheduledTask("reserved", 20),
+        item({ ...scheduledTask("appointment-a", 15), taskFixedStartsAt: date("09:00"), taskFixedEndsAt: date("09:15") }),
+        item({ ...scheduledTask("appointment-b", 15), taskFixedStartsAt: date("10:00"), taskFixedEndsAt: date("10:15") }),
+        item({ ...scheduledTask("done", 20), taskStatus: "done" }),
+        item({ id: "note" })
+      ];
+      const links = [link("reservation", "reserved", "block"), link("appointment", "appointment-a", "block")];
+      const options = {
+        links, horizonDays: 1,
+        ...(selection.taskIds === undefined ? {} : { taskIds: [...selection.taskIds] })
+      };
+      const callNow = new Date(now);
+      const snapshot = structuredClone({ items, options, callNow });
+
+      const result = proposeSchedule(items, callNow, strategy, options);
+
+      // 120 minutes - 30 appointment minutes - 25 buffered reserved minutes = 65.
+      // Each small task uses 25; overflow uses 75 and would fit if either an
+      // appointment or the unselected reservation were lost. Linked appointments
+      // must also avoid being reserved twice, or the second small task won't fit.
+      assert.deepEqual(result.assignments.map(({ taskId }) => taskId).sort(), selection.expected);
+      assert.ok(result.assignments.every(({ intervalId }) => intervalId === "block"));
+      assert.deepEqual(result.unassigned, [
+        { taskId: "appointment-a", reason: "excluded" },
+        { taskId: "appointment-b", reason: "excluded" },
+        ...(selection.overflow ? [{ taskId: "overflow", reason: "no_feasible_interval" }] : [])
+      ]);
+      assert.equal(result.metrics.assignedCount, selection.expected.length);
+      assert.equal(result.metrics.unassignedCount, 2 + Number(selection.overflow));
+      assert.deepEqual({ items, options, callNow }, snapshot);
+    });
+  }
+}
+
 test("Atlas preview and Brain handoff reserve duplicate scheduled links once", () => {
   const items = [workBlock("block"), scheduledTask("existing", 20), scheduledTask("new", 15)];
   const links = [link("a", "existing", "block"), link("b", "existing", "block")];

@@ -12,9 +12,17 @@ runtime/transport tests. A live Luna/Medium worker compilation succeeded
 (IR-7dcb2c14, two calls, zero schema changes); browser fixture review preserved
 the old version on a real click. No calendar items were created.
 
-Next: final contract/undo checks, commit and main integration, then apply migration
-011 and install the idle compiler service from the main checkout. Deployment and
-live schema availability are not yet claimed. Portable note:
+Deployed: commit b206f05 was checked, fast-forwarded into main and pushed to
+origin; Vercel reports its deployment completed and the hosted bundle contains the
+generator editor. Migration 011 was applied transactionally through the Supabase
+Management API and recorded in migration history. Live metadata confirms the
+reference column, history RLS, invoker RPC and restrict FK; no recurring/history
+rows were created. `local.atlas.recurrence-compiler` is installed from main with
+the exact hosted Atlas origin allowed. Browser fetch from the hosted page to the
+local bridge health endpoint returned 200/ready. A separate phone cannot reach it.
+Temporary compiler/Vite fixture processes stopped. Keep-old and actual Undo
+clicks passed on inert browser data. The full recurring scheduling/feedback loop
+is still a separate unfinished Brain feature. Portable note:
 `.handoff/recurring-generators-20261012.md` in that thread's Atlas worktree.
 Guide and limits: `docs/RECURRING_GENERATORS.md`.
 

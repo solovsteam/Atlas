@@ -56,10 +56,9 @@ export async function projectItems(
   horizonDays = 90,
 ): Promise<Item[]> {
   const generators = raw.filter((item) => generatorRule(item));
-  const results = raw.filter(
-    (item) =>
-      !occurrenceRule(item) && generatorRule(item)?.status !== "deleted",
-  );
+  // Keep archived sources addressable from completed/changed references. The
+  // library hides them; opening a reference can still inspect or restore its source.
+  const results = raw.filter((item) => !occurrenceRule(item));
   const sources = new Set(generators.map((g) => g.id));
   for (const generator of generators) {
     const rule = generatorRule(generator)!;

@@ -20,6 +20,7 @@ import { itemsToScheduleInputs } from "../shared/scheduling/resolve";
 import { intervalsFromItems } from "../src/services/scheduling";
 import { proposeSchedule } from "../src/services/scheduling";
 import { buildNowFocus } from "../shared/scheduling/now";
+import { isLibraryItem } from "../shared/relevance";
 
 const day = "2026-10-12";
 export const owner = "11111111-1111-4111-8111-111111111111";
@@ -213,6 +214,11 @@ test("pause/delete suppress virtual occurrences while completed, edited and sche
     assert.equal(items.filter((i) => i.generatedFromId).length, 3);
     assert.equal(
       items.some((i) => i.id === g.id),
+      true,
+      "the archived source remains addressable",
+    );
+    assert.equal(
+      isLibraryItem(items.find((i) => i.id === g.id)!),
       status === "paused",
     );
   }

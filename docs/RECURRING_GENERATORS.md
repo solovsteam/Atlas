@@ -64,3 +64,10 @@ migration/RLS/history checks in PGlite, sandbox tests and inert compiler-transpo
 tests. A live 12 Oct check queued `IR-7dcb2c14`, ran Luna/Medium with two tool calls
 and zero schema changes, and independently evaluated its returned first-Monday
 predicate. Browser checks used inert data. No calendar items were created.
+
+Deployment checked 12 Oct: implementation b206f05 is on main and Vercel reported
+success. Migration 011 is recorded in the live project; metadata confirms history
+RLS, the invoker RPC and deletion restriction, with zero recurring/history rows
+created. The persistent local compiler is installed, and the hosted page reached
+its health endpoint on the Mac (200/ready). These checks do not claim a live
+authenticated occurrence mutation: browser review/undo checks used inert data.

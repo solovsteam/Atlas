@@ -1,4 +1,5 @@
 import type { Item, TaskStatus } from "./item";
+import { generatorRule } from './recurringReferences';
 
 export type RelevanceContext = {
   now: Date;
@@ -119,7 +120,7 @@ export function isParkedTask(item: Item): boolean {
 }
 
 export function isLibraryItem(item: Item): boolean {
-  return !isArchivedTask(item);
+  return !isArchivedTask(item) && generatorRule(item)?.status!=='deleted';
 }
 
 export function searchItems(items: Item[], query: string): Item[] {

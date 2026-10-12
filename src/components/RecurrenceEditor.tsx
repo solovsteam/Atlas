@@ -342,6 +342,12 @@ export function RecurrenceEditor({ item }: { item: Item }) {
   return (
     <section className={panel}>
       <h2 className="mb-3 font-medium">Recurring generator</h2>
+      {rule.status === "deleted" ? (
+        <p className="mb-3 text-sm text-amber-200">
+          Archived generator. Completed and changed occurrences still reference
+          it.
+        </p>
+      ) : null}
       <p className="mb-3 text-sm text-neutral-400">
         Open occurrences stay live from the start date through the next 90 days.
         Completed and changed occurrences are preserved.
@@ -405,7 +411,11 @@ export function RecurrenceEditor({ item }: { item: Item }) {
             }).catch((e) => setError(e.message))
           }
         >
-          {rule.status === "active" ? "Pause" : "Resume"}
+          {rule.status === "active"
+            ? "Pause"
+            : rule.status === "deleted"
+              ? "Restore generator"
+              : "Resume"}
         </button>
       </div>
       {job && busy ? (

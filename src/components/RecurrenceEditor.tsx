@@ -339,6 +339,8 @@ export function RecurrenceEditor({ item }: { item: Item }) {
   const reviews = items.filter(
     (i) => i.generatedFromId === item.id && i.recurrenceView?.needsReview,
   );
+  // Restore the archived source itself: replacing it would split the identities
+  // that completed and individually changed occurrences still reference.
   return (
     <section className={panel}>
       <h2 className="mb-3 font-medium">Recurring generator</h2>

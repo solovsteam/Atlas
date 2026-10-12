@@ -193,6 +193,8 @@ export async function previewAtlasSchedule(
     }
   }
   const workingItems = [...items, ...candidates];
+  // Recurring fixed windows remain blockers. intervalsFromItems never offers
+  // them as capacity, so applying this plan creates only tasks and links.
   const schedule = proposeSchedule(workingItems, now, "delta_cost_switch", {
     links,
     taskIds,

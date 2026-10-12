@@ -3,7 +3,12 @@ import { parseStoredTaskDuration } from "./duration";
 
 export type TaskStatus = "active" | "later" | "done" | "cancelled";
 
-export const TASK_STATUSES: TaskStatus[] = ["active", "later", "done", "cancelled"];
+export const TASK_STATUSES: TaskStatus[] = [
+  "active",
+  "later",
+  "done",
+  "cancelled",
+];
 
 export type CompletionRule =
   | { kind: "manual" }
@@ -30,6 +35,7 @@ export type Item = {
   documentationSchema: unknown | null;
   documentationData: unknown | null;
   recurrenceRule: unknown | null;
+  recurrenceState?: unknown | null;
   generatedFromId: string;
   occurrenceKey: string;
   overriddenFields: string[];
@@ -40,6 +46,14 @@ export type Item = {
   revision: number;
   createdAt: string;
   updatedAt: string;
+  recurrenceView?: {
+    virtual: boolean;
+    needsReview: boolean;
+    reasons: string[];
+    pinned: boolean;
+    availableFrom?: string;
+  };
+  recurrenceError?: string;
 };
 
 export type ItemPatch = Partial<{
@@ -60,6 +74,8 @@ export type ItemPatch = Partial<{
   documentationSchema: unknown | null;
   documentationData: unknown | null;
   recurrenceRule: unknown | null;
+  recurrenceState: unknown | null;
+  occurrenceStarted: boolean;
   overriddenFields: string[];
   intervalKind: string;
   intervalStartsAt: string | null;
@@ -68,8 +84,7 @@ export type ItemPatch = Partial<{
 }>;
 
 export type UpdateItemResult =
-  | { ok: true; revision: number }
-  | { conflict: true; serverItem: Item };
+  { ok: true; revision: number } | { conflict: true; serverItem: Item };
 
 export type CreateItemResult = {
   id: string;
@@ -87,6 +102,7 @@ export function patchUsesExtendedFields(patch: ItemPatch): boolean {
     patch.documentationSchema !== undefined ||
     patch.documentationData !== undefined ||
     patch.recurrenceRule !== undefined ||
+    patch.recurrenceState !== undefined ||
     patch.overriddenFields !== undefined ||
     patch.intervalKind !== undefined ||
     patch.intervalStartsAt !== undefined ||
@@ -160,6 +176,8 @@ export function mergeItemPatch(item: Item, patch: ItemPatch): Item {
   if (patch.recurrenceRule !== undefined) {
     next.recurrenceRule = patch.recurrenceRule;
   }
+  if (patch.recurrenceState !== undefined)
+    next.recurrenceState = patch.recurrenceState;
   if (patch.overriddenFields !== undefined) {
     next.overriddenFields = patch.overriddenFields;
   }
@@ -197,7 +215,10 @@ export function toJson(value: unknown): string {
   return JSON.stringify(value);
 }
 
-export function parseTaskStatus(value: string, isTask: boolean): TaskStatus | null {
+export function parseTaskStatus(
+  value: string,
+  isTask: boolean,
+): TaskStatus | null {
   if (!isTask) {
     return null;
   }
@@ -227,6 +248,7 @@ export function itemFromDbRow(row: {
   documentation_schema?: unknown;
   documentation_data?: unknown;
   recurrence_rule?: unknown;
+  recurrence_state?: unknown;
   generated_from_id?: string | null;
   occurrence_key?: string;
   overridden_fields?: unknown;
@@ -239,9 +261,13 @@ export function itemFromDbRow(row: {
   updated_at: string;
 }): Item {
   const isTask = Boolean(row.is_task);
-  const tags = Array.isArray(row.tags) ? row.tags.filter((tag): tag is string => typeof tag === "string") : [];
+  const tags = Array.isArray(row.tags)
+    ? row.tags.filter((tag): tag is string => typeof tag === "string")
+    : [];
   const overriddenFields = Array.isArray(row.overridden_fields)
-    ? row.overridden_fields.filter((field): field is string => typeof field === "string")
+    ? row.overridden_fields.filter(
+        (field): field is string => typeof field === "string",
+      )
     : [];
 
   return {
@@ -264,6 +290,7 @@ export function itemFromDbRow(row: {
     documentationSchema: row.documentation_schema ?? null,
     documentationData: row.documentation_data ?? null,
     recurrenceRule: row.recurrence_rule ?? null,
+    recurrenceState: row.recurrence_state ?? null,
     generatedFromId: row.generated_from_id ?? "",
     occurrenceKey: row.occurrence_key ?? "",
     overriddenFields,
@@ -273,14 +300,14 @@ export function itemFromDbRow(row: {
     intervalStatus: row.interval_status ?? "",
     revision: row.revision,
     createdAt: row.created_at,
-    updatedAt: row.updated_at
+    updatedAt: row.updated_at,
   };
 }
 
 export function applyPatch(
   item: Item,
   patch: ItemPatch,
-  options?: { includeExtended?: boolean }
+  options?: { includeExtended?: boolean },
 ): Partial<{
   title: string;
   body: string;
@@ -299,6 +326,7 @@ export function applyPatch(
   documentation_schema: unknown;
   documentation_data: unknown;
   recurrence_rule: unknown;
+  recurrence_state: unknown;
   overridden_fields: unknown;
   interval_kind: string;
   interval_starts_at: string;
@@ -324,6 +352,7 @@ export function applyPatch(
     documentation_schema: unknown;
     documentation_data: unknown;
     recurrence_rule: unknown;
+    recurrence_state: unknown;
     overridden_fields: unknown;
     interval_kind: string;
     interval_starts_at: string;
@@ -392,6 +421,8 @@ export function applyPatch(
   if (includeExtended && patch.recurrenceRule !== undefined) {
     next.recurrence_rule = patch.recurrenceRule;
   }
+  if (includeExtended && patch.recurrenceState !== undefined)
+    next.recurrence_state = patch.recurrenceState;
   if (includeExtended && patch.overriddenFields !== undefined) {
     next.overridden_fields = patch.overriddenFields;
   }
@@ -446,7 +477,7 @@ export function newItemInsert(ownerId: string, title: string) {
     task_status: "",
     manual_relevance: 0,
     tags: [] as string[],
-    revision: 0
+    revision: 0,
   };
 }
 
@@ -471,6 +502,7 @@ export function itemToDbInsert(item: Item, ownerId: string) {
     documentation_schema: item.documentationSchema,
     documentation_data: item.documentationData,
     recurrence_rule: item.recurrenceRule,
+    recurrence_state: item.recurrenceState ?? null,
     generated_from_id: item.generatedFromId || null,
     occurrence_key: item.occurrenceKey,
     overridden_fields: item.overriddenFields,
@@ -478,6 +510,6 @@ export function itemToDbInsert(item: Item, ownerId: string) {
     interval_starts_at: item.intervalStartsAt,
     interval_ends_at: item.intervalEndsAt,
     interval_status: item.intervalStatus,
-    revision: item.revision
+    revision: item.revision,
   };
 }

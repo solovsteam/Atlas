@@ -1,4 +1,5 @@
 import type { Item } from "../item";
+import { generatorRule, occurrenceRule } from '../recurringReferences';
 import { isQuickDuration } from "../duration";
 import { scheduledTaskIds, tasksScheduledIn, type ItemLink } from "../links";
 import {
@@ -27,7 +28,7 @@ export type NowFocus = {
 };
 
 function isActiveTask(item: Item): boolean {
-  return item.isTask && item.taskStatus === "active";
+  return item.isTask && item.taskStatus === "active" && !generatorRule(item) && !item.recurrenceView?.needsReview;
 }
 
 function appointmentContains(item: Item, now: Date): boolean {
@@ -41,7 +42,7 @@ function appointmentContains(item: Item, now: Date): boolean {
 
 function currentIntervals(items: Item[], now: Date): Item[] {
   return items.filter((item) => {
-    if (!item.isInterval) {
+    if (!item.isInterval || occurrenceRule(item)) {
       return false;
     }
     const slot = calendarIntervalFromItem(item);
@@ -61,7 +62,7 @@ function todaysIntervals(items: Item[], now: Date): Item[] {
   const start = startOfDay(now);
   const end = endOfDay(now);
   return items.filter((item) => {
-    if (!item.isInterval) {
+    if (!item.isInterval || occurrenceRule(item)) {
       return false;
     }
     const slot = calendarIntervalFromItem(item);
@@ -82,7 +83,7 @@ function todaysIntervals(items: Item[], now: Date): Item[] {
 export function buildNowFocus(items: Item[], links: ItemLink[], now: Date): NowFocus {
   const config = mergeSchedulerConfig(now);
   const byId = new Map(items.map((item) => [item.id, item]));
-  const active = items.filter(isActiveTask);
+  const active = items.filter(item=>isActiveTask(item) && (!item.recurrenceView?.availableFrom || Date.parse(item.recurrenceView.availableFrom)<=now.getTime()));
 
   const liveAppointments = active
     .filter((item) => appointmentContains(item, now))

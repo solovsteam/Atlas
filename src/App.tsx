@@ -132,6 +132,10 @@ function AppShell() {
             {itemsLoading ? <p className="text-sm text-neutral-500">Loading items…</p> : null}
             {itemsError ? <p className="mb-4 text-sm text-red-400">{itemsError}</p> : null}
             {linksError ? <p className="mb-4 text-sm text-red-400">{linksError}</p> : null}
+            {items.some(item=>item.recurrenceView?.needsReview)?<aside className="mb-4 rounded border border-amber-700 p-3 text-sm text-amber-200" role="status">
+              <p>Generator changes need review. These occurrences keep their earlier version:</p>
+              {items.filter(item=>item.recurrenceView?.needsReview).map(item=><Link className="mr-3 underline" key={item.id} to={`/item/${item.id}`}>{item.title || item.occurrenceKey} ({item.occurrenceKey})</Link>)}
+            </aside>:null}
             <Routes>
               <Route path="/" element={<NowPage />} />
               <Route path="/tasks" element={<TasksPage />} />

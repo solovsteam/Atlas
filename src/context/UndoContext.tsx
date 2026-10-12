@@ -128,9 +128,9 @@ export function useUndo() {
 
 export function trackTaskStatusUndo(push: UndoContextValue["push"], item: Item) {
   push({
-    kind: "setTaskStatus",
+    kind: "updateItem",
     id: item.id,
-    before: item.taskStatus
+    before: { taskStatus: item.taskStatus, recurrenceState: item.recurrenceState }
   });
 }
 

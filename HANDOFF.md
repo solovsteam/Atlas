@@ -1,5 +1,23 @@
 # Handoff
 
+## Recurring generators (12 Oct 2026)
+
+Implemented in reviewed thread `recurring-generators-20261012`, from main
+17b8aca; the unapproved `brain-experimental` batch stays separate. Lazy live
+references, universal field ownership, completed snapshots, visible clash
+resolution, pause/delete/undo, fixed/flexible scheduling and the subscription
+compiler are implemented. New recurrence state is distinct from legacy metadata.
+`npm run check` passes, including real PostgreSQL migration/RLS/history and
+runtime/transport tests. A live Luna/Medium worker compilation succeeded
+(IR-7dcb2c14, two calls, zero schema changes); browser fixture review preserved
+the old version on a real click. No calendar items were created.
+
+Next: final contract/undo checks, commit and main integration, then apply migration
+011 and install the idle compiler service from the main checkout. Deployment and
+live schema availability are not yet claimed. Portable note:
+`.handoff/recurring-generators-20261012.md` in that thread's Atlas worktree.
+Guide and limits: `docs/RECURRING_GENERATORS.md`.
+
 Last updated 2026-10-06.
 
 ## State

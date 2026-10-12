@@ -13,6 +13,8 @@ import { TaskDurationEditor } from "./TaskDurationEditor";
 import { TaskSchedulingEditor } from "./TaskSchedulingEditor";
 import { TaskIntervalLinkEditor } from "./TaskIntervalLinkEditor";
 import { TaskStatusButtons } from "./TaskStatusButtons";
+import { RecurrenceEditor } from './RecurrenceEditor';
+import { generatorRule, occurrenceRule, policyFor } from '@shared/recurringReferences';
 
 export function ItemEditor({
   item,
@@ -24,8 +26,12 @@ export function ItemEditor({
   const { push } = useUndo();
   const { extendedSchema, items } = useAtlasData();
   const subtaskCount = useMemo(() => subtasksOf(item.id, items).length, [item.id, items]);
+  const occurrence=occurrenceRule(item);
+  const source=items.find(i=>i.id===item.generatedFromId);
+  const policies=occurrence?.held?.policies ?? (item.recurrenceView?.needsReview?occurrence?.baseline.policies:(source?generatorRule(source)?.policies:undefined)) ?? occurrence?.baseline.policies ?? {};
+  const strict=(field:'title'|'body')=>Boolean(occurrence && !occurrence.frozen && policyFor({policies},field)==='strict');
   const autosave = useAutosaveItem(item, updateItem, (before) => {
-    trackItemPatchUndo(push, item.id, before);
+    trackItemPatchUndo(push, item.id, { ...before, recurrenceState: item.recurrenceState });
   });
 
   async function patchItem(patch: ItemPatch) {
@@ -52,7 +58,7 @@ export function ItemEditor({
       if (patch.taskStatus !== undefined) {
         trackTaskStatusUndo(push, item);
       } else if (Object.keys(before).length > 0) {
-        trackItemPatchUndo(push, item.id, before);
+        trackItemPatchUndo(push, item.id, { ...before, recurrenceState: item.recurrenceState });
       }
     }
   }
@@ -67,6 +73,8 @@ export function ItemEditor({
 
   return (
     <section>
+      <RecurrenceEditor item={item}/>
+      <fieldset disabled={item.recurrenceView?.needsReview}>
       {autosave.conflict ? (
         <div className="mb-4 rounded border border-amber-700 bg-amber-950/40 px-3 py-2 text-sm text-amber-100">
           <p className="mb-2">This item was edited elsewhere.</p>
@@ -87,6 +95,7 @@ export function ItemEditor({
           <input
             className="w-full border border-neutral-700 bg-black px-3 py-2 text-2xl font-semibold outline-none focus:border-white"
             value={autosave.draft.title}
+            disabled={strict('title')}
             onChange={(event) => autosave.updateTitle(event.target.value)}
           />
         </label>
@@ -144,9 +153,11 @@ export function ItemEditor({
         <textarea
           className="min-h-64 w-full border border-neutral-700 bg-black px-3 py-2 text-base leading-6 outline-none focus:border-white"
           value={autosave.draft.body}
+          disabled={strict('body')}
           onChange={(event) => autosave.updateBody(event.target.value)}
         />
       </label>
+      </fieldset>
     </section>
   );
 }

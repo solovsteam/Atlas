@@ -4,6 +4,7 @@ import {
   cleanTitle,
   EXTENDED_SCHEMA_MESSAGE,
   itemFromDbRow,
+  mergeItemPatch,
   itemToDbInsert,
   newItemInsert,
   parseJson,
@@ -11,10 +12,17 @@ import {
   type CreateItemResult,
   type Item,
   type ItemPatch,
-  type UpdateItemResult
+  type UpdateItemResult,
 } from "@shared/item";
 import { validateParentTaskAssignment } from "@shared/subtasks";
 import type { Database, DbItemRow } from "../types/database";
+import { generatorRule, occurrenceRule } from "@shared/recurringReferences";
+import {
+  fetchRawItems,
+  projectItems,
+  updateReference,
+  writeReference,
+} from "./recurrence";
 
 type Client = SupabaseClient<Database>;
 
@@ -23,21 +31,17 @@ export type UpdateItemOptions = {
   extendedSchema?: boolean;
 };
 
-export async function fetchOwnedItems(client: Client, userId: string): Promise<Item[]> {
-  const { data, error } = await client
-    .from("items")
-    .select("*")
-    .eq("owner_id", userId)
-    .order("updated_at", { ascending: false });
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  return (data ?? []).map((row) => itemFromDbRow(row as DbItemRow));
+export async function fetchOwnedItems(
+  client: Client,
+  userId: string,
+): Promise<Item[]> {
+  return projectItems(await fetchRawItems(client, userId));
 }
 
-export async function listOwnedItems(client: Client, userId: string): Promise<Item[]> {
+export async function listOwnedItems(
+  client: Client,
+  userId: string,
+): Promise<Item[]> {
   return fetchOwnedItems(client, userId);
 }
 
@@ -59,7 +63,7 @@ export async function createItem(
   client: Client,
   userId: string,
   title: string,
-  options: CreateItemOptions = {}
+  options: CreateItemOptions = {},
 ): Promise<CreateItemResult> {
   const clean = cleanTitle(title);
   if (!clean) {
@@ -68,7 +72,11 @@ export async function createItem(
 
   if (options.parentTaskId) {
     const items = await fetchOwnedItems(client, userId);
-    const error = validateParentTaskAssignment("new", options.parentTaskId, items);
+    const error = validateParentTaskAssignment(
+      "new",
+      options.parentTaskId,
+      items,
+    );
     if (error) {
       throw new Error(error);
     }
@@ -90,11 +98,15 @@ export async function createItem(
           interval_kind: options.intervalKind ?? "fixed",
           interval_starts_at: options.intervalStartsAt ?? "",
           interval_ends_at: options.intervalEndsAt ?? "",
-          interval_status: options.intervalStatus ?? "scheduled"
+          interval_status: options.intervalStatus ?? "scheduled",
         }
       : {}),
-    ...(options.manualRelevance !== undefined ? { manual_relevance: options.manualRelevance } : {}),
-    ...(options.expectedDurationMinutes !== undefined ? { task_expected_minutes: options.expectedDurationMinutes } : {})
+    ...(options.manualRelevance !== undefined
+      ? { manual_relevance: options.manualRelevance }
+      : {}),
+    ...(options.expectedDurationMinutes !== undefined
+      ? { task_expected_minutes: options.expectedDurationMinutes }
+      : {}),
   };
 
   const { data, error } = await client
@@ -116,10 +128,13 @@ export async function updateItem(
   id: string,
   patchJson: string,
   expectedRevision: number,
-  options: UpdateItemOptions = {}
+  options: UpdateItemOptions = {},
 ): Promise<UpdateItemResult> {
   const extendedSchema = options.extendedSchema ?? true;
   const patch = parseJson<ItemPatch>(patchJson, {});
+
+  if (options.knownItem && occurrenceRule(options.knownItem))
+    return updateReference(client, userId, id, patch, expectedRevision);
 
   if (patchUsesExtendedFields(patch) && !extendedSchema) {
     throw new Error(EXTENDED_SCHEMA_MESSAGE);
@@ -131,7 +146,11 @@ export async function updateItem(
   }
 
   if (!current) {
-    const { data: row, error: fetchError } = await client.from("items").select("*").eq("id", id).single();
+    const { data: row, error: fetchError } = await client
+      .from("items")
+      .select("*")
+      .eq("id", id)
+      .single();
     if (fetchError || !row) {
       throw new Error("Item not found");
     }
@@ -146,6 +165,20 @@ export async function updateItem(
     return { conflict: true, serverItem: current };
   }
 
+  if (occurrenceRule(current))
+    return updateReference(client, userId, id, patch, expectedRevision);
+  if (
+    generatorRule(current) ||
+    (patch.recurrenceState as { kind?: string })?.kind === "generator"
+  ) {
+    return writeReference(
+      client,
+      userId,
+      mergeItemPatch(current, patch),
+      expectedRevision,
+    );
+  }
+
   if (patch.parentTaskId !== undefined) {
     const items = await fetchOwnedItems(client, userId);
     const error = validateParentTaskAssignment(id, patch.parentTaskId, items);
@@ -157,7 +190,9 @@ export async function updateItem(
     }
   }
 
-  const updates = applyPatch(current, patch, { includeExtended: extendedSchema });
+  const updates = applyPatch(current, patch, {
+    includeExtended: extendedSchema,
+  });
   if (Object.keys(updates).length === 0) {
     return { ok: true, revision: current.revision };
   }
@@ -176,7 +211,11 @@ export async function updateItem(
   }
 
   if (!updated) {
-    const { data: latest } = await client.from("items").select("*").eq("id", id).single();
+    const { data: latest } = await client
+      .from("items")
+      .select("*")
+      .eq("id", id)
+      .single();
     if (latest) {
       return { conflict: true, serverItem: itemFromDbRow(latest as DbItemRow) };
     }
@@ -186,8 +225,39 @@ export async function updateItem(
   return { ok: true, revision: nextRevision };
 }
 
-export async function deleteItem(client: Client, userId: string, id: string): Promise<void> {
-  const { data, error } = await client.from("items").delete().eq("id", id).eq("owner_id", userId).select("id");
+export async function deleteItem(
+  client: Client,
+  userId: string,
+  id: string,
+): Promise<void> {
+  const raw = await fetchRawItems(client, userId);
+  const item =
+    raw.find((i) => i.id === id) ??
+    (await projectItems(raw)).find((i) => i.id === id);
+  if (item && (generatorRule(item) || occurrenceRule(item))) {
+    const rule = generatorRule(item) ?? occurrenceRule(item)!;
+    const recurrenceState =
+      rule.kind === "generator"
+        ? { ...rule, status: "deleted" }
+        : { ...rule, deleted: true };
+    const generator = raw.find((i) => i.id === item.generatedFromId);
+    const result = await writeReference(
+      client,
+      userId,
+      { ...item, recurrenceState },
+      item.revision,
+      generator,
+    );
+    if ("conflict" in result)
+      throw new Error("Item changed while deleting; reload it");
+    return;
+  }
+  const { data, error } = await client
+    .from("items")
+    .delete()
+    .eq("id", id)
+    .eq("owner_id", userId)
+    .select("id");
 
   if (error) {
     throw new Error(error.message);
@@ -198,7 +268,26 @@ export async function deleteItem(client: Client, userId: string, id: string): Pr
   }
 }
 
-export async function restoreItem(client: Client, userId: string, item: Item): Promise<void> {
+export async function restoreItem(
+  client: Client,
+  userId: string,
+  item: Item,
+): Promise<void> {
+  if (generatorRule(item) || occurrenceRule(item)) {
+    const raw = await fetchRawItems(client, userId);
+    const current = raw.find((i) => i.id === item.id);
+    const generator = raw.find((i) => i.id === item.generatedFromId);
+    const result = await writeReference(
+      client,
+      userId,
+      item,
+      current?.revision ?? 0,
+      generator,
+    );
+    if ("conflict" in result)
+      throw new Error("Item changed while undoing; reload it");
+    return;
+  }
   const { data, error } = await client
     .from("items")
     .insert(itemToDbInsert(item, userId))

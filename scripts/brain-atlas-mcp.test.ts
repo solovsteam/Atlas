@@ -178,6 +178,28 @@ async function effectLayerChecks() {
     const reused = await apply(reuse.previewId);
     assert.notEqual(reused.isError, true, JSON.stringify(reused.content));
     assert.equal(JSON.stringify({ items: rows, links: linkRows }), edited);
+
+    // A virtual recurring commitment must still block a conversation plan.
+    // Applying may create an unassigned task, never a generator/occurrence row.
+    const source = item('reference-source', {
+      title:'Recurring appointment',isInterval:true,intervalKind:'fixed',
+      intervalStartsAt:block.intervalStartsAt,intervalEndsAt:block.intervalEndsAt,
+      recurrenceState:{kind:'generator',version:1,text:'Daily',compiledText:'Daily',source:'d=>true',
+        timeZone:'UTC',from:now.toISOString().slice(0,10),until:now.toISOString().slice(0,10),status:'active',policies:{intervalStatus:'owned'}}
+    });
+    const sourceRow={...itemToDbInsert(source,'owner'),revision:1,created_at:appliedAt,updated_at:appliedAt};
+    rows.push(sourceRow);
+    const sourceBefore=JSON.stringify(sourceRow),writeStart=writes.length,rowStart=rows.length,linkStart=linkRows.length;
+    plan.schemaRunId='R-'+'d'.repeat(32);
+    plan.actions[0]!.actionId='A-recurring-blocked';
+    const blocked=await preview();
+    assert.equal(blocked.assignments[0].intervalId,null,'virtual appointments reserve real capacity');
+    const blockedResult=await apply(blocked.previewId);
+    assert.notEqual(blockedResult.isError,true,JSON.stringify(blockedResult.content));
+    assert.equal(rows.length,rowStart+1,'only the new plan task is persisted');
+    assert.equal(linkRows.length,linkStart,'no virtual interval is first-touched or linked');
+    assert.equal(JSON.stringify(sourceRow),sourceBefore,'the generator stays unchanged');
+    assert.equal(writes.slice(writeStart).filter(w=>w==='items:insert').length,1);
   } finally { await mcp.close(); await server.close(); }
 }
 

@@ -28,6 +28,10 @@ Brain's local MCP connection to Atlas is documented in [`docs/BRAIN_MCP.md`](doc
 
 ## Prerequisites
 
+Recurring item generators are described in [the generator guide](docs/RECURRING_GENERATORS.md).
+They require migration 011 and the local Brain compiler bridge for the first
+compilation; saved predicates subsequently run without a model connection.
+
 - Node.js 20+
 - A [Supabase](https://supabase.com) project
 

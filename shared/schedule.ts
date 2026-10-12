@@ -1,4 +1,5 @@
 import type { Item } from "./item";
+import { generatorRule } from "./recurringReferences";
 import type { ItemLink } from "./links";
 import { tasksScheduledIn } from "./links";
 import { formatIsoDateTime } from "./locale";
@@ -47,7 +48,11 @@ export function parseSlotStatus(value: string): SlotStatus {
 }
 
 export function calendarIntervalFromItem(item: Item): ScheduleSlot | null {
-  if (!item.isInterval) {
+  if (
+    !item.isInterval ||
+    generatorRule(item) ||
+    item.recurrenceView?.needsReview
+  ) {
     return null;
   }
   return {
@@ -59,13 +64,15 @@ export function calendarIntervalFromItem(item: Item): ScheduleSlot | null {
     slotStatus: parseSlotStatus(item.intervalStatus || "scheduled"),
     label: item.title,
     createdAt: item.createdAt,
-    updatedAt: item.updatedAt
+    updatedAt: item.updatedAt,
   };
 }
 
 export function formatTimeRange(slot: ScheduleSlot): string {
   if (slot.kind === "allDay") {
-    return slot.label && slot.label !== "Free time" ? `All day · ${slot.label}` : "All day";
+    return slot.label && slot.label !== "Free time"
+      ? `All day · ${slot.label}`
+      : "All day";
   }
   if (slot.kind === "due" && slot.endsAt) {
     return `Due ${formatTime(slot.endsAt)}`;
@@ -117,8 +124,10 @@ export function intervalItemsToCalendar(items: Item[]): ScheduleSlot[] {
     .map((item) => calendarIntervalFromItem(item))
     .filter((slot): slot is ScheduleSlot => Boolean(slot))
     .sort((a, b) => {
-      const aTime = slotRangeStart(a)?.getTime() ?? slotRangeEnd(a)?.getTime() ?? 0;
-      const bTime = slotRangeStart(b)?.getTime() ?? slotRangeEnd(b)?.getTime() ?? 0;
+      const aTime =
+        slotRangeStart(a)?.getTime() ?? slotRangeEnd(a)?.getTime() ?? 0;
+      const bTime =
+        slotRangeStart(b)?.getTime() ?? slotRangeEnd(b)?.getTime() ?? 0;
       return aTime - bTime;
     });
 }
@@ -136,7 +145,7 @@ export function appointmentSlotFromItem(item: Item): ScheduleSlot | null {
     slotStatus: "scheduled",
     label: item.title,
     createdAt: item.createdAt,
-    updatedAt: item.updatedAt
+    updatedAt: item.updatedAt,
   };
 }
 
@@ -205,7 +214,11 @@ export function daysInMonthGrid(monthStart: Date): Date[] {
   return days;
 }
 
-export function slotOverlapsRange(slot: ScheduleSlot, rangeStart: Date, rangeEnd: Date): boolean {
+export function slotOverlapsRange(
+  slot: ScheduleSlot,
+  rangeStart: Date,
+  rangeEnd: Date,
+): boolean {
   if (slot.kind === "allDay") {
     const anchor = slotRangeStart(slot) ?? slotRangeEnd(slot);
     if (!anchor) {
@@ -230,7 +243,11 @@ export function slotOverlapsRange(slot: ScheduleSlot, rangeStart: Date, rangeEnd
   return effectiveStart < rangeEnd && effectiveEnd >= rangeStart;
 }
 
-export function slotsInRange(slots: ScheduleSlot[], rangeStart: Date, rangeEnd: Date): ScheduleSlot[] {
+export function slotsInRange(
+  slots: ScheduleSlot[],
+  rangeStart: Date,
+  rangeEnd: Date,
+): ScheduleSlot[] {
   return slots.filter((slot) => slotOverlapsRange(slot, rangeStart, rangeEnd));
 }
 
@@ -242,12 +259,18 @@ function minutesFromDayStart(date: Date, day: Date): number {
   return Math.round((date.getTime() - startOfDay(day).getTime()) / 60_000);
 }
 
-export function layoutBoxesOnDay(slots: ScheduleSlot[], day: Date): DayLayoutEntry[] {
+export function layoutBoxesOnDay(
+  slots: ScheduleSlot[],
+  day: Date,
+): DayLayoutEntry[] {
   const dayStart = startOfDay(day);
   const gridStartMinutes = DAY_GRID_START_HOUR * 60;
   const entries: DayLayoutEntry[] = [];
   const timed = slots.filter(
-    (slot) => slot.kind !== "allDay" && slot.kind !== "due" && slotOverlapsRange(slot, dayStart, endOfDay(day))
+    (slot) =>
+      slot.kind !== "allDay" &&
+      slot.kind !== "due" &&
+      slotOverlapsRange(slot, dayStart, endOfDay(day)),
   );
   for (const slot of timed) {
     const start = slotRangeStart(slot) ?? slotRangeEnd(slot);
@@ -266,17 +289,28 @@ export function layoutBoxesOnDay(slots: ScheduleSlot[], day: Date): DayLayoutEnt
       slot,
       topPct: ((clampedStart - gridStartMinutes) / DAY_GRID_MINUTES) * 100,
       heightPct: ((clampedEnd - clampedStart) / DAY_GRID_MINUTES) * 100,
-      lane: 0
+      lane: 0,
     });
   }
   return entries.sort((a, b) => a.topPct - b.topPct);
 }
 
-export function allDayBoxesOnDay(slots: ScheduleSlot[], day: Date): ScheduleSlot[] {
-  return slots.filter((slot) => slot.kind === "allDay" && slotOverlapsRange(slot, startOfDay(day), endOfDay(day)));
+export function allDayBoxesOnDay(
+  slots: ScheduleSlot[],
+  day: Date,
+): ScheduleSlot[] {
+  return slots.filter(
+    (slot) =>
+      slot.kind === "allDay" &&
+      slotOverlapsRange(slot, startOfDay(day), endOfDay(day)),
+  );
 }
 
-export function boxDisplayLabel(slot: ScheduleSlot, links: ItemLink[], itemTitles: Map<string, string>): string {
+export function boxDisplayLabel(
+  slot: ScheduleSlot,
+  links: ItemLink[],
+  itemTitles: Map<string, string>,
+): string {
   if (slot.id.startsWith("appt:")) {
     return slot.label;
   }

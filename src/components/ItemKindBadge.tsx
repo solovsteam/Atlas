@@ -1,5 +1,6 @@
 import type { Item } from "@shared/item";
 import { itemKindLabel } from "@shared/item";
+import { generatorRule, occurrenceRule } from '@shared/recurringReferences';
 
 const KIND_STYLES: Record<string, string> = {
   note: "border-neutral-700 text-neutral-400",
@@ -29,7 +30,7 @@ function styleForItem(item: Item): string {
 export function ItemKindBadge({ item }: { item: Item }) {
   return (
     <span className={`rounded border px-1.5 py-0.5 text-[10px] uppercase tracking-wide ${styleForItem(item)}`}>
-      {itemKindLabel(item)}
+      {generatorRule(item)?'generator':item.recurrenceView?.needsReview?'needs review':occurrenceRule(item)?`recurring ${itemKindLabel(item)}`:itemKindLabel(item)}
     </span>
   );
 }

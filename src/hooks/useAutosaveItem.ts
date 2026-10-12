@@ -55,11 +55,14 @@ export function useAutosaveItem(item: Item | null, updateItem: UpdateMutation, o
     if (savingRef.current || conflict) {
       return;
     }
+    if(Object.keys(pendingPatchRef.current).length===0){
+      const next={title:item.title,body:item.body};setDraft(next);draftRef.current=next;
+    }
     if (item.revision > revisionRef.current) {
       revisionRef.current = item.revision;
       setRevision(item.revision);
     }
-  }, [item?.revision, item?.id, conflict]);
+  }, [item?.revision, item?.id, item?.title, item?.body, conflict]);
 
   async function flushSave(forcePatch?: ItemPatch) {
     if (!item) {

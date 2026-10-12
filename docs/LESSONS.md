@@ -29,6 +29,16 @@ The previous implementation was removed because it mixed half-ported Lakebed cod
 
 When re-implementing dynamic item materialization, study `.lakebed/reference/shared/` for the Lakebed spec and the roadmap Phase 3 row, but design for Supabase from scratch (migrations → `shared/` → `src/services/` → UI).
 
+## Live recurring references (12 Oct 2026)
+
+Tonio's reference requirement supersedes the removed materialized-copy design
+above. Untouched occurrences remain computed; touched ones keep sparse state,
+source versions and completed snapshots. Keep new `recurrence_state` separate
+from legacy `recurrence_rule`, own projection/mutation in one service, and preserve
+generator deletion as a tombstone with append-only history. Use an actual isolated
+JS runtime for generated predicates: a browser Worker by itself still has network
+and storage capabilities. See [RECURRING_GENERATORS.md](RECURRING_GENERATORS.md).
+
 ## Documentation map
 
 | File | Purpose |

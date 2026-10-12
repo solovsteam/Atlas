@@ -37,7 +37,7 @@ export function TaskDurationEditor({
         return;
       }
       if ("ok" in result && result.ok) {
-        trackItemPatchUndo(push, item.id, { expectedDurationMinutes: item.expectedDurationMinutes });
+        trackItemPatchUndo(push, item.id, { expectedDurationMinutes: item.expectedDurationMinutes, recurrenceState: item.recurrenceState });
         setDraft(formatDurationMinutes(nextMinutes));
         setError(null);
       }

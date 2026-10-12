@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { useMemo, useState } from "react";
+import { generatorRule } from "@shared/recurringReferences";
 import type { Item, TaskStatus } from "@shared/item";
 import { isArchivedTask, isParkedTask } from "@shared/relevance";
 import { scheduledTaskIds } from "@shared/links";
@@ -21,7 +22,7 @@ export function TasksPage() {
   const scheduled = useMemo(() => scheduledTaskIds(links), [links]);
 
   const desired = useMemo(
-    () => items.filter((item) => item.isTask && item.taskStatus === "active"),
+    () => items.filter((item) => item.isTask && item.taskStatus === "active" && !generatorRule(item)),
     [items]
   );
   const taskCatalog = useMemo(() => items.filter((item) => item.isTask), [items]);
@@ -67,7 +68,7 @@ export function TasksPage() {
     try {
       const result = await updateItem(item.id, JSON.stringify(next), item.revision);
       if ("ok" in result && result.ok) {
-        trackItemPatchUndo(push, item.id, before);
+        trackItemPatchUndo(push, item.id, { ...before, recurrenceState: item.recurrenceState });
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save");

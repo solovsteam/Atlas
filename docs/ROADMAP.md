@@ -87,6 +87,13 @@ The implementation was developed on `experiment/scientific-atlas` and has been p
 
 ### To port from Lakebed reference
 
+**12 Oct recurring generators:** the reviewed implementation uses lazy live
+references, sparse touched-occurrence state, completed snapshots, universal field
+ownership, visible clash review and undo, plus free-text compilation through
+Brain's subscription worker. See [RECURRING_GENERATORS.md](RECURRING_GENERATORS.md)
+for its migration, bounded offline runtime and current access limits. It replaces
+the old proposed materialized-copy approach; the phase table below stays as history.
+
 Source: `.lakebed/reference/` (read-only archive, gitignored).
 
 | Phase | Features | Reference paths |

@@ -89,6 +89,9 @@ export function taskFitsInterval(
   remainingMinutes: number,
   config: SchedulerConfig
 ): boolean {
+  const notBefore=parseTime(task.notBeforeAt);
+  const range=intervalRange(interval);
+  if(notBefore && (!range || range.start.getTime()<notBefore.getTime()))return false;
   const duration = bufferedMinutes(resolvedDuration(task, config), config);
   if (duration > remainingMinutes + 1e-6) {
     return false;

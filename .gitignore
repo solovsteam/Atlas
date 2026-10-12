@@ -27,4 +27,6 @@ supabase/.temp
 *.ntvs*
 *.njsproj
 *.sln
+.handoff/
+__pycache__/
 *.sw?

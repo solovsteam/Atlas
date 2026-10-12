@@ -13,18 +13,22 @@
     "typecheck:brain-mcp": "tsc -p tsconfig.brain-mcp.json",
     "atlas:brain": "tsx --tsconfig tsconfig.brain-mcp.json scripts/brain-atlas-mcp.ts",
     "test:brain-contract": "tsx --tsconfig tsconfig.brain-mcp.json scripts/brain-contract.test.ts",
-    "test": "npm run test:scheduling && npm run test:brain-mcp && npm run test:brain-contract && tsx --test scripts/decision-schedule.test.ts && node --test scripts/web-handoff.test.mjs",
-    "check": "npm run lint && npm run build && npm run typecheck:brain-mcp && npm test"
+    "test": "npm run test:scheduling && npm run test:brain-mcp && npm run test:brain-contract && tsx --test scripts/decision-schedule.test.ts && node --test scripts/web-handoff.test.mjs && tsx --tsconfig tsconfig.brain-mcp.json --test scripts/recurrence.test.ts scripts/recurrence-storage.test.ts && node --test scripts/recurrence-compiler.test.mjs",
+    "check": "npm run lint && npm run build && npm run typecheck:brain-mcp && npm test",
+    "atlas:compile": "node scripts/recurrence-compiler.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "^2.1.0",
+    "@noble/hashes": "^2.4.0",
     "@supabase/supabase-js": "^2.110.3",
+    "quickjs-emscripten": "^0.32.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-router-dom": "^7.18.1",
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.9",
     "@modelcontextprotocol/client": "^2.1.0",
     "@tailwindcss/vite": "^4.3.2",
     "@types/node": "^24.13.2",

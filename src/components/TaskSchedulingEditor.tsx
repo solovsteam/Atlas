@@ -14,7 +14,7 @@ export function TaskSchedulingEditor({
   async function save(patch: ItemPatch, before: ItemPatch) {
     const result = await updateItem(item.id, JSON.stringify(patch), item.revision);
     if ("ok" in result && result.ok) {
-      trackItemPatchUndo(push, item.id, before);
+      trackItemPatchUndo(push, item.id, { ...before, recurrenceState: item.recurrenceState });
     }
   }
 

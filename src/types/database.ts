@@ -18,6 +18,7 @@ export type DbItemRow = {
   documentation_schema: unknown;
   documentation_data: unknown;
   recurrence_rule: unknown;
+  recurrence_state?: unknown;
   generated_from_id: string | null;
   occurrence_key: string;
   overridden_fields: unknown;
@@ -50,6 +51,7 @@ export type DbItemInsert = {
   documentation_schema?: unknown;
   documentation_data?: unknown;
   recurrence_rule?: unknown;
+  recurrence_state?: unknown;
   generated_from_id?: string | null;
   occurrence_key?: string;
   overridden_fields?: unknown;
@@ -131,7 +133,12 @@ export type Database = {
       };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      atlas_write_reference: {
+        Args: { p_row: unknown; p_expected_revision: number; p_generator_revision?: number | null };
+        Returns: unknown;
+      };
+    };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };

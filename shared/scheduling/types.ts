@@ -15,6 +15,7 @@ export type TaskScheduleInput = {
   fixedEndsAt: string | null;
   parentTaskId: string;
   tags: string[];
+  notBeforeAt?: string | null;
 };
 
 export type IntervalInput = {

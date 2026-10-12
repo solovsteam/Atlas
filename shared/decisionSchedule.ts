@@ -1,4 +1,5 @@
 import type { Item } from "./item";
+import { occurrenceRule } from './recurringReferences';
 import type { ItemLink } from "./links";
 import { itemsToScheduleInputs } from "./scheduling/resolve";
 import { appointmentOverlapMinutes, intervalCapacityMinutes, intervalIsOpen, resolvedDuration } from "./scheduling/constraints";
@@ -21,6 +22,7 @@ export function firstFeasibleWorkBlock(
   const appointments = tasks.filter((task) => task.fixedStartsAt && task.fixedEndsAt);
   const needed = bufferedMinutes(durationMinutes, config);
   const blocks = items.flatMap((item) => {
+    if(occurrenceRule(item))return []; // A recurring fixed window is a commitment, never capacity.
     const slot = calendarIntervalFromItem(item);
     if (!slot || slot.kind !== "fixed" || isArchivedSlot(slot) || !slot.startsAt || !slot.endsAt) return [];
     return [{ id: item.id, title: item.title, kind: slot.kind, startsAt: slot.startsAt, endsAt: slot.endsAt, archived: false }];

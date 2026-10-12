@@ -71,3 +71,8 @@ RLS, the invoker RPC and deletion restriction, with zero recurring/history rows
 created. The persistent local compiler is installed, and the hosted page reached
 its health endpoint on the Mac (200/ready). These checks do not claim a live
 authenticated occurrence mutation: browser review/undo checks used inert data.
+
+The archived source remains addressable from retained occurrences in main
+37fd45b, with a Restore generator control. That final follow-up failed its Vercel
+deployment; the initial b206f05 generator release remains live. Build logs need
+Vercel sign-in before the deployment failure can be diagnosed.

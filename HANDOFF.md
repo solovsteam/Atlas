@@ -13,8 +13,9 @@ runtime/transport tests. A live Luna/Medium worker compilation succeeded
 the old version on a real click. No calendar items were created.
 
 Deployed: commit b206f05 was checked, fast-forwarded into main and pushed to
-origin; Vercel reports its deployment completed and the hosted bundle contains the
-generator editor. Migration 011 was applied transactionally through the Supabase
+origin; Vercel completed the initial b206f05 deployment and its hosted bundle contains
+the generator editor. The 37fd45b archive-restoration follow-up failed to deploy;
+private logs require Vercel sign-in. Its tested code is on main. Migration 011 was applied transactionally through the Supabase
 Management API and recorded in migration history. Live metadata confirms the
 reference column, history RLS, invoker RPC and restrict FK; no recurring/history
 rows were created. `local.atlas.recurrence-compiler` is installed from main with
@@ -24,7 +25,9 @@ Temporary compiler/Vite fixture processes stopped. Keep-old and actual Undo
 clicks passed on inert browser data. The full recurring scheduling/feedback loop
 is still a separate unfinished Brain feature. Portable note:
 `.handoff/recurring-generators-20261012.md` in that thread's Atlas worktree.
-Guide and limits: `docs/RECURRING_GENERATORS.md`.
+Guide and limits: `docs/RECURRING_GENERATORS.md`. Pending: Tonio was asked to
+open the failed deployment in Safari and sign in so its private build logs can be
+read. No CLI credentials are available; an automatic CLI login was stopped.
 
 Last updated 2026-10-06.
 

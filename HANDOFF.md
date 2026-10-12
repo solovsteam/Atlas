@@ -4,8 +4,9 @@ Last updated 2026-10-12.
 
 ## Recurring seven-day preview (12 Oct)
 
-- First pure scheduling slice on `recurring-preview`, based on `brain-experimental`;
-  integration targets that branch only. No UI, persistence or calendar effects.
+- Complete: implementation `181e8b8` from `recurring-preview` is integrated and
+  pushed to `brain-experimental` only. Main bcf5674 is unchanged. No UI,
+  persistence or calendar effects.
 - `shared/recurringPreview.ts` generates seven civil dates from explicit rules and
   labelled inputs: availability, occupied commitments, activities, named buffers,
   sleep/latency, cutoff checks and provenance. Unknown inputs stay placeholders
@@ -19,10 +20,12 @@ Last updated 2026-10-12.
   standalone typecheck also passed for the module, CLI and test. Existing lint
   and bundle warnings only. The fixture yields 45 occurrences over seven days,
   zero placement issues and a provisional status for labelled assumptions.
-- Next: integrate into experimental, record result in Brain `IQ-b3a3849d` and
-  update the source brief. Main batch remains under Tonio's approval; personal
-  inputs, proportional meal spacing, application and feedback remain unresolved.
-  Portable note: `.handoff/recurring-preview-20261012.md`.
+- Outcome recorded and read back in Brain `IQ-b3a3849d` revision142,
+  `IT-d07bd6cf`; source brief marked complete. Brain documentation commit
+  `2bb6735` records partial feature status after `make check` passed.
+- Next for the broader feature: personal inputs, proportional meal spacing,
+  application and feedback; main batch approval remains Tonio's. No unfinished
+  work within this preview brief. Portable note: `.handoff/recurring-preview-20261012.md`.
 
 ## Scheduling capacity fixes (11 Oct)
 

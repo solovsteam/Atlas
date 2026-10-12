@@ -73,6 +73,7 @@ its health endpoint on the Mac (200/ready). These checks do not claim a live
 authenticated occurrence mutation: browser review/undo checks used inert data.
 
 The archived source remains addressable from retained occurrences in main
-37fd45b, with a Restore generator control. That final follow-up failed its Vercel
-deployment; the initial b206f05 generator release remains live. Build logs need
-Vercel sign-in before the deployment failure can be diagnosed.
+37fd45b, with a Restore generator control. Its first deployment failed, then aadf781
+recovered it. Final 8335d03 is also deployed and verified in the hosted bundle;
+timezone-only edits reuse the predicate without another model call. An inert
+browser check observed zero compiler requests. No Vercel sign-in is needed.

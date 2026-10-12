@@ -14,8 +14,9 @@ the old version on a real click. No calendar items were created.
 
 Deployed: commit b206f05 was checked, fast-forwarded into main and pushed to
 origin; Vercel completed the initial b206f05 deployment and its hosted bundle contains
-the generator editor. The 37fd45b archive-restoration follow-up failed to deploy;
-private logs require Vercel sign-in. Its tested code is on main. Migration 011 was applied transactionally through the Supabase
+the generator editor. The archive-restoration retry aadf781 and final timezone-reuse fix 8335d03
+also deployed successfully; the hosted bundle confirms both. The earlier
+37fd45b deployment failure was recovered without needing user sign-in. Migration 011 was applied transactionally through the Supabase
 Management API and recorded in migration history. Live metadata confirms the
 reference column, history RLS, invoker RPC and restrict FK; no recurring/history
 rows were created. `local.atlas.recurrence-compiler` is installed from main with
@@ -25,9 +26,9 @@ Temporary compiler/Vite fixture processes stopped. Keep-old and actual Undo
 clicks passed on inert browser data. The full recurring scheduling/feedback loop
 is still a separate unfinished Brain feature. Portable note:
 `.handoff/recurring-generators-20261012.md` in that thread's Atlas worktree.
-Guide and limits: `docs/RECURRING_GENERATORS.md`. Pending: Tonio was asked to
-open the failed deployment in Safari and sign in so its private build logs can be
-read. No CLI credentials are available; an automatic CLI login was stopped.
+Guide and limits: `docs/RECURRING_GENERATORS.md`. Task complete; no user answer
+or approval is pending. Timezone-only changes reuse the saved predicate, verified
+with a browser fixture showing zero compiler requests. All temporary services stopped.
 
 Last updated 2026-10-06.
 

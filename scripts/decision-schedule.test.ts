@@ -1337,27 +1337,56 @@ test("calendar day and week navigation preserves local time across boundaries an
   }
 });
 
-test("current behavior: calendar month navigation overflows short months and resets time even at zero delta", () => {
+test("calendar month navigation clamps short months and preserves local time", () => {
   const fixtures: [number[], number, number[]][] = [
-    [[2026, 1, 29], 1, [2026, 3, 1]],
-    [[2026, 1, 30], 1, [2026, 3, 2]],
-    [[2026, 1, 31], 1, [2026, 3, 3]],
-    [[2026, 3, 29], -1, [2026, 3, 1]],
-    [[2026, 3, 30], -1, [2026, 3, 2]],
-    [[2026, 3, 31], -1, [2026, 3, 3]],
-    [[2024, 1, 31], 1, [2024, 3, 2]],
-    [[2024, 2, 29], 12, [2025, 3, 1]],
-    [[2026, 12, 31], 2, [2027, 3, 3]],
-    [[2026, 1, 31], -2, [2025, 12, 1]],
+    [[2026, 1, 29], 1, [2026, 2, 28]],
+    [[2026, 1, 30], 1, [2026, 2, 28]],
+    [[2026, 1, 31], 1, [2026, 2, 28]],
+    [[2026, 3, 29], -1, [2026, 2, 28]],
+    [[2026, 3, 30], -1, [2026, 2, 28]],
+    [[2026, 3, 31], -1, [2026, 2, 28]],
+    [[2024, 1, 31], 1, [2024, 2, 29]],
+    [[2024, 3, 31], -1, [2024, 2, 29]],
+    [[2024, 2, 29], 12, [2025, 2, 28]],
+    [[2026, 12, 31], 2, [2027, 2, 28]],
+    [[2026, 1, 31], -2, [2025, 11, 30]],
+    [[2026, 1, 30], 13, [2027, 2, 28]],
+    [[2025, 1, 30], -11, [2024, 2, 29]],
+    [[2026, 1, 31], 2, [2026, 3, 31]],
+    [[2026, 3, 31], -2, [2026, 1, 31]],
+    [[2026, 12, 31], 1, [2027, 1, 31]],
+    [[2026, 1, 31], -1, [2025, 12, 31]],
+    [[2000, 1, 31], 1, [2000, 2, 29]],
+    [[2100, 1, 31], 1, [2100, 2, 28]],
+    // Both source and destination DST transition days, in both directions.
     [[2026, 3, 29], 2, [2026, 5, 29]],
-    [[2026, 10, 25], -2, [2026, 8, 25]]
+    [[2026, 10, 25], -2, [2026, 8, 25]],
+    [[2026, 2, 28], 1, [2026, 3, 28]],
+    [[2026, 1, 29], 2, [2026, 3, 29]],
+    [[2026, 4, 29], -1, [2026, 3, 29]],
+    [[2026, 9, 25], 1, [2026, 10, 25]],
+    [[2026, 11, 25], -1, [2026, 10, 25]]
   ];
+  // Every month end, forward and backward, in common and leap years.
+  for (const year of [2024, 2026]) {
+    const lengths = [31, year === 2024 ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    for (let month = 1; month <= 12; month += 1) {
+      for (const delta of [-1, 1]) {
+        const targetMonth = month + delta;
+        const targetYear = targetMonth === 0 ? year - 1 : targetMonth === 13 ? year + 1 : year;
+        const normalizedMonth = targetMonth === 0 ? 12 : targetMonth === 13 ? 1 : targetMonth;
+        fixtures.push([[year, month, lengths[month - 1]!], delta,
+          [targetYear, normalizedMonth, Math.min(lengths[month - 1]!, lengths[normalizedMonth - 1]!)]]);
+      }
+    }
+  }
   for (const [source, delta, expected] of fixtures) {
     const anchor = new Date(source[0], source[1] - 1, source[2], 12, 34, 56, 789);
     const before = anchor.getTime();
-    assert.deepEqual(navigateAnchor("month", anchor, delta), new Date(expected[0], expected[1] - 1, expected[2]));
-    assert.deepEqual(navigateAnchor("month", anchor, 0), new Date(source[0], source[1] - 1, source[2]));
-    assert.equal(anchor.getTime(), before);
+    const label = `${source.join("-")} + ${delta} months`;
+    assert.deepEqual(navigateAnchor("month", anchor, delta), new Date(expected[0], expected[1] - 1, expected[2], 12, 34, 56, 789), label);
+    assert.deepEqual(navigateAnchor("month", anchor, 0), anchor, `${label} zero delta`);
+    assert.equal(anchor.getTime(), before, `${label} input preserved`);
   }
 });
 

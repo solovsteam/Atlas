@@ -193,7 +193,14 @@ export function addDays(date: Date, days: number): Date {
 }
 
 export function addMonths(date: Date, months: number): Date {
-  return new Date(date.getFullYear(), date.getMonth() + months, date.getDate());
+  const next = new Date(date);
+  if (months === 0) return next;
+  const targetMonth = date.getMonth() + months;
+  const monthEnd = new Date(date);
+  monthEnd.setMonth(targetMonth + 1, 0);
+  // Set month and clamped day together to avoid overflow, retaining local time.
+  next.setMonth(targetMonth, Math.min(date.getDate(), monthEnd.getDate()));
+  return next;
 }
 
 export function daysInMonthGrid(monthStart: Date): Date[] {

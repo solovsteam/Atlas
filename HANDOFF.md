@@ -1,6 +1,28 @@
 # Handoff
 
-Last updated 2026-10-11.
+Last updated 2026-10-12.
+
+## Recurring seven-day preview (12 Oct)
+
+- First pure scheduling slice on `recurring-preview`, based on `brain-experimental`;
+  integration targets that branch only. No UI, persistence or calendar effects.
+- `shared/recurringPreview.ts` generates seven civil dates from explicit rules and
+  labelled inputs: availability, occupied commitments, activities, named buffers,
+  sleep/latency, cutoff checks and provenance. Unknown inputs stay placeholders
+  or make affected occurrences unplaceable. Placement is deterministic first/last
+  fit, not an optimizing solver; failures are reported without relaxing constraints.
+- Interface tests are added under `tests/constraints/` and discovered by the
+  unchanged check. Fixture/CLI usage and limits: `docs/RECURRING_PREVIEW.md`.
+- Verification: all 12 interface tests and full `npm run check` passed, including
+  lint/build/MCP typecheck, 17 scheduling fixtures, effect/Brain contracts, 15
+  constraint tests, 273 scheduling/decision tests and 3 web-handoff tests. A
+  standalone typecheck also passed for the module, CLI and test. Existing lint
+  and bundle warnings only. The fixture yields 45 occurrences over seven days,
+  zero placement issues and a provisional status for labelled assumptions.
+- Next: integrate into experimental, record result in Brain `IQ-b3a3849d` and
+  update the source brief. Main batch remains under Tonio's approval; personal
+  inputs, proportional meal spacing, application and feedback remain unresolved.
+  Portable note: `.handoff/recurring-preview-20261012.md`.
 
 ## Scheduling capacity fixes (11 Oct)
 

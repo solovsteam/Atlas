@@ -1,0 +1,329 @@
+{
+  "spec": {
+    "version": 1,
+    "inputs": {
+      "gettingReady": {
+        "label": "Getting ready (unmeasured agent estimate)",
+        "value": null,
+        "placeholder": 15
+      },
+      "unpacking": {
+        "label": "Unpacking groceries (unmeasured agent estimate)",
+        "value": null,
+        "placeholder": 10
+      },
+      "breakfastDuration": {
+        "label": "Breakfast duration (unmeasured agent estimate)",
+        "value": null,
+        "placeholder": 20
+      },
+      "dinnerDuration": {
+        "label": "Dinner duration (unmeasured agent estimate)",
+        "value": null,
+        "placeholder": 30
+      },
+      "preSleepDuration": {
+        "label": "Pre-sleep protocol duration (unmeasured agent estimate; steps unresolved)",
+        "value": null,
+        "placeholder": 30
+      },
+      "bufferSize": {
+        "label": "Daily surprise buffer size (agent preview assumption)",
+        "value": null,
+        "placeholder": 20
+      },
+      "eyeClosing": {
+        "label": "Eye-closing time (agent preview assumption, separate from target onset)",
+        "value": null,
+        "placeholder": "22:45"
+      },
+      "groceryDuration": {
+        "label": "Grocery visit including travel (chosen upper end of stated 30-40 minutes)",
+        "value": 40
+      }
+    },
+    "availability": [
+      {
+        "id": "waking-capacity",
+        "title": "Capacity within waking hours (preview assumption)",
+        "source": "Agent preview policy; capacity is not a commitment",
+        "weekdays": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ],
+        "start": "07:30",
+        "end": {
+          "input": "eyeClosing"
+        }
+      }
+    ],
+    "commitments": [
+      {
+        "id": "weekday-work",
+        "title": "Work, lunch included",
+        "source": "Brain:scheduling-test/WEEKLY_CASE.md (human inputs 2026-10-10; placement interpretation and labelled estimates are agent-origin)",
+        "weekdays": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "start": "09:00",
+        "end": "18:00"
+      }
+    ],
+    "activities": [
+      {
+        "id": "breakfast",
+        "title": "Breakfast",
+        "source": "Brain:scheduling-test/WEEKLY_CASE.md (human inputs 2026-10-10; placement interpretation and labelled estimates are agent-origin)",
+        "kind": "activity",
+        "category": "meal",
+        "recurrence": {
+          "weekdays": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ]
+        },
+        "window": {
+          "start": "07:30",
+          "end": "09:00"
+        },
+        "components": [
+          {
+            "name": "meal",
+            "minutes": {
+              "input": "breakfastDuration"
+            }
+          }
+        ],
+        "placement": "earliest"
+      },
+      {
+        "id": "dinner",
+        "title": "Dinner",
+        "source": "Brain:scheduling-test/WEEKLY_CASE.md (human inputs 2026-10-10; placement interpretation and labelled estimates are agent-origin)",
+        "kind": "activity",
+        "category": "meal",
+        "recurrence": {
+          "weekdays": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ]
+        },
+        "window": {
+          "start": "18:00",
+          "end": "21:30"
+        },
+        "components": [
+          {
+            "name": "meal",
+            "minutes": {
+              "input": "dinnerDuration"
+            }
+          }
+        ],
+        "placement": "latest"
+      },
+      {
+        "id": "pre-sleep",
+        "title": "Pre-sleep protocol",
+        "source": "Brain:scheduling-test/WEEKLY_CASE.md (human inputs 2026-10-10; placement interpretation and labelled estimates are agent-origin)",
+        "kind": "activity",
+        "category": "pre_sleep",
+        "recurrence": {
+          "weekdays": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ]
+        },
+        "window": {
+          "start": "21:30",
+          "end": {
+            "input": "eyeClosing"
+          }
+        },
+        "components": [
+          {
+            "name": "protocol",
+            "minutes": {
+              "input": "preSleepDuration"
+            }
+          }
+        ],
+        "placement": "end_at_window_end"
+      },
+      {
+        "id": "surprise-buffer",
+        "title": "Daily surprise buffer",
+        "source": "Brain:scheduling-test/WEEKLY_CASE.md (human inputs 2026-10-10; placement interpretation and labelled estimates are agent-origin)",
+        "kind": "buffer",
+        "category": "other",
+        "recurrence": {
+          "weekdays": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ]
+        },
+        "window": {
+          "start": "20:00",
+          "end": {
+            "input": "eyeClosing"
+          }
+        },
+        "components": [
+          {
+            "name": "reserved slack",
+            "minutes": {
+              "input": "bufferSize"
+            }
+          }
+        ],
+        "placement": "earliest"
+      },
+      {
+        "id": "gym",
+        "title": "Gym visit (two base, third optional)",
+        "source": "Brain:scheduling-test/WEEKLY_CASE.md (human inputs 2026-10-10; placement interpretation and labelled estimates are agent-origin)",
+        "kind": "activity",
+        "category": "exercise",
+        "recurrence": {
+          "weekly": {
+            "base": 2,
+            "optional": 1
+          }
+        },
+        "window": {
+          "start": "09:00",
+          "end": "20:00"
+        },
+        "components": [
+          {
+            "name": "getting ready",
+            "minutes": {
+              "input": "gettingReady"
+            }
+          },
+          {
+            "name": "visit including travel",
+            "minutes": 90
+          }
+        ],
+        "placement": "earliest"
+      },
+      {
+        "id": "run",
+        "title": "Run",
+        "source": "Brain:scheduling-test/WEEKLY_CASE.md (human inputs 2026-10-10; placement interpretation and labelled estimates are agent-origin)",
+        "kind": "activity",
+        "category": "exercise",
+        "recurrence": {
+          "weekly": {
+            "base": 1,
+            "optional": 0
+          }
+        },
+        "window": {
+          "start": "09:00",
+          "end": "20:00"
+        },
+        "components": [
+          {
+            "name": "run",
+            "minutes": 30
+          }
+        ],
+        "placement": "earliest"
+      },
+      {
+        "id": "groceries",
+        "title": "Groceries",
+        "source": "Brain:scheduling-test/WEEKLY_CASE.md (human inputs 2026-10-10; placement interpretation and labelled estimates are agent-origin)",
+        "kind": "activity",
+        "category": "other",
+        "recurrence": {
+          "weekly": {
+            "base": 1,
+            "optional": 0
+          }
+        },
+        "window": {
+          "start": "09:00",
+          "end": "21:30"
+        },
+        "components": [
+          {
+            "name": "getting ready",
+            "minutes": {
+              "input": "gettingReady"
+            }
+          },
+          {
+            "name": "trip including travel",
+            "minutes": {
+              "input": "groceryDuration"
+            }
+          },
+          {
+            "name": "unpacking",
+            "minutes": {
+              "input": "unpacking"
+            }
+          }
+        ],
+        "placement": "earliest"
+      }
+    ],
+    "sleep": {
+      "id": "sleep-routine",
+      "title": "Wake, eye closing and target sleep onset",
+      "source": "Brain:scheduling-test/WEEKLY_CASE.md (human inputs 2026-10-10; placement interpretation and labelled estimates are agent-origin)",
+      "wakeAt": "07:30",
+      "targetOnset": "23:00",
+      "eyeClosing": {
+        "input": "eyeClosing"
+      },
+      "latencyMinutes": {
+        "min": 1,
+        "max": 30
+      },
+      "exerciseGapMinutes": 180,
+      "mealGapMinutes": 90
+    }
+  },
+  "horizon": {
+    "startDate": "2026-10-12",
+    "days": 7
+  },
+  "timezone": {
+    "label": "Timezone unknown; Europe/Berlin is an agent preview assumption",
+    "value": null,
+    "placeholder": "Europe/Berlin"
+  }
+}

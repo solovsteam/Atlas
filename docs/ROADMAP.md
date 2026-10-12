@@ -83,6 +83,13 @@ Supabase is currently used in ~5 files; `shared/` domain logic is portable. **Do
 
 ### Calendar, scheduler, and schema handoff
 
+The first recurring scheduling slice is a pure seven-day preview on
+`recurring-preview`, targeting `brain-experimental`: distinct capacity and occupied
+commitments, labelled placeholder/missing inputs, named buffers, sleep cutoffs,
+dated conflicts and occurrence provenance. See [RECURRING_PREVIEW.md](RECURRING_PREVIEW.md)
+and `tests/constraints/recurring-preview.test.ts`. It adds no UI or application;
+the complete recurring scheduling/feedback loop remains unfinished.
+
 The implementation was developed on `experiment/scientific-atlas` and has been promoted to `main`. See [EXPERIMENT.md](EXPERIMENT.md). It includes Tasks / Items / Calendar / Archive, `scheduled_in` links, due/appointment fields, a TMT + switching-cost scheduler (not earliest-fit), Now as a focus view, later (someday) status, 2-minute skip on the calendar, a weekly look on Calendar, clock-true nudges while Atlas is running, `.ics` export, and the reviewed Brain schedule handoff.
 
 Scheduling-capacity corrections verified on `atlas-scheduling-20261011` (11 Oct), pending the experimental batch: exclude elapsed time and time beyond the horizon; merge overlapping appointments; reserve each active task once per block; release completed work; use chronological UTC-offset ordering in the decision handoff; count unassigned work accurately; measure all-day capacity across daylight-saving transitions. Behavioral evidence: [`scripts/scheduling-capacity.test.ts`](../scripts/scheduling-capacity.test.ts) and `npm run check`. This remains allocation to existing intervals; recurring generation and exact task start/end placement are not built.

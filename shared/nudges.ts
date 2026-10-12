@@ -6,7 +6,8 @@ import {
   slotOverlapsRange,
   slotRangeEnd,
   slotRangeStart,
-  startOfDay
+  startOfDay,
+  type ScheduleSlot
 } from "./schedule";
 import { parseTime } from "./scheduling/math";
 import { nominalWorkWindow } from "./workBlocks";
@@ -33,6 +34,20 @@ function localDateKey(now: Date): string {
 
 function isActiveTask(item: Item): boolean {
   return item.isTask && item.taskStatus === "active";
+}
+
+function suppressesEmptyMorning(slot: ScheduleSlot, startsAt: Date, endsAt: Date): boolean {
+  if (isArchivedSlot(slot)) {
+    return false;
+  }
+  if (slot.kind !== "fixed") {
+    return slotOverlapsRange(slot, startsAt, endsAt);
+  }
+  const start = slotRangeStart(slot);
+  const end = slotRangeEnd(slot);
+  // Fixed blocks must cover some morning time; touching endpoints cover none.
+  return Boolean(start && end &&
+    Math.min(end.getTime(), endsAt.getTime()) > Math.max(start.getTime(), startsAt.getTime()));
 }
 
 function pushClockNudges(
@@ -123,7 +138,7 @@ export function buildNudges(items: Item[], links: ItemLink[], now: Date): Nudge[
       return false;
     }
     const slot = calendarIntervalFromItem(item);
-    return Boolean(slot && !isArchivedSlot(slot) && slotOverlapsRange(slot, morning.startsAt, morning.endsAt));
+    return Boolean(slot && suppressesEmptyMorning(slot, morning.startsAt, morning.endsAt));
   });
   if (!hasMorning) {
     const fire = startOfDay(now);

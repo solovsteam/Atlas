@@ -2691,9 +2691,52 @@ test("empty morning is suppressed by non-archived overlap but ignores archived a
   assert.equal(morning([workBlock("early", "2026-09-24T08:00:00", "2026-09-24T08:59:59.999")]).length, 1);
 });
 
-test("current behavior: an interval ending exactly at 09:00 suppresses empty morning", () => {
-  assert.deepEqual(buildNudges([workBlock("touch", "2026-09-24T08:00:00", "2026-09-24T09:00:00")], [],
-    new Date("2026-09-24T08:50:00")).filter(({ kind }) => kind === "empty_morning"), []);
+for (const day of ["2026-09-24", "2026-03-29", "2026-10-25"]) {
+  test(`empty morning requires positive fixed overlap, including on DST days: ${day}`, () => {
+    const at = new Date(`${day}T08:50:00`);
+    const reminder = buildNudges([], [], at).filter(({ kind }) => kind === "empty_morning");
+    assert.equal(reminder.length, 1);
+    for (const [start, end, suppresses] of [
+      ["07:00:00", "09:00:00", false],
+      ["12:00:00", "13:00:00", false],
+      ["07:00:00", "09:00:00.001", true],
+      ["11:59:59.999", "13:00:00", true],
+      ["09:00:00", "12:00:00", true],
+      ["10:00:00", "11:00:00", true],
+      ["07:00:00", "13:00:00", true],
+      ["10:00:00", "10:00:00", false],
+      ["11:00:00", "10:00:00", false]
+    ] as const) {
+      const block = workBlock("overlap", `${day}T${start}`, `${day}T${end}`);
+      const morning = (entry: Item) => buildNudges([entry], [], at).filter(({ kind }) => kind === "empty_morning");
+      assert.deepEqual(morning(block), suppresses ? [] : reminder, `${start}–${end}`);
+      assert.deepEqual(morning({ ...block, intervalStatus: "archived" }), reminder, `archived ${start}–${end}`);
+      for (const patch of [{ intervalStartsAt: "" }, { intervalEndsAt: "" }]) {
+        assert.deepEqual(morning({ ...block, ...patch }), reminder, "one endpoint covers no elapsed time");
+      }
+    }
+  });
+}
+
+test("empty morning retains all-day anchors and due point handling", () => {
+  const day = "2026-09-24";
+  const at = new Date(`${day}T08:50:00`);
+  for (const [kind, start, end, suppresses] of [
+    ["allDay", `${day}T00:00:00`, "", true],
+    ["allDay", `${day}T11:59:59.999`, "", true],
+    ["allDay", `${day}T12:00:00`, "", false],
+    ["allDay", "2026-09-23T00:00:00", `${day}T11:00:00`, false],
+    ["due", "", `${day}T08:59:59.999`, false],
+    ["due", "", `${day}T09:00:00`, true],
+    ["due", "", `${day}T11:59:59.999`, true],
+    ["due", "", `${day}T12:00:00`, false],
+    ["due", `${day}T10:00:00`, "", true]
+  ] as const) {
+    const block = { ...workBlock("special", start, end), intervalKind: kind };
+    const morning = (entry: Item) => buildNudges([entry], [], at).filter(({ kind }) => kind === "empty_morning");
+    assert.equal(morning(block).length, suppresses ? 0 : 1, `${kind}: ${start}–${end}`);
+    assert.equal(morning({ ...block, intervalStatus: "archived" }).length, 1);
+  }
 });
 
 test("nudge horizon excludes fireAt exactly 24 elapsed hours away and includes one millisecond before", () => {

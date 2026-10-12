@@ -60,6 +60,15 @@ function compareBooleanSignal(a: boolean, b: boolean): number {
   return a ? -1 : 1;
 }
 
+function compareUpdatedAt(a: Item, b: Item): number {
+  const left = Date.parse(a.updatedAt);
+  const right = Date.parse(b.updatedAt);
+  if (Number.isNaN(left) || Number.isNaN(right)) {
+    return b.updatedAt.localeCompare(a.updatedAt);
+  }
+  return right - left;
+}
+
 export function compareItems(a: Item, b: Item, ctx: RelevanceContext): number {
   const left = rankSignals(a, ctx);
   const right = rankSignals(b, ctx);
@@ -105,7 +114,7 @@ function compareRankSignals(
     return right.manualRelevance - left.manualRelevance;
   }
 
-  return b.updatedAt.localeCompare(a.updatedAt);
+  return compareUpdatedAt(a, b);
 }
 
 export function sortItemsByRelevance(items: Item[], ctx: RelevanceContext): Item[] {
@@ -155,5 +164,5 @@ export function searchItems(items: Item[], query: string): Item[] {
   }
   return items
     .filter((item) => item.title.toLowerCase().includes(needle) || item.body.toLowerCase().includes(needle))
-    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    .sort(compareUpdatedAt);
 }

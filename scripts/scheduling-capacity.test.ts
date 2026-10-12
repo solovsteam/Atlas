@@ -477,16 +477,51 @@ test("search trims and matches title or body case-insensitively, newest update f
 });
 
 for (const mode of ["relevance", "search"] as const) {
-  test(`current behavior: ${mode} compares updatedAt strings rather than UTC-offset instants`, () => {
+  test(`${mode} compares updatedAt as instants across UTC offsets, newest first`, () => {
     const earlier = item({ id: "earlier-instant", title: "match", updatedAt: "2026-09-24T10:00:00+02:00" });
     const later = item({ id: "later-instant", title: "match", updatedAt: "2026-09-24T08:30:00Z" });
     assert.ok(Date.parse(earlier.updatedAt) < Date.parse(later.updatedAt));
     const context: RelevanceContext = { now, activeTags: [], activeStatusBoosts: [] };
-    assert.ok(compareItems(earlier, later, context) < 0);
+    assert.ok(compareItems(earlier, later, context) > 0);
     const result = mode === "relevance"
       ? sortItemsByRelevance([later, earlier], context)
       : searchItems([later, earlier], "match");
-    assert.deepEqual(result, [earlier, later]);
+    assert.deepEqual(result, [later, earlier]);
+  });
+
+  test(`${mode} preserves input order for equal instants written with different offsets`, () => {
+    const items = ["2026-09-24T10:00:00+02:00", "2026-09-24T08:00:00Z", "2026-09-24T03:00:00-05:00"]
+      .map((updatedAt, index) => item({ id: String(index), title: "match", updatedAt }));
+    const context: RelevanceContext = { now, activeTags: [], activeStatusBoosts: [] };
+    for (const a of items) {
+      for (const b of items) assert.equal(compareItems(a, b, context), 0);
+    }
+    for (const input of [items, [...items].reverse()]) {
+      const result = mode === "relevance" ? sortItemsByRelevance(input, context) : searchItems(input, "match");
+      assert.deepEqual(result, input);
+      assert.deepEqual([...input].sort((a, b) => compareItems(a, b, context)), input);
+    }
+  });
+
+  test(`${mode} falls back to string comparison when either updatedAt is unparsable`, () => {
+    const context: RelevanceContext = { now, activeTags: [], activeStatusBoosts: [] };
+    for (const [left, right] of [
+      ["invalid", "2026-09-24T08:00:00Z"],
+      ["2026-09-24T10:00:00+02:00", ""],
+      ["invalid-a", "invalid-z"],
+      ["invalid", "invalid"]
+    ]) {
+      const a = item({ id: "a", title: "match", updatedAt: left });
+      const b = item({ id: "b", title: "match", updatedAt: right });
+      assert.ok(Number.isNaN(Date.parse(left)) || Number.isNaN(Date.parse(right)));
+      for (const input of [[a, b], [b, a]]) {
+        assert.equal(compareItems(input[0], input[1], context), input[1].updatedAt.localeCompare(input[0].updatedAt));
+        const expected = [...input].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+        const result = mode === "relevance" ? sortItemsByRelevance(input, context) : searchItems(input, "match");
+        assert.deepEqual(result, expected);
+        assert.deepEqual([...input].sort((a, b) => compareItems(a, b, context)), expected);
+      }
+    }
   });
 }
 

@@ -192,10 +192,11 @@ export function RecurrenceEditor({ item }: { item: Item }) {
       compilationRef.current = { item, rule, text, zone, from, until };
       if (
         rule?.source &&
-        rule.compiledText === text &&
-        rule.timeZone === zone
+        rule.compiledText === text
       ) {
-        await save({ ...rule, from, until, status: "active" });
+        // Timezone selects civil inputs and clocks outside the pure predicate;
+        // only changed repetition text warrants another subscription call.
+        await save({ ...rule, timeZone:zone, from, until, status: "active" });
         setBusy(false);
         return;
       }

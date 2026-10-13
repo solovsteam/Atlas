@@ -13,6 +13,8 @@ import * as links from "../src/services/links";
 import * as runs from "../src/services/schemaScheduleRuns";
 import * as handoff from "../src/services/webHandoff";
 import * as plans from "../shared/schemaSchedule";
+import * as recurring from "../shared/recurringActionPlan";
+import * as previews from "../shared/recurringPreview";
 import type { SchemaSchedulePlan, ScheduleRunBaseline } from "../shared/schemaSchedule";
 import type { Database } from "../src/types/database";
 
@@ -21,7 +23,9 @@ const surface = {
   "src/services/links.ts": [links, ["fetchOwnedLinks", "createLink", "deleteLink"]],
   "src/services/schemaScheduleRuns.ts": [runs, ["findSchemaScheduleRun", "createSchemaScheduleRun", "updateSchemaScheduleRun", "deleteSchemaScheduleRun"]],
   "src/services/webHandoff.ts": [handoff, ["atlasTaskIdForAction"]],
-  "shared/schemaSchedule.ts": [plans, ["parseSchemaSchedulePlan"]]
+  "shared/schemaSchedule.ts": [plans, ["parseSchemaSchedulePlan"]],
+  "shared/recurringPreview.ts": [previews, ["generateRecurringPreview"]],
+  "shared/recurringActionPlan.ts": [recurring, ["prepareRecurringActions", "recurringBatchPlan"]]
 } as const;
 
 for (const [path, [module, names]] of Object.entries(surface)) {
@@ -48,3 +52,9 @@ export async function brainAdapterCalls(client: SupabaseClient<Database>, userId
 }
 
 console.log("Atlas surface used by Brain is intact.");
+
+// Brain/scripts/atlas-recurring-stage.mjs uses this read-only preparation surface.
+export function brainRecurringCalls(preview: Parameters<typeof recurring.prepareRecurringActions>[0], bindings: Parameters<typeof recurring.prepareRecurringActions>[1]) {
+  const delta = recurring.prepareRecurringActions(preview, bindings, []);
+  return delta.batches.map((batch) => recurring.recurringBatchPlan(batch, `R-${"0".repeat(32)}`, "2000-01-01T00:00:00Z"));
+}

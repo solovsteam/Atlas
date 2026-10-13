@@ -87,8 +87,11 @@ The first recurring scheduling slice is a pure seven-day preview on
 `recurring-preview`, targeting `brain-experimental`: distinct capacity and occupied
 commitments, labelled placeholder/missing inputs, named buffers, sleep cutoffs,
 dated conflicts and occurrence provenance. See [RECURRING_PREVIEW.md](RECURRING_PREVIEW.md)
-and `tests/constraints/recurring-preview.test.ts`. It adds no UI or application;
-the complete recurring scheduling/feedback loop remains unfinished.
+and `tests/constraints/recurring-preview.test.ts`. The next experimental component provides explicit date exclusions and a pure
+preview-to-batch interface for Brain staging, with preserved occurrence provenance
+and additive revision reports. Apply remains the existing human-admin button;
+no UI or effect law changes. The complete live recurring scheduling/feedback loop
+remains unfinished.
 
 The implementation was developed on `experiment/scientific-atlas` and has been promoted to `main`. See [EXPERIMENT.md](EXPERIMENT.md). It includes Tasks / Items / Calendar / Archive, `scheduled_in` links, due/appointment fields, a TMT + switching-cost scheduler (not earliest-fit), Now as a focus view, later (someday) status, 2-minute skip on the calendar, a weekly look on Calendar, clock-true nudges while Atlas is running, `.ics` export, and the reviewed Brain schedule handoff.
 

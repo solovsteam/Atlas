@@ -1,6 +1,21 @@
 # Handoff
 
-Last updated 2026-10-12.
+Last updated 2026-10-13.
+
+## Recurring preview to Brain staging (13 Oct)
+
+Implemented in `atlas-real-week-20261012`, based on experimental `af7601d`:
+`shared/recurringActionPlan.ts` exposes pure preparation/plan binding, preserves
+occurrence provenance, splits into existing bounded action contracts, and reports
+changed/retired output without editing it. The preview accepts explicit sourced
+date exclusions, generator v2. Four invented interface tests and the final full `npm run check` pass
+(lint/build/MCP typecheck, scheduling/effect contracts and all tests). Companion Brain
+staging script and contract declaration change together; effect adapter untouched.
+No UI, calendar or Supabase effects. Live staging/integration outcome will be
+recorded in Brain inquiry IQ-b3a3849d; main batch approval remains the human's.
+Privacy finding: old181e8b8 already contains personal routine values in its fixture,
+preview tests and guide. History is preserved; the new routine/artifacts are private
+outside this public repository. See RECURRING_PREVIEW.md for the small interface.
 
 ## Recurring seven-day preview (12 Oct)
 

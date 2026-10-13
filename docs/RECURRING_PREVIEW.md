@@ -66,3 +66,33 @@ holidays, application and feedback remain outside this slice.
 Behavioral evidence: `tests/constraints/recurring-preview.test.ts`, automatically
 included by the unchanged `npm run check`. No protected files or prior tests are
 changed to register this module.
+
+## Stage a bounded preview through Brain
+
+Generator version `atlas.recurring-preview/v2` adds optional explicit sourced date
+exclusions to availability/commitment windows: `exclusions: {dates: [...], source}`.
+Excluded dates are omitted from that named window; other commitments and activities
+still run. Invalid civil dates fail. This is a supplied date list, not an inferred
+holiday jurisdiction or legal calendar. Keep its coverage current.
+
+`shared/recurringActionPlan.ts` provides `prepareRecurringActions(preview, bindings,
+previous)` and `recurringBatchPlan(batch, schemaRunId, createdAt)`. Selection is
+explicit by source-rule ID. Capacity is never materialized. Selected placed
+activities/buffers/short commitments retain occurrence, rule, content revision,
+generator version, component durations and labelled inputs in the bounded action
+reason. Existing action-contract size/duration limits are validated before staging.
+
+Stable occurrence identities survive revision changes. Reusing the journal reports
+unchanged, changed and retired output, without editing anything already staged;
+only genuinely new occurrences are batched. Completed source reports and staged
+IDs are saved by Brain's companion `scripts/atlas-recurring-stage.mjs`. It takes
+private spec/journal paths as arguments and has no Atlas effect capability. Apply
+only with the existing Brain button. Read subsequent Atlas feedback through the
+existing receipt/export tools, then classify it in the host `schedule-feedback-review`.
+
+New interface tests use invented routines in
+`tests/constraints/recurring-action-plan.test.ts`. Earlier commit `181e8b8` already
+contains personal routine values in `scripts/fixtures/weekly-routine.json`,
+`tests/constraints/recurring-preview.test.ts` and this guide. This is a privacy
+finding about preserved history, not newly supplied personal data. Do not place a
+real routine or its generated output in this public repository.

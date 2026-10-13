@@ -1,11 +1,11 @@
 /** Pure, bounded routine preview. No calendar effects or implicit duration defaults. */
-export const RECURRING_PREVIEW_VERSION = "atlas.recurring-preview/v1";
+export const RECURRING_PREVIEW_VERSION = "atlas.recurring-preview/v2";
 
 export type RoutineInput = { label: string; value: string | number | null; placeholder?: string | number };
 export type RoutineValue<T extends string | number> = T | { input: string };
 type Window = { start: RoutineValue<string>; end: RoutineValue<string> };
 type Rule = { id: string; title: string; source: string };
-type WindowRule = Rule & Window & { weekdays: number[] };
+type WindowRule = Rule & Window & { weekdays: number[]; exclusions?: { dates: string[]; source: string } };
 export type RoutineActivity = Rule & {
   kind: "activity" | "buffer";
   category: "exercise" | "meal" | "pre_sleep" | "other";
@@ -145,7 +145,8 @@ export function generateRecurringPreview(
   const rules = [...spec.availability, ...spec.commitments, ...spec.activities, spec.sleep];
   if (spec.version !== 1 || horizon.days !== 7 || startDate === null || new Set(rules.map((r) => r.id)).size !== rules.length ||
       rules.some((r) => !r.id || !r.title || !r.source) || Object.hasOwn(spec.inputs, "timezone") || Object.values(spec.inputs).some((i) => !i.label) ||
-      [...spec.availability, ...spec.commitments].some((r) => !validDays(r.weekdays)) ||
+      [...spec.availability, ...spec.commitments].some((r) => !validDays(r.weekdays) || (r.exclusions !== undefined &&
+        (!r.exclusions.source?.trim() || !Array.isArray(r.exclusions.dates) || r.exclusions.dates.some((d) => civilDate(d) === null)))) ||
       spec.activities.some((r) => !["activity", "buffer"].includes(r.kind) || !["exercise", "meal", "pre_sleep", "other"].includes(r.category) ||
         !["earliest", "latest", "end_at_window_end"].includes(r.placement) || !r.components.length || r.components.some((c) => !c.name) ||
         ("weekdays" in r.recurrence ? !validDays(r.recurrence.weekdays) :
@@ -238,7 +239,7 @@ export function generateRecurringPreview(
     o.date = date; o.status = "placed"; o.startsAt = iso(start); o.endsAt = iso(end); o.durationMinutes = (end - start) / 60_000;
   };
   for (const [kind, windows] of [["availability", spec.availability], ["commitment", spec.commitments]] as const) {
-    for (const rule of windows) for (const date of dates.filter((d) => rule.weekdays.includes(weekday(d)))) {
+    for (const rule of windows) for (const date of dates.filter((d) => rule.weekdays.includes(weekday(d)) && !rule.exclusions?.dates.includes(d))) {
       const o = occurrence(rule, kind, [date], `${rule.id}@${date}`);
       occurrences.push(o);
       const start = time(rule.start, date, o, o.id);

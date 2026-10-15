@@ -18,6 +18,14 @@ in-memory Supabase stub (not committed). brain-experimental also edits
 `CalendarViews.tsx`; expect a conflict there on its next refresh (keep this
 version, re-apply its `itemTitles` map change if still wanted).
 
+Follow-ups the same day: requests refused with "JWT issued at future" (fresh
+token a few seconds ahead of PostgREST's clock) are resent after a short wait
+(`src/lib/clockSkewFetch.ts`); recurring-generator templates no longer draw as
+an extra appointment. His weekday work 09:00–18:00 is not in Atlas at all: Brain's
+routine spec keeps it as occupied context because the action contract allows
+3–240 minutes. Showing it needs either a recurring appointment he creates on the
+Mac or his command to change that contract; asked 15 Oct.
+
 ## Recurring generators (12 Oct 2026)
 
 Implemented in reviewed thread `recurring-generators-20261012`, from main

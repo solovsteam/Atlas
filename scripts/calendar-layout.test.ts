@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { anchorForView, calendarTitle, navigateAnchor } from "../shared/calendar";
-import { dayGridRange, layoutBoxesOnDay, startOfMonth, type ScheduleSlot } from "../shared/schedule";
+import type { Item } from "../shared/item";
+import { appointmentSlotFromItem, dayGridRange, layoutBoxesOnDay, startOfMonth, type ScheduleSlot } from "../shared/schedule";
 
 const day = new Date(2026, 9, 15);
 
@@ -78,4 +79,15 @@ test("toolbar titles and month stepping", () => {
   assert.equal(calendarTitle("week", anchorForView("week", new Date(2026, 9, 29))), "26 Oct – 1 Nov 2026");
   const next = navigateAnchor("month", startOfMonth(new Date(2026, 0, 31)), 1);
   assert.equal(calendarTitle("month", anchorForView("month", next)), "February 2026");
+});
+
+test("a recurring appointment's template is not drawn; its occurrences are", () => {
+  const base = {
+    id: "work", ownerId: "owner", title: "Work", isTask: true, taskStatus: "active",
+    taskFixedStartsAt: new Date(2026, 9, 19, 9).toISOString(), taskFixedEndsAt: new Date(2026, 9, 19, 18).toISOString()
+  };
+  const template = { ...base, recurrenceState: { kind: "generator", version: 1 } } as unknown as Item;
+  const occurrence = { ...base, id: "work:2026-10-19", recurrenceState: { kind: "occurrence", version: 1 } } as unknown as Item;
+  assert.equal(appointmentSlotFromItem(template), null);
+  assert.equal(appointmentSlotFromItem(occurrence)?.id, "appt:work:2026-10-19");
 });

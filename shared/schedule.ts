@@ -142,7 +142,13 @@ export function intervalItemsToCalendar(items: Item[]): ScheduleSlot[] {
 }
 
 export function appointmentSlotFromItem(item: Item): ScheduleSlot | null {
-  if (!item.isTask || !item.taskFixedStartsAt || !item.taskFixedEndsAt) {
+  // A recurring generator is a template; only its occurrences are dated appointments.
+  if (
+    !item.isTask ||
+    !item.taskFixedStartsAt ||
+    !item.taskFixedEndsAt ||
+    generatorRule(item)
+  ) {
     return null;
   }
   return {

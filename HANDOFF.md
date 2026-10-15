@@ -1,9 +1,31 @@
 # Handoff
 
+## Brain scheduling effect adapter deployed (15 Oct 2026)
+
+Code93a9bd4 (bfd93ac plus safety hardening) is integrated/pushed to main.
+Migration012 was applied once through the Management API, with its history in
+the same transaction and independent catalog/privilege readback. Brain ea3ba5d
+and documentation cfac622 are deployed; acting schema installed and workers
+restarted. Both full project checks pass. Atlas apply revalidates elapsed time
+and remaining capacity; potential virtual recurring conflicts stop conservatively
+for review rather than trusting raw rows or model assertions.
+
+Authenticated read-only context returned75items/35links, real edit contract and
+scheduler preview. Receipt lookup returned null; remote preview/receipt counts
+both0. No calendar edits or invented thread messages were issued to test this.
+Live effect/delivery behavior is covered by inert transaction/controller tests.
+The old pinned routine job and experimental batch remain unchanged.
+
+Next: real scheduling instructions can use Brain's dedicated path. No migration
+or implementation action remains; never replay migration012. Phone delivery and
+independent new-task/manual-feedback activation remain separate future work.
+Final note: `.handoff/brain-edit-loop-deployment-20261015.md`; Brain's coordinating
+note: `/Users/tonio/apps/Brain/.handoff/atlas-edit-loop-deploy-20261015.md`.
+
 ## Automatic Brain scheduling effect adapter (15 Oct 2026)
 
-Implemented on `brain-edit-loop-20261015` from e836bc7, not yet integrated or
-deployed. The user explicitly authorized the Brain principle-triggered loop and
+Initial implementation phase (superseded by the deployment record above), on
+`brain-edit-loop-20261015` from e836bc7. The user explicitly authorized the Brain principle-triggered loop and
 superseded create-only as its target. `shared/brainEdits.ts`,
 `src/services/brainEdits.ts` and `scripts/brain-edit-adapter.mjs` define its bounded
 context/preview/apply/receipt/feedback/undo surface. Migration

@@ -57,6 +57,65 @@ create function public.atlas_brain_edit_context_digest() returns text language s
   )::text)
 $$;
 
+-- Untouched recurring occurrences are virtual. This SQL boundary cannot run
+-- their sandboxed predicates, so raw-row overlap checks alone are insufficient.
+-- Refuse possibly intersecting scheduling horizons; never trust a planner's
+-- assertion that a predicate excludes a date. Dates outside those horizons and
+-- removals remain usable. A future exact projection can narrow this guard.
+create function public.atlas_assert_brain_edit_recurrence_clear(p_starts timestamptz,p_ends timestamptz) returns void language plpgsql security definer set search_path='' as $$
+declare r public.items; state jsonb; candidate jsonb; stamp text; anchor text; zone text;
+  offset_days integer; min_offset integer; max_offset integer;
+  first_date date; last_date date; touched_first date; touched_last date;
+  horizon_start timestamptz; horizon_end timestamptz; candidate_start timestamptz; candidate_end timestamptz;
+begin
+  for r in select * from public.items where owner_id=auth.uid() and recurrence_state is not null loop
+    state:=r.recurrence_state;
+    if state->>'kind'='generator' then
+      if not r.is_interval and nullif(r.task_fixed_starts_at::text,'') is null and nullif(r.task_fixed_ends_at::text,'') is null then continue; end if;
+      zone:=coalesce(nullif(state->>'timeZone',''),'UTC');
+      select min(occurrence_key::date),max(occurrence_key::date) into touched_first,touched_last from public.items where owner_id=auth.uid() and generated_from_id=r.id and recurrence_state->>'kind'='occurrence' and coalesce((recurrence_state->>'deleted')::boolean,false)=false;
+      if state->>'status'='active' then
+        if nullif(state->>'from','') is null then raise exception 'Recurring scheduling horizon needs review before automatic edits'; end if;
+        first_date:=least((state->>'from')::date,touched_first);
+        last_date:=case when nullif(state->>'until','') is null then null else greatest((state->>'until')::date,touched_last) end;
+      else
+        if touched_first is null then continue; end if;
+        first_date:=touched_first; last_date:=touched_last;
+      end if;
+      anchor:=coalesce(nullif(r.interval_starts_at,''),r.task_fixed_starts_at::text,r.task_due_at::text);
+      min_offset:=0; max_offset:=0;
+      for stamp in select v from unnest(array[r.interval_starts_at,r.interval_ends_at,r.task_fixed_starts_at::text,r.task_fixed_ends_at::text]) v where nullif(v,'') is not null loop
+        offset_days:=((stamp::timestamptz at time zone zone)::date-(anchor::timestamptz at time zone zone)::date);
+        min_offset:=least(min_offset,offset_days); max_offset:=greatest(max_offset,offset_days);
+      end loop;
+      horizon_start:=(first_date+min_offset)::timestamp at time zone zone;
+      horizon_end:=case when last_date is null then 'infinity'::timestamptz else ((last_date+max_offset+1)::timestamp at time zone zone) end;
+      if p_starts<horizon_end and p_ends>horizon_start then raise exception 'Automatic edit may overlap virtual recurring capacity or appointments; recurrence review required'; end if;
+    elsif state->>'kind'='occurrence' and coalesce((state->>'deleted')::boolean,false)=false then
+      -- A touched occurrence can remain live after its generator pauses or is
+      -- deleted. Cover every retained value that resolution may select.
+      horizon_start:=null; horizon_end:=null;
+      for candidate in select value from jsonb_array_elements(jsonb_build_array(to_jsonb(r),state#>'{baseline,values}',state#>'{held,values}',state->'frozen',state->'overrides')) loop
+        for stamp in select v from unnest(array[candidate->>'intervalStartsAt',candidate->>'taskFixedStartsAt',candidate->>'interval_starts_at',candidate->>'task_fixed_starts_at']) v where nullif(v,'') is not null loop
+          candidate_start:=stamp::timestamptz;
+          horizon_start:=least(horizon_start,candidate_start);
+        end loop;
+        for stamp in select v from unnest(array[candidate->>'intervalEndsAt',candidate->>'taskFixedEndsAt',candidate->>'interval_ends_at',candidate->>'task_fixed_ends_at']) v where nullif(v,'') is not null loop
+          candidate_end:=stamp::timestamptz;
+          horizon_end:=greatest(horizon_end,candidate_end);
+        end loop;
+      end loop;
+      if horizon_start is null and horizon_end is not null then horizon_start:=horizon_end-interval '24 hours'; end if;
+      if horizon_end is null and horizon_start is not null then horizon_end:=horizon_start+interval '24 hours'; end if;
+      if horizon_start is null then
+        if coalesce((state#>>'{baseline,values,isInterval}')::boolean,false) or nullif(state#>>'{baseline,values,taskFixedStartsAt}','') is not null then raise exception 'Recurring occurrence range needs review before automatic edits'; end if;
+      elsif p_starts<horizon_end and p_ends>horizon_start then
+        raise exception 'Automatic edit may overlap a recurring occurrence; recurrence review required';
+      end if;
+    end if;
+  end loop;
+end $$;
+
 -- A complete proposed state is validated before any item/link write. Recurring
 -- references need their own field-ownership contract and fail closed here.
 create function public.atlas_brain_edit_changes(p_plan jsonb) returns jsonb language plpgsql security definer set search_path='' as $$
@@ -159,6 +218,7 @@ begin
       changed_times:=original is null or row_json->>'interval_starts_at' is distinct from original->>'interval_starts_at' or row_json->>'interval_ends_at' is distinct from original->>'interval_ends_at';
       if changed_times then
         if starts<now() or starts>now()+interval '90 days' then raise exception 'Edited interval must start in the next 90 days'; end if;
+        perform public.atlas_assert_brain_edit_recurrence_clear(starts,ends);
         for other in select value from jsonb_each(items) loop
           if other->>'id'<>key and (other->>'is_interval')::boolean and other->>'interval_status'<>'archived' and coalesce(other->>'interval_starts_at','')<>'' and coalesce(other->>'interval_ends_at','')<>''
             and (other->>'interval_starts_at')::timestamptz<ends and (other->>'interval_ends_at')::timestamptz>starts then raise exception 'Interval overlaps another interval'; end if;
@@ -171,6 +231,7 @@ begin
         if row_json->>'task_fixed_starts_at' !~ '(Z|[+-][0-9]{2}:[0-9]{2})$' or row_json->>'task_fixed_ends_at' !~ '(Z|[+-][0-9]{2}:[0-9]{2})$' then raise exception 'Appointment needs explicit timezone'; end if;
         starts:=(row_json->>'task_fixed_starts_at')::timestamptz; ends:=(row_json->>'task_fixed_ends_at')::timestamptz;
         if starts<now() or starts>now()+interval '90 days' or ends<=starts or ends-starts>interval '24 hours' then raise exception 'Invalid appointment range'; end if;
+        perform public.atlas_assert_brain_edit_recurrence_clear(starts,ends);
         if exists(select 1 from jsonb_array_elements(links) l where l->>'from_id'=key) then raise exception 'Appointment must be unscheduled from work intervals'; end if;
         for other in select value from jsonb_each(items) loop
           if other->>'id'<>key and (other->>'is_task')::boolean and other->>'task_status'='active' and other->>'task_fixed_starts_at' is not null and other->>'task_fixed_ends_at' is not null
@@ -191,6 +252,9 @@ begin
         continue;
       end if;
       capacity:=extract(epoch from (ends-greatest(starts,now())))/60; used:=0;
+      if exists(select 1 from jsonb_array_elements(links) l where l->>'to_id'=key and (l->>'from_id'=any(placed) or l->>'from_id'=any(touched))) then
+        perform public.atlas_assert_brain_edit_recurrence_clear(greatest(starts,now()),ends);
+      end if;
       for link in select value from jsonb_array_elements(links) where value->>'to_id'=key loop
         task:=items->(link->>'from_id');
         if task->>'task_status'='active' then
@@ -289,6 +353,9 @@ begin
   end if;
   if p.expires_at<=now() then raise exception 'Preview expired; obtain a fresh preview'; end if;
   if p.context_digest<>public.atlas_brain_edit_context_digest() then raise exception 'Atlas context changed; obtain a fresh preview'; end if;
+  -- Time can advance without changing a row or its digest. Revalidate at commit
+  -- time, retaining the preview's exact snapshots and placement identities.
+  perform public.atlas_brain_edit_changes(p.plan);
   return public.atlas_commit_brain_edit_changes(p.request_id,p.plan_digest,p.plan,p.changes);
 end $$;
 
@@ -336,7 +403,7 @@ begin
 end $$;
 
 -- Only the public bounded RPCs are callable; helpers never accept external rows.
-revoke all on function public.atlas_brain_edit_context_digest(),public.atlas_brain_edit_changes(jsonb),public.atlas_commit_brain_edit_changes(text,text,jsonb,jsonb),public.atlas_preserve_link() from public,anon,authenticated;
+revoke all on function public.atlas_brain_edit_context_digest(),public.atlas_assert_brain_edit_recurrence_clear(timestamptz,timestamptz),public.atlas_brain_edit_changes(jsonb),public.atlas_commit_brain_edit_changes(text,text,jsonb,jsonb),public.atlas_preserve_link() from public,anon,authenticated;
 revoke all on function public.atlas_preview_brain_edits(jsonb),public.atlas_apply_brain_edit_preview(uuid),public.atlas_get_brain_edit_receipt(text),public.atlas_get_brain_edit_feedback(text),public.atlas_undo_brain_edits(text,text) from public,anon;
 grant execute on function public.atlas_preview_brain_edits(jsonb),public.atlas_apply_brain_edit_preview(uuid),public.atlas_get_brain_edit_receipt(text),public.atlas_get_brain_edit_feedback(text),public.atlas_undo_brain_edits(text,text) to authenticated;
 notify pgrst,'reload schema';

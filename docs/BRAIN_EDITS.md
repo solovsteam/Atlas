@@ -30,7 +30,9 @@ Supported requests:
   "receipt": ... }`.
 - `{ "operation": "apply", "previewId": "UUID" }` atomically checks the own
   account, fresh complete item/link snapshot and preview expiry, then applies the
-  edits and saves the receipt. Reapplying a committed request returns that receipt.
+  edits and saves the receipt. Time and remaining capacity are validated again
+  at commit, since the clock can advance while rows stay unchanged. Reapplying a
+  committed request returns that receipt.
 - `{ "operation": "receipt", "requestId": "stable-ID" }` reads its durable
   receipt or `null`. After a lost response, read this before doing anything else.
   Never replace an uncertain request with a new ID or replay individual writes.
@@ -71,6 +73,16 @@ Recurring generators and occurrences fail closed: their field ownership, first
 touch and review rules need a dedicated edit contract. Task deletion, account
 changes, status changes and arbitrary content edits are absent from this effect
 vocabulary. Existing non-scheduling content is never rewritten by this adapter.
+
+Conflict checks also protect virtual recurring events. The database currently
+refuses timed edits and added interval load that may intersect an active
+scheduling generator's date horizon, including its template day offsets. It
+also covers retained scheduling values of touched occurrences after their
+generator pauses. This guard conservatively includes dates on which the
+generator's predicate might return false; exact predicate projection at the
+database boundary remains unfinished. Dates outside those horizons and pure
+unscheduling remain available. Brain reports a recurrence-review blocker when
+this guard prevents an edit.
 
 Preview/apply serializes briefly against normal Atlas item/link writes, including
 new rows, so freshness is checked in the transaction that commits the effects and

@@ -8,6 +8,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../src/types/database";
 import { emptyItem } from "../shared/recurringReferences";
 import { itemToDbInsert } from "../shared/item";
+import { defaultGeneratorRule } from "../shared/recurringReferences";
+import { projectItems } from "../src/services/recurrence";
+import { itemFromDbRow } from "../shared/item";
+import type { DbItemRow } from "../src/types/database";
 
 const owner = "11111111-1111-4111-8111-111111111111";
 const foreign = "99999999-9999-4999-8999-999999999999";
@@ -166,6 +170,50 @@ test("real PostgreSQL atomic edits enforce freshness, receipts, account, capacit
     assert.equal(routineMove.afterItems[0].interval_starts_at, at(19), "legacy nominal-duration interval can move without worsening overbooking");
     await assert.rejects(preview(plan("worsen-routine", [{ kind: "update_interval", id: second, expectedRevision: 2, startsAt: `${date}T19:15:00Z` }])), /insufficient capacity/);
     await assert.rejects(preview(plan("appointment-over-routine", [{ kind: "update_task", id: task, expectedRevision: 3, fixedStartsAt: at(19), fixedEndsAt: at(20) }])), /insufficient capacity/);
+
+    // The predicate produces an occurrence next week, while the stored template
+    // is far in the past. A raw items-only overlap check cannot see that event.
+    const generator = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    const recurrence = { ...defaultGeneratorRule("UTC", date), status: "active", text: "Every day", compiledText: "Every day", source: "function includes(date) { return true; }", until: date };
+    await db.query(`insert into public.items(id,owner_id,title,is_interval,interval_kind,interval_status,interval_starts_at,interval_ends_at,revision,recurrence_state) values($1,$2,'Recurring work',true,'fixed','scheduled','2020-01-01T21:00:00Z','2020-01-01T22:00:00Z',1,$3)`, [generator, owner, JSON.stringify(recurrence)]);
+    const generatorRows = await db.query<DbItemRow>(`select * from public.items where id=$1`, [generator]);
+    const projected = await projectItems(generatorRows.rows.map(itemFromDbRow));
+    assert.ok(projected.some(item => item.generatedFromId === generator && Date.parse(item.intervalStartsAt) === Date.parse(at(21))), "fixture contains a virtual recurring interval");
+    await assert.rejects(preview(plan("overlap-virtual-interval", [{ kind: "create_interval", id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", title: "Clashing work", startsAt: at(21), endsAt: at(22) }])), /virtual recurring/);
+    await assert.rejects(preview(plan("overlap-virtual-appointment", [{ kind: "update_task", id: task, expectedRevision: 3, fixedStartsAt: at(21), fixedEndsAt: at(22) }])), /virtual recurring/);
+    const afterHorizon = new Date(Date.parse(`${date}T00:00:00Z`) + 2 * 86400000).toISOString().slice(0, 10);
+    assert.ok((await preview(plan("outside-recurrence-horizon", [{ kind: "update_task", id: task, expectedRevision: 3, fixedStartsAt: `${afterHorizon}T21:00:00Z`, fixedEndsAt: `${afterHorizon}T22:00:00Z` }]))).previewId);
+    await db.exec(`update public.items set recurrence_state=recurrence_state||'{"status":"paused"}' where id='${generator}'`);
+    // Sparse touched rows preserve their scheduling values in the baseline, not
+    // necessarily their raw columns, and survive paused/deleted generators.
+    const touchedOccurrence = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+    await db.query(`insert into public.items(id,owner_id,title,generated_from_id,occurrence_key,revision,recurrence_state) values($1,$2,'Touched recurrence',$3,$4,1,$5)`, [touchedOccurrence, owner, generator, date, JSON.stringify({ kind: "occurrence", version: 1, baseline: { values: { isInterval: true, intervalStartsAt: at(21), intervalEndsAt: at(22) } }, overrides: {}, deleted: false })]);
+    await assert.rejects(preview(plan("overlap-sparse-occurrence", [{ kind: "update_task", id: task, expectedRevision: 3, fixedStartsAt: at(21), fixedEndsAt: at(22) }])), /recurring/);
+    await db.exec(`update public.items set interval_starts_at='2020-01-01T06:00:00Z',interval_ends_at='2020-01-01T07:00:00Z' where id='${generator}'`);
+    await assert.rejects(preview(plan("paused-generator-live-reference", [{ kind: "update_task", id: task, expectedRevision: 3, fixedStartsAt: at(6), fixedEndsAt: at(7) }])), /recurring/);
+    // Pure removals reduce load and need no recurrence assumption.
+    assert.ok((await preview(plan("safe-unschedule-with-recurrence", [{ kind: "place_task", taskId: routineTask, expectedRevision: 1, intervalId: null }]))).previewId);
+
+    // A still-unexpired preview must refuse time-sensitive effects whose start
+    // passed after preview, even though no item/link row changed in between.
+    const imminentStarts = new Date(Date.now() + 700).toISOString();
+    const imminentEnds = new Date(Date.now() + 3600000).toISOString();
+    const imminent = await preview(plan("time-passed", [{ kind: "update_task", id: task, expectedRevision: 3, fixedStartsAt: imminentStarts, fixedEndsAt: imminentEnds }]));
+    await new Promise(resolve => setTimeout(resolve, 800));
+    await assert.rejects(apply(imminent.previewId), /Invalid appointment range/);
+    assert.equal(await receipt("time-passed"), null);
+    const runningInterval = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+    const minuteTask = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
+    const runningStart = new Date(Date.now() - 10000).toISOString();
+    const runningEnd = new Date(Date.now() + 120500).toISOString();
+    await db.query(`insert into public.items(id,owner_id,title,is_interval,interval_kind,interval_status,interval_starts_at,interval_ends_at,revision) values($1,$2,'Running work block',true,'fixed','scheduled',$3,$4,1)`, [runningInterval, owner, runningStart, runningEnd]);
+    const shrinkingCapacity = await preview(plan("capacity-time-passed", [
+      { kind: "create_task", id: minuteTask, title: "One minute task", durationMinutes: 1 },
+      { kind: "place_task", taskId: minuteTask, expectedRevision: 0, intervalId: runningInterval }
+    ]));
+    await new Promise(resolve => setTimeout(resolve, 650));
+    await assert.rejects(apply(shrinkingCapacity.previewId), /insufficient capacity/);
+    assert.equal(await receipt("capacity-time-passed"), null);
     await db.exec(`update public.items set recurrence_state='{"kind":"generator"}',revision=2 where id='${routineTask}'`);
     await assert.rejects(preview(plan("generator-edit", [{ kind: "update_task", id: routineTask, expectedRevision: 2, durationMinutes: 15 }])), /recurrence review/);
     assert.ok(await count("item_link_history") >= 5);

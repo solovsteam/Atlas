@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { useMemo } from "react";
 import { buildReview } from "@shared/review";
 import { useAtlasData } from "../context/AtlasDataContext";
+import { Panel } from "./Panel";
 
 const PREVIEW = 5;
 
@@ -14,8 +15,11 @@ export function ReviewPanel() {
   }
 
   return (
-    <div className="mb-8 rounded border border-neutral-800 p-4">
-      <p className="mb-1 text-xs uppercase tracking-wide text-neutral-500">Weekly look</p>
+    <Panel
+      defaultOpen={review.overdue.length > 0}
+      summary={`${review.overdue.length} overdue · ${review.unscheduled.length} unscheduled · ${review.later.length} later`}
+      title="Weekly look"
+    >
       <p className="mb-4 text-sm text-neutral-400">
         Dates that slipped, next actions not on the calendar, and parked later items.
       </p>
@@ -34,7 +38,7 @@ export function ReviewPanel() {
         />
         <Bucket href="/items" items={review.later} title="Later" empty="None parked" />
       </div>
-    </div>
+    </Panel>
   );
 }
 
@@ -53,7 +57,7 @@ function Bucket({
   const rest = items.length - shown.length;
   return (
     <div>
-      <p className="text-xs text-neutral-500">
+      <p className={`text-xs font-medium ${title === "Overdue" && items.length > 0 ? "text-rose-300" : "text-neutral-500"}`}>
         {title} · {items.length}
       </p>
       {items.length === 0 ? (

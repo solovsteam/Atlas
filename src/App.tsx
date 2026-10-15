@@ -1,4 +1,5 @@
-import { BrowserRouter, Link, NavLink, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Link, NavLink, Route, Routes, useLocation } from "react-router-dom";
+import type { ComponentType } from "react";
 import { authDisplayName, authPicture, useAuthSession } from "./hooks/useAuthSession";
 import { AtlasDataProvider, useAtlasData } from "./context/AtlasDataContext";
 import { RelevanceProvider } from "./context/RelevanceContext";
@@ -11,6 +12,7 @@ import { TasksPage } from "./pages/TasksPage";
 import { ItemsPage } from "./pages/ItemsPage";
 import { CalendarPage } from "./pages/CalendarPage";
 import { ArchivePage } from "./pages/ArchivePage";
+import { ArchiveIcon, CalendarIcon, ItemsIcon, NowIcon, TasksIcon, UndoIcon } from "./components/icons";
 
 function AuthAvatar({ label, picture }: { label: string; picture?: string }) {
   const initial = label.trim().slice(0, 1).toUpperCase() || "?";
@@ -42,11 +44,40 @@ function UndoButton() {
     return null;
   }
   return (
-    <button className="text-sm text-neutral-400 hover:text-white" type="button" onClick={() => void undo()}>
+    <button
+      className="inline-flex items-center gap-1.5 rounded-full border border-neutral-700 px-3 py-1 text-sm text-neutral-200 hover:border-neutral-500"
+      type="button"
+      onClick={() => void undo()}
+    >
+      <UndoIcon className="h-4 w-4" />
       Undo
     </button>
   );
 }
+
+function AccountMenu({ label, picture, onSignOut }: { label: string; picture?: string; onSignOut: () => void }) {
+  return (
+    <details className="relative">
+      <summary aria-label="Account" className="block cursor-pointer list-none rounded-full [&::-webkit-details-marker]:hidden">
+        <AuthAvatar label={label} picture={picture} />
+      </summary>
+      <div className="absolute right-0 z-40 mt-2 w-56 rounded-xl border border-neutral-800 bg-neutral-900 p-1 shadow-xl">
+        <p className="truncate px-3 py-2 text-xs text-neutral-400">Signed in as {label}</p>
+        <button className="w-full px-3 py-2 text-left text-sm text-neutral-200 hover:bg-neutral-800" type="button" onClick={() => void onSignOut()}>
+          Sign out
+        </button>
+      </div>
+    </details>
+  );
+}
+
+const NAV: { to: string; label: string; icon: ComponentType<{ className?: string }> }[] = [
+  { to: "/", label: "Now", icon: NowIcon },
+  { to: "/tasks", label: "Tasks", icon: TasksIcon },
+  { to: "/items", label: "Items", icon: ItemsIcon },
+  { to: "/calendar", label: "Calendar", icon: CalendarIcon },
+  { to: "/archive", label: "Archive", icon: ArchiveIcon }
+];
 
 function LoginScreen({ onSignIn }: { onSignIn: () => void }) {
   return (
@@ -66,14 +97,11 @@ function LoginScreen({ onSignIn }: { onSignIn: () => void }) {
   );
 }
 
-function navClass({ isActive }: { isActive: boolean }) {
-  return isActive ? "text-white" : "hover:text-white";
-}
-
 function AppShell() {
   const { session, loading, signInWithGoogle, signOut } = useAuthSession();
   const { items, itemsLoading, itemsError, linksError, updateItem, deleteItem, restoreItem, deleteLink, restoreLink } =
     useAtlasData();
+  const { pathname } = useLocation();
 
   if (loading) {
     return <main className="min-h-screen bg-black px-6 py-10 text-white">Loading…</main>;
@@ -97,38 +125,52 @@ function AppShell() {
     >
       <RelevanceProvider items={items}>
         <NudgeProvider>
-        <main className="min-h-screen bg-black px-6 py-10 text-white" lang="de">
+        <main className="min-h-screen bg-black px-4 pb-28 pt-3 text-neutral-100 md:px-8 md:pb-12 md:pt-5" lang="de">
           <section className="mx-auto max-w-6xl">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <div className="flex min-w-0 items-center gap-2">
-                <AuthAvatar label={label} picture={picture} />
-                <p className="min-w-0 truncate font-mono text-sm text-neutral-500">signed in as {label}</p>
-              </div>
-              <div className="flex shrink-0 items-center gap-3">
+            <header className="mb-3 flex items-center gap-3 md:mb-5">
+              <Link className="flex items-center gap-2 text-lg font-semibold tracking-tight" to="/">
+                <span className="h-2.5 w-2.5 rounded-full bg-indigo-400" />
+                Atlas
+              </Link>
+              <nav className="ml-4 hidden gap-1 md:flex">
+                {NAV.map(({ to, label: navLabel, icon: NavIcon }) => (
+                  <NavLink
+                    className={({ isActive }) =>
+                      `inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm ${
+                        isActive ? "bg-indigo-500/15 text-indigo-200" : "text-neutral-400 hover:bg-neutral-900 hover:text-white"
+                      }`
+                    }
+                    end={to === "/"}
+                    key={to}
+                    to={to}
+                  >
+                    <NavIcon className="h-4 w-4" />
+                    {navLabel}
+                  </NavLink>
+                ))}
+              </nav>
+              <div className="ml-auto flex items-center gap-3">
                 <UndoButton />
-                <button className="text-sm text-neutral-400 hover:text-white" type="button" onClick={() => void signOut()}>
-                  Sign out
-                </button>
+                <AccountMenu label={label} picture={picture} onSignOut={signOut} />
               </div>
-            </div>
-            <nav className="mb-4 flex flex-wrap gap-4 text-sm text-neutral-400">
-              <NavLink className={navClass} to="/">
-                Now
-              </NavLink>
-              <NavLink className={navClass} to="/tasks">
-                Tasks
-              </NavLink>
-              <NavLink className={navClass} to="/items">
-                Items
-              </NavLink>
-              <NavLink className={navClass} to="/calendar">
-                Calendar
-              </NavLink>
-              <NavLink className={navClass} to="/archive">
-                Archive
-              </NavLink>
+            </header>
+            <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-neutral-800 bg-neutral-950/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden">
+              {NAV.map(({ to, label: navLabel, icon: NavIcon }) => (
+                <NavLink
+                  className={({ isActive }) =>
+                    `flex flex-col items-center gap-0.5 pb-1.5 pt-2 text-[10px] font-medium ${isActive ? "text-indigo-300" : "text-neutral-500"}`
+                  }
+                  end={to === "/"}
+                  key={to}
+                  to={to}
+                >
+                  <NavIcon className="h-6 w-6" />
+                  {navLabel}
+                </NavLink>
+              ))}
             </nav>
-            <CaptureBar />
+            {/* The calendar opens with the calendar itself; capture stays on every other page. */}
+            {pathname === "/calendar" ? null : <CaptureBar />}
             {itemsLoading ? <p className="text-sm text-neutral-500">Loading items…</p> : null}
             {itemsError ? <p className="mb-4 text-sm text-red-400">{itemsError}</p> : null}
             {linksError ? <p className="mb-4 text-sm text-red-400">{linksError}</p> : null}

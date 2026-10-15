@@ -113,7 +113,7 @@ export function NowPage() {
       <h1 className="text-4xl font-bold tracking-tight">Now</h1>
       <p className="mt-2 max-w-xl text-sm text-neutral-400">
         One thing. Capture lives on Tasks; this page is for starting.
-        {remainingLabel ? ` ${remainingLabel} left in ${interval?.title || "this block"}.` : ""}
+        {remainingLabel ? ` ${remainingLabel} left in ${interval?.title || "this interval"}.` : ""}
       </p>
       <div className="mt-4 flex flex-wrap items-center gap-3">
         <WorkBlockButtons />
@@ -148,7 +148,7 @@ export function NowPage() {
           <Link className="underline hover:text-white" to="/tasks">
             Tasks
           </Link>
-          , or block morning/afternoon so work has a place to land.
+          , or add a morning or afternoon interval so work has a place to land.
           {laterCount > 0 ? (
             <>
               {" "}

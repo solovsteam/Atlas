@@ -1,5 +1,4 @@
 import { addDays, addMonths, startOfDay, startOfMonth, startOfWeek } from "./schedule";
-import { formatDayLabel } from "./locale";
 
 export type CalendarView = "day" | "week" | "month";
 
@@ -14,42 +13,39 @@ export function navigateAnchor(view: CalendarView, anchor: Date, delta: number):
 }
 
 export function anchorForToday(view: CalendarView): Date {
-  const today = startOfDay(new Date());
-  if (view === "day") {
-    return today;
-  }
-  if (view === "week") {
-    return startOfWeek(today);
-  }
-  return startOfMonth(today);
+  return anchorForView(view, new Date());
 }
 
-export function headerLabel(view: CalendarView, anchor: Date): string {
-  if (view === "day") {
-    return formatDayLabel(anchor);
-  }
-  if (view === "week") {
-    return `${formatDayLabel(anchor)} – ${formatDayLabel(addDays(anchor, 6))}`;
-  }
-  return anchor.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const SHORT_MONTHS = MONTHS.map((month) => month.slice(0, 3));
+export const WEEKDAYS_SHORT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+/** Monday-first weekday abbreviation. */
+export function weekdayShort(date: Date): string {
+  return WEEKDAYS_SHORT[(date.getDay() + 6) % 7]!;
 }
 
-export function prevLabel(view: CalendarView): string {
+/** Compact toolbar title: "October 2026", "12 – 18 Oct 2026", "Thu 15 Oct". */
+export function calendarTitle(view: CalendarView, anchor: Date): string {
+  if (view === "month") {
+    return `${MONTHS[anchor.getMonth()]} ${anchor.getFullYear()}`;
+  }
   if (view === "day") {
-    return "← Prev day";
+    return `${weekdayShort(anchor)} ${anchor.getDate()} ${SHORT_MONTHS[anchor.getMonth()]}`;
   }
-  if (view === "week") {
-    return "← Prev week";
-  }
-  return "← Prev month";
+  const end = addDays(anchor, 6);
+  const sameMonth = end.getMonth() === anchor.getMonth();
+  const startText = sameMonth ? `${anchor.getDate()}` : `${anchor.getDate()} ${SHORT_MONTHS[anchor.getMonth()]}`;
+  return `${startText} – ${end.getDate()} ${SHORT_MONTHS[end.getMonth()]} ${end.getFullYear()}`;
 }
 
-export function nextLabel(view: CalendarView): string {
+/** The anchor a view shows when switching to it while looking at `focus`. */
+export function anchorForView(view: CalendarView, focus: Date): Date {
   if (view === "day") {
-    return "Next day →";
+    return startOfDay(focus);
   }
   if (view === "week") {
-    return "Next week →";
+    return startOfWeek(focus);
   }
-  return "Next month →";
+  return startOfMonth(focus);
 }

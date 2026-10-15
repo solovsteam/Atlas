@@ -62,7 +62,7 @@ export function calendarIcs(items: Item[], links: ItemLink[], now: Date, dayCoun
           `atlas-interval-${item.id}@atlas`,
           start,
           end,
-          item.title || "Work block",
+          item.title || "Interval",
           committed.length > 0 ? committed.join(", ") : "Nothing committed yet"
         )
       );

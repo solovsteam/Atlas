@@ -139,7 +139,7 @@ export function WebHandoffImport() {
             </select>
           </label>
           {handoff.proposal && !existing ? (
-            <p className="text-xs text-neutral-500">{suggestedIntervalId ? "Suggested: first future work block with estimated room, including Atlas’s 25% duration buffer. This handoff proposes only one task." : "No existing future work block has enough room. Create a block in Calendar or leave this task unscheduled."}</p>
+            <p className="text-xs text-neutral-500">{suggestedIntervalId ? "Suggested: first future interval with estimated room, including Atlas’s 25% duration buffer. This handoff proposes only one task." : "No future interval has enough room. Create an interval in Calendar or leave this task unscheduled."}</p>
           ) : null}
           <button className="border border-white px-4 py-2 text-sm disabled:opacity-40" disabled={busy || itemsLoading || !!itemsError || (!existing && !title.trim()) || (!!existing && (!intervalId || alreadyLinked))} type="button" onClick={() => void apply()}>
             {busy ? "Applying…" : existing ? "Link existing task" : "Create task in Atlas"}

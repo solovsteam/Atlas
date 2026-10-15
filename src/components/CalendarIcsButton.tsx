@@ -16,8 +16,8 @@ export function CalendarIcsButton() {
   }
 
   return (
-    <button className="border border-neutral-600 px-3 py-1.5 text-xs hover:border-white" type="button" onClick={download}>
-      Add 7 days to Calendar
+    <button className="rounded-full border border-neutral-700 px-3 py-1.5 text-xs text-neutral-300 hover:border-neutral-500 hover:text-white" type="button" onClick={download}>
+      Add 7 days to calendar app
     </button>
   );
 }

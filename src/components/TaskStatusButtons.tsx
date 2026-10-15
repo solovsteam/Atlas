@@ -29,26 +29,23 @@ export function TaskStatusButtons({
   );
 }
 
-function buttonClass(entry: TaskStatus, selected: boolean, compact: boolean): string {
-  if (selected) {
-    if (entry === "done") {
-      return compact
-        ? "rounded border border-green-500 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-green-400"
-        : "rounded border border-green-500 px-3 py-1 text-xs font-medium text-green-400";
-    }
-    if (entry === "later") {
-      return compact
-        ? "rounded border border-amber-500 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-400"
-        : "rounded border border-amber-500 px-3 py-1 text-xs font-medium text-amber-400";
-    }
-    return compact
-      ? "rounded border border-white px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide"
-      : "rounded border border-white px-3 py-1 text-xs font-medium";
-  }
+const SELECTED: Record<TaskStatus, string> = {
+  active: "border-indigo-400 bg-indigo-500/20 text-indigo-100",
+  later: "border-amber-500 bg-amber-500/15 text-amber-300",
+  done: "border-green-500 bg-green-500/15 text-green-300",
+  cancelled: "border-rose-500/70 bg-rose-500/10 text-rose-300"
+};
 
-  return compact
-    ? "rounded border border-neutral-800 px-2 py-0.5 text-[10px] uppercase tracking-wide text-neutral-500 hover:border-neutral-500 hover:text-neutral-300"
-    : "rounded border border-neutral-700 px-3 py-1 text-xs text-neutral-400 hover:border-neutral-500";
+function buttonClass(entry: TaskStatus, selected: boolean, compact: boolean): string {
+  const size = compact ? "px-2 py-0.5 text-[10px] uppercase tracking-wide" : "px-3 py-1 text-xs";
+  if (selected) {
+    return `rounded-md border font-medium ${size} ${SELECTED[entry]}`;
+  }
+  return `rounded-md border ${size} ${
+    compact
+      ? "border-neutral-800 text-neutral-500 hover:border-neutral-500 hover:text-neutral-300"
+      : "border-neutral-700 text-neutral-400 hover:border-neutral-500"
+  }`;
 }
 
 export function TaskStatusButtonsForItem({

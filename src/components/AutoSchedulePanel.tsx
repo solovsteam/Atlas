@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useAtlasData } from "../context/AtlasDataContext";
+import { Panel } from "./Panel";
 import { trackBatchLinksUndo, useUndo } from "../context/UndoContext";
 import { planScheduleApply, proposeSchedule } from "../services/scheduling";
 import type { PlacementStrategy, SchedulerResult, UnassignedReason } from "@shared/scheduling";
@@ -52,8 +53,7 @@ export function AutoSchedulePanel() {
   }
 
   return (
-    <div className="mb-8 rounded border border-neutral-800 p-4">
-      <p className="mb-3 text-xs uppercase tracking-wide text-neutral-500">Auto-schedule</p>
+    <Panel summary="Place ready tasks into open intervals" title="Auto-schedule">
       <p className="mb-4 text-sm text-neutral-400">
         Places ready tasks into open intervals. Two-minute tasks stay off the calendar. Default minimizes postponement and switching, not earliest-fit.
       </p>
@@ -62,8 +62,8 @@ export function AutoSchedulePanel() {
           <button
             className={
               strategy === entry.id
-                ? "rounded border border-white px-3 py-1 text-xs"
-                : "rounded border border-neutral-700 px-3 py-1 text-xs text-neutral-400 hover:border-neutral-500"
+                ? "rounded-full border border-indigo-400 bg-indigo-500/20 px-3 py-1 text-xs text-indigo-100"
+                : "rounded-full border border-neutral-700 px-3 py-1 text-xs text-neutral-400 hover:border-neutral-500"
             }
             key={entry.id}
             type="button"
@@ -82,7 +82,7 @@ export function AutoSchedulePanel() {
         </button>
         {preview ? (
           <button
-            className="border border-white px-3 py-1.5 text-xs font-medium disabled:opacity-50"
+            className="bg-indigo-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-400 disabled:opacity-50"
             disabled={busy}
             type="button"
             onClick={() => void apply()}
@@ -115,7 +115,7 @@ export function AutoSchedulePanel() {
           </ul>
         </div>
       ) : null}
-    </div>
+    </Panel>
   );
 }
 

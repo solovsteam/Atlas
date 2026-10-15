@@ -1,21 +1,58 @@
 @import "tailwindcss";
 
+/*
+ * Palette: a blue-tinted dark grey instead of pure black and white, so
+ * surfaces, borders and text separate visually. Overriding Tailwind's
+ * neutral scale and black restyles every page without touching its classes.
+ * Colour that carries meaning (interval, appointment, all-day, now) lives in
+ * src/components/calendar/eventStyle.ts.
+ */
+@theme {
+  --color-black: #0b0f17;
+  --color-neutral-50: #f6f7f9;
+  --color-neutral-100: #eceff4;
+  --color-neutral-200: #dce1e9;
+  --color-neutral-300: #c1c8d4;
+  --color-neutral-400: #97a1b3;
+  --color-neutral-500: #6c768a;
+  --color-neutral-600: #4a5468;
+  --color-neutral-700: #343d4f;
+  --color-neutral-800: #252c3a;
+  --color-neutral-900: #181e29;
+  --color-neutral-950: #111620;
+}
+
 html,
 body,
 #root {
   min-height: 100%;
 }
 
+html {
+  color-scheme: dark;
+  -webkit-tap-highlight-color: transparent;
+}
+
 body {
   margin: 0;
-  background: #000;
-  color: #fff;
-  font-family: ui-sans-serif, system-ui, sans-serif;
+  background: var(--color-black);
+  color: var(--color-neutral-100);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
 a {
   color: inherit;
   text-decoration: none;
+}
+
+@layer base {
+  /* Soft corners by default; a component's own rounded-* class still wins. */
+  button,
+  input,
+  textarea,
+  select {
+    border-radius: 0.5rem;
+  }
 }
 
 /* iOS Safari zooms focused inputs when font-size < 16px. */

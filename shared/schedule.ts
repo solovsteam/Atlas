@@ -112,12 +112,21 @@ export type DayLayoutEntry = {
   slot: ScheduleSlot;
   topPct: number;
   heightPct: number;
+  /** Column within its cluster of overlapping entries, 0-based. */
   lane: number;
+  /** Number of columns the cluster needs. */
+  lanes: number;
+  /** Columns the entry covers, from its lane rightwards while nothing there overlaps it; it is span/lanes wide. */
+  span: number;
+  startMinutes: number;
+  endMinutes: number;
 };
+
+export type DayGridRange = { startHour: number; endHour: number };
 
 export const DAY_GRID_START_HOUR = 6;
 export const DAY_GRID_END_HOUR = 22;
-const DAY_GRID_MINUTES = (DAY_GRID_END_HOUR - DAY_GRID_START_HOUR) * 60;
+export const DEFAULT_DAY_GRID: DayGridRange = { startHour: DAY_GRID_START_HOUR, endHour: DAY_GRID_END_HOUR };
 
 export function intervalItemsToCalendar(items: Item[]): ScheduleSlot[] {
   return items
@@ -259,40 +268,116 @@ function minutesFromDayStart(date: Date, day: Date): number {
   return Math.round((date.getTime() - startOfDay(day).getTime()) / 60_000);
 }
 
+function timedMinutesOnDay(slot: ScheduleSlot, day: Date): [number, number] | null {
+  if (slot.kind === "allDay" || slot.kind === "due") {
+    return null;
+  }
+  if (!slotOverlapsRange(slot, startOfDay(day), endOfDay(day))) {
+    return null;
+  }
+  const start = slotRangeStart(slot) ?? slotRangeEnd(slot);
+  const end = slotRangeEnd(slot) ?? slotRangeStart(slot);
+  if (!start || !end) {
+    return null;
+  }
+  const startMinutes = Math.max(minutesFromDayStart(start, day), 0);
+  const endMinutes = Math.min(minutesFromDayStart(end, day), 24 * 60);
+  return endMinutes > startMinutes ? [startMinutes, endMinutes] : null;
+}
+
+/** The default 06–22 grid, widened so no timed entry on these days is hidden. */
+export function dayGridRange(slots: ScheduleSlot[], days: Date[]): DayGridRange {
+  let startHour = DAY_GRID_START_HOUR;
+  let endHour = DAY_GRID_END_HOUR;
+  for (const day of days) {
+    for (const slot of slots) {
+      const minutes = timedMinutesOnDay(slot, day);
+      if (!minutes) {
+        continue;
+      }
+      startHour = Math.min(startHour, Math.floor(minutes[0] / 60));
+      endHour = Math.max(endHour, Math.ceil(minutes[1] / 60));
+    }
+  }
+  return { startHour, endHour };
+}
+
+/**
+ * Positions timed entries on one day's grid. Entries that overlap, directly or
+ * through a chain, form a cluster and sit side by side in lanes, as in common
+ * calendar apps, instead of covering each other.
+ */
 export function layoutBoxesOnDay(
   slots: ScheduleSlot[],
   day: Date,
+  range: DayGridRange = DEFAULT_DAY_GRID,
 ): DayLayoutEntry[] {
-  const dayStart = startOfDay(day);
-  const gridStartMinutes = DAY_GRID_START_HOUR * 60;
-  const entries: DayLayoutEntry[] = [];
-  const timed = slots.filter(
-    (slot) =>
-      slot.kind !== "allDay" &&
-      slot.kind !== "due" &&
-      slotOverlapsRange(slot, dayStart, endOfDay(day)),
-  );
-  for (const slot of timed) {
-    const start = slotRangeStart(slot) ?? slotRangeEnd(slot);
-    const end = slotRangeEnd(slot) ?? slotRangeStart(slot);
-    if (!start || !end) {
+  const gridStart = range.startHour * 60;
+  const gridEnd = range.endHour * 60;
+  const gridMinutes = gridEnd - gridStart;
+  const timed: { slot: ScheduleSlot; start: number; end: number }[] = [];
+  for (const slot of slots) {
+    const minutes = timedMinutesOnDay(slot, day);
+    if (!minutes) {
       continue;
     }
-    const startMinutes = minutesFromDayStart(start, day);
-    const endMinutes = minutesFromDayStart(end, day);
-    const clampedStart = Math.max(startMinutes, gridStartMinutes);
-    const clampedEnd = Math.min(endMinutes, DAY_GRID_END_HOUR * 60);
-    if (clampedEnd <= clampedStart) {
-      continue;
+    const start = Math.max(minutes[0], gridStart);
+    const end = Math.min(minutes[1], gridEnd);
+    if (end > start) {
+      timed.push({ slot, start, end });
     }
-    entries.push({
-      slot,
-      topPct: ((clampedStart - gridStartMinutes) / DAY_GRID_MINUTES) * 100,
-      heightPct: ((clampedEnd - clampedStart) / DAY_GRID_MINUTES) * 100,
-      lane: 0,
-    });
   }
-  return entries.sort((a, b) => a.topPct - b.topPct);
+  timed.sort((a, b) => a.start - b.start || b.end - a.end);
+
+  const entries: DayLayoutEntry[] = [];
+  let cluster: DayLayoutEntry[] = [];
+  let laneEnds: number[] = [];
+  let clusterEnd = -1;
+  const closeCluster = () => {
+    const lanes = laneEnds.length;
+    for (const entry of cluster) {
+      entry.lanes = lanes;
+      const blocked = (lane: number) =>
+        cluster.some(
+          (other) =>
+            other.lane === lane &&
+            other.startMinutes < entry.endMinutes &&
+            entry.startMinutes < other.endMinutes,
+        );
+      while (entry.lane + entry.span < lanes && !blocked(entry.lane + entry.span)) {
+        entry.span += 1;
+      }
+    }
+    cluster = [];
+    laneEnds = [];
+  };
+  for (const { slot, start, end } of timed) {
+    if (start >= clusterEnd) {
+      closeCluster();
+    }
+    let lane = laneEnds.findIndex((laneEnd) => laneEnd <= start);
+    if (lane === -1) {
+      lane = laneEnds.length;
+      laneEnds.push(end);
+    } else {
+      laneEnds[lane] = end;
+    }
+    const entry: DayLayoutEntry = {
+      slot,
+      topPct: ((start - gridStart) / gridMinutes) * 100,
+      heightPct: ((end - start) / gridMinutes) * 100,
+      lane,
+      lanes: 1,
+      span: 1,
+      startMinutes: start,
+      endMinutes: end,
+    };
+    cluster.push(entry);
+    entries.push(entry);
+    clusterEnd = Math.max(clusterEnd, end);
+  }
+  closeCluster();
+  return entries;
 }
 
 export function allDayBoxesOnDay(

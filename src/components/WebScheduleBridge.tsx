@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import type { SchemaSchedulePlan, SchemaScheduleRun, ScheduleRunBaseline } from "@shared/schemaSchedule";
 import { parseSchemaSchedulePlan } from "@shared/schemaSchedule";
 import { useAtlasData } from "../context/AtlasDataContext";
+import { Panel } from "./Panel";
 import { trackCreateLinkUndo, trackCreateUndo, useUndo } from "../context/UndoContext";
 import { supabase } from "../lib/supabase";
 import { fetchOwnedItems } from "../services/items";
@@ -135,7 +136,7 @@ export function WebScheduleBridge() {
       run = await updateSchemaScheduleRun(supabase, userId, run.id, { baseline, status: "applied" });
       setRuns((current) => [run!, ...current.filter((entry) => entry.id !== run!.id)]);
       const placedCount = baseline.actions.filter((action) => action.plannedIntervalId !== null).length;
-      setMessage(`${plan.actions.length} proposed task${plan.actions.length === 1 ? "" : "s"} processed; ${placedCount} placed into Atlas work blocks. Undo can reverse each created task and placement.`);
+      setMessage(`${plan.actions.length} proposed task${plan.actions.length === 1 ? "" : "s"} processed; ${placedCount} placed into Atlas intervals. Undo can reverse each created task and placement.`);
       setPlan(null);
     } catch (err) {
       const reason = err instanceof Error ? err.message : "Could not generate the schedule.";
@@ -164,9 +165,8 @@ export function WebScheduleBridge() {
   }
 
   return (
-    <div className="mb-8 rounded border border-neutral-800 p-4">
-      <p className="mb-2 text-xs uppercase tracking-wide text-neutral-500">Schema generated schedule</p>
-      <p className="mb-4 text-sm text-neutral-400">Import a finite candidate set from Codex. Atlas schedules only those tasks against your current blocks, appointments, and existing placements, within the plan horizon or Atlas’s 21-day default. Review or edit the result in this calendar, then export a plan-versus-current receipt to discuss in Codex.</p>
+    <Panel summary={runs.length ? `${runs.length} run${runs.length === 1 ? "" : "s"}` : "Import a plan from Codex"} title="Schema generated schedule">
+      <p className="mb-4 text-sm text-neutral-400">Import a finite candidate set from Codex. Atlas schedules only those tasks against your current intervals, appointments, and existing placements, within the plan horizon or Atlas’s 21-day default. Review or edit the result in this calendar, then export a plan-versus-current receipt to discuss in Codex.</p>
       <p className="-mt-2 mb-4 text-xs text-neutral-500">Run history requires Atlas Supabase migration `009_schema_schedule_runs.sql`.</p>
       <label className="block text-xs text-neutral-400">Schedule plan JSON
         <input className="mt-2 block w-full text-sm" type="file" accept=".json,application/json" onChange={(event) => void load(event.target.files?.[0])} />
@@ -197,7 +197,7 @@ export function WebScheduleBridge() {
                 <Link className="underline decoration-neutral-700 hover:text-white" to={`/item/${baseline.taskId}`}>{task?.title ?? baseline.title}</Link>
                 <span className="text-neutral-500"> · {task?.expectedDurationMinutes ?? baseline.durationMinutes}m</span>
                 <span className="text-neutral-500"> → </span>
-                {interval ? <Link className="underline decoration-neutral-700 hover:text-white" to={`/item/${interval.id}`}>{interval.title || "Work block"}</Link> : <span className="text-neutral-500">unscheduled</span>}
+                {interval ? <Link className="underline decoration-neutral-700 hover:text-white" to={`/item/${interval.id}`}>{interval.title || "Interval"}</Link> : <span className="text-neutral-500">unscheduled</span>}
                 {task?.taskStatus === "done" ? <span className="text-neutral-500"> · done</span> : null}
                 {!interval && baseline.unassignedReason ? <span className="text-neutral-500"> · {unassignedLabel(baseline.unassignedReason)}</span> : null}
                 {action?.reason ? <p className="mt-0.5 max-w-2xl text-neutral-500">{action.reason}</p> : null}
@@ -205,10 +205,10 @@ export function WebScheduleBridge() {
             })}</ul>
           </details> : null}
         </li>)}</ul>
-        <p className="mt-2 text-[11px] text-neutral-500">The export records task moves, removals, status and duration edits, work-block changes, and tasks added after the run. It does not infer why. Attach it in Codex, explain what was wrong, and ask the feedback-review schema to assess it.</p>
+        <p className="mt-2 text-[11px] text-neutral-500">The export records task moves, removals, status and duration edits, interval changes, and tasks added after the run. It does not infer why. Attach it in Codex, explain what was wrong, and ask the feedback-review schema to assess it.</p>
       </div> : null}
       {runs.some((run) => run.status === "applying") ? <p className="mt-2 text-xs text-amber-300">A previous run may be incomplete. Reimport the same plan to retry it safely.</p> : null}
-    </div>
+    </Panel>
   );
 }
 
@@ -216,7 +216,7 @@ function unassignedLabel(reason: string): string {
   switch (reason) {
     case "quick": return "short task; calendar placement skipped";
     case "missing_info": return "missing scheduling information";
-    case "no_feasible_interval": return "no work block has enough capacity";
+    case "no_feasible_interval": return "no interval has enough room";
     case "excluded": return "fixed appointment";
     default: return reason;
   }

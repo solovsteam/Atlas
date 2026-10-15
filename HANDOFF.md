@@ -1,5 +1,23 @@
 # Handoff
 
+## Calendar and shell redesign (15 Oct 2026)
+
+Tonio found the UI, above all Calendar on his phone, hard to use. Calendar now
+opens with the calendar under a sticky toolbar (title, Day/Week/Month, Today,
+‹ ›, +), so switching back from a tapped month day needs no scrolling. Day and
+desktop-week views use an hour grid where intervals are rounded boxes as tall as
+their duration; overlapping entries sit in lanes and widen into free ones
+(`layoutBoxesOnDay`, tested in `scripts/calendar-layout.test.ts`); the grid
+widens for early/late entries and shows a now line. Phone week is an agenda.
+Colour by kind lives in `src/components/calendar/eventStyle.ts`; the tinted
+palette overrides Tailwind's neutral scale in `src/index.css`. Phone navigation
+is a bottom tab bar; capture is hidden on Calendar; tool panels fold away below
+the calendar. "Interval" replaces "block" in all user-visible text (his name for
+them). Evidence: `npm run check` and headless phone/desktop screenshots against an
+in-memory Supabase stub (not committed). brain-experimental also edits
+`CalendarViews.tsx`; expect a conflict there on its next refresh (keep this
+version, re-apply its `itemTitles` map change if still wanted).
+
 ## Recurring generators (12 Oct 2026)
 
 Implemented in reviewed thread `recurring-generators-20261012`, from main

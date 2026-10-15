@@ -3,6 +3,7 @@ import { intervalItemsToCalendar } from "@shared/schedule";
 import { workBlockForNow, workBlockOverlapsExisting, type WorkBlockKind } from "@shared/workBlocks";
 import { useAtlasData } from "../context/AtlasDataContext";
 import { trackCreateUndo, useUndo } from "../context/UndoContext";
+import { PlusIcon } from "./icons";
 
 export function WorkBlockButtons() {
   const { items, createItem } = useAtlasData();
@@ -46,20 +47,22 @@ export function WorkBlockButtons() {
     <div className="flex flex-wrap items-center gap-2">
       {morning && !workBlockOverlapsExisting(morning, slots) ? (
         <button
-          className="border border-neutral-600 px-3 py-1.5 text-xs hover:border-white"
+          className="inline-flex items-center gap-1 rounded-full border border-indigo-400/50 bg-indigo-500/10 px-3 py-1.5 text-xs text-indigo-100 hover:bg-indigo-500/20"
           type="button"
           onClick={() => void createBlock("morning")}
         >
-          Block morning
+          <PlusIcon className="h-3.5 w-3.5" />
+          Morning interval
         </button>
       ) : null}
       {afternoon && !workBlockOverlapsExisting(afternoon, slots) ? (
         <button
-          className="border border-neutral-600 px-3 py-1.5 text-xs hover:border-white"
+          className="inline-flex items-center gap-1 rounded-full border border-indigo-400/50 bg-indigo-500/10 px-3 py-1.5 text-xs text-indigo-100 hover:bg-indigo-500/20"
           type="button"
           onClick={() => void createBlock("afternoon")}
         >
-          Block afternoon
+          <PlusIcon className="h-3.5 w-3.5" />
+          Afternoon interval
         </button>
       ) : null}
       {error ? <p className="text-xs text-red-400">{error}</p> : null}

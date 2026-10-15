@@ -14,7 +14,7 @@ export function NudgeToggle() {
       return;
     }
     if (result !== "granted") {
-      setError("Notifications are blocked. Use the browser site settings, or import today’s blocks into Calendar.");
+      setError("Notifications are blocked. Use the browser site settings, or import today’s intervals into your calendar app.");
       return;
     }
     setError(null);
@@ -36,7 +36,7 @@ export function NudgeToggle() {
           type="button"
           onClick={() => void onEnable()}
         >
-          Ping me at block time
+          Ping me when intervals start
         </button>
       )}
       {enabled && next ? (

@@ -27,12 +27,12 @@ export function CaptureBar() {
   return (
     <form className="mb-6 flex gap-2" onSubmit={(event) => void onSubmit(event)}>
       <input
-        className="min-w-0 flex-1 border border-neutral-800 bg-black px-3 py-1.5 text-sm outline-none focus:border-white"
+        className="min-w-0 flex-1 border border-neutral-800 bg-neutral-950 px-3 py-2 text-sm outline-none placeholder:text-neutral-500 focus:border-indigo-400"
         placeholder="Capture a task…"
         value={title}
         onChange={(event) => setTitle(event.target.value)}
       />
-      <button className="shrink-0 border border-neutral-600 px-3 py-1.5 text-xs hover:border-white" type="submit">
+      <button className="shrink-0 bg-indigo-500 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-400" type="submit">
         Capture
       </button>
       {error ? <p className="self-center text-xs text-red-400">{error}</p> : null}

@@ -106,7 +106,7 @@ export function buildNudges(items: Item[], links: ItemLink[], now: Date): Nudge[
     const committed = tasksScheduledIn(item.id, links)
       .map((id) => byId.get(id))
       .filter((entry): entry is Item => entry !== undefined && isActiveTask(entry));
-    const blockLabel = item.title || "Work block";
+    const blockLabel = item.title || "Interval";
     const body = committed[0]?.title || "Nothing committed yet — open Now";
     pushClockNudges(
       nudges,
@@ -134,8 +134,8 @@ export function buildNudges(items: Item[], links: ItemLink[], now: Date): Nudge[
       kind: "empty_morning",
       fireAt: fire.getTime(),
       expiresAt: expires.getTime(),
-      title: "No morning block",
-      body: "Block morning so work has a place to land."
+      title: "No morning interval",
+      body: "Add a morning interval so work has a place to land."
     });
   }
 

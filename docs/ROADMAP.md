@@ -83,6 +83,13 @@ Supabase is currently used in ~5 files; `shared/` domain logic is portable. **Do
 
 ### Calendar, scheduler, and schema handoff
 
+**15 Oct automatic Brain effect adapter:** typed existing-task placement/moves,
+interval create/update, appointment/duration edits, server-authored ten-minute
+previews, atomic own-account fresh-state validation, immutable receipts and safe
+undo. Migration 012 is required before enabling the Brain worker. The ordinary
+Calendar Auto-schedule panel is still explicit Preview/Apply. Generator/reference
+edits remain outside this new effect vocabulary. See [BRAIN_EDITS.md](BRAIN_EDITS.md).
+
 The implementation was developed on `experiment/scientific-atlas` and has been promoted to `main`. See [EXPERIMENT.md](EXPERIMENT.md). It includes Tasks / Items / Calendar / Archive, `scheduled_in` links, due/appointment fields, a TMT + switching-cost scheduler (not earliest-fit), Now as a focus view, later (someday) status, 2-minute skip on the calendar, a weekly look on Calendar, clock-true nudges while Atlas is running, `.ics` export, and the reviewed Brain schedule handoff.
 
 ### To port from Lakebed reference

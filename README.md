@@ -25,6 +25,10 @@ In Codex, run the `schedule-set` schema for the intentions and constraints you s
 Atlas needs its Supabase project active for sign-in and saving. If the project is paused, resume it from the [Supabase Dashboard](https://supabase.com/dashboard). Calendar placement requires migrations through `008_item_links.sql`; durable schema schedule runs and feedback require [`009_schema_schedule_runs.sql`](supabase/migrations/009_schema_schedule_runs.sql). Apply pending migrations before using the run-history feature.
 
 Brain's local MCP connection to Atlas is documented in [`docs/BRAIN_MCP.md`](docs/BRAIN_MCP.md).
+Brain's automatic scheduling worker uses the separate fresh-preview/atomic-edit
+adapter in [`docs/BRAIN_EDITS.md`](docs/BRAIN_EDITS.md), including existing tasks
+and interval edits. It requires migration 012; the older MCP plan tools stay
+create-only.
 
 ## Prerequisites
 

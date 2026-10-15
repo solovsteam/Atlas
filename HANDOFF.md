@@ -1,5 +1,27 @@
 # Handoff
 
+## Automatic Brain scheduling effect adapter (15 Oct 2026)
+
+Implemented on `brain-edit-loop-20261015` from e836bc7, not yet integrated or
+deployed. The user explicitly authorized the Brain principle-triggered loop and
+superseded create-only as its target. `shared/brainEdits.ts`,
+`src/services/brainEdits.ts` and `scripts/brain-edit-adapter.mjs` define its bounded
+context/preview/apply/receipt/feedback/undo surface. Migration
+`012_brain_edits.sql` adds server-authored ten-minute previews, atomic fresh-state
+edits and immutable receipts, plus append-only link history. It supports active
+existing task placement/moves, interval create/update and task appointment/time
+edits; recurring references fail closed. Existing routine overbooking is not
+worsened. Old MCP/pinned-routine adapters retain their current contracts.
+
+Real PostgreSQL fixture tests verify no calendar writes during preview, exact
+idempotent receipts/retries, foreign/stale/expired refusal, atomic rollback after
+a late constraint failure, placement/interval/appointment edits and safe undo
+with recoverable original values. Transport errors remain explicitly uncertain.
+Full check status and commit are recorded in
+`.handoff/brain-edit-loop-20261015.md` in this worktree. Root Brain thread
+coordinates both repositories, deployment and applying migration 012. No live
+personal data changes or integration/push performed by this Atlas agent.
+
 ## Calendar and shell redesign (15 Oct 2026)
 
 Tonio found the UI, above all Calendar on his phone, hard to use. Calendar now

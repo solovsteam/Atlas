@@ -91,7 +91,7 @@ function loadEnvironment(): { url: string; anonKey: string } {
   return { url: values.VITE_SUPABASE_URL, anonKey: values.VITE_SUPABASE_ANON_KEY };
 }
 
-function createAtlasClient(): SupabaseClient<Database> {
+export function createAtlasClient(): SupabaseClient<Database> {
   const { url, anonKey } = loadEnvironment();
   return createClient<Database>(url, anonKey, {
     auth: {

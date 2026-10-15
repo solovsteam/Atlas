@@ -134,6 +134,11 @@ export type Database = {
     };
     Views: Record<string, never>;
     Functions: {
+      atlas_preview_brain_edits: { Args: { p_plan: unknown }; Returns: unknown };
+      atlas_apply_brain_edit_preview: { Args: { p_preview_id: string }; Returns: unknown };
+      atlas_get_brain_edit_receipt: { Args: { p_request_id: string }; Returns: unknown };
+      atlas_get_brain_edit_feedback: { Args: { p_request_id: string }; Returns: unknown };
+      atlas_undo_brain_edits: { Args: { p_request_id: string; p_undo_request_id: string }; Returns: unknown };
       atlas_write_reference: {
         Args: { p_row: unknown; p_expected_revision: number; p_generator_revision?: number | null };
         Returns: unknown;

@@ -18,6 +18,11 @@ Atlas provides a local MCP server so Brain agents running in Codex can read Atla
 
 ## Available tools
 
+These original plan tools remain create-only. Brain's automatic scheduling worker
+uses a separate typed edit adapter for existing placements/intervals; see
+[BRAIN_EDITS.md](BRAIN_EDITS.md). Its migration 012 and transactional receipts do
+not change the older plan contract described below.
+
 - atlas_identity checks the signed-in Atlas account.
 - atlas_list_items and atlas_get_item read notes, tasks, intervals and documentation items.
 - atlas_get_schedule_context reads active/later tasks, calendar intervals and scheduled_in links.

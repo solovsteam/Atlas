@@ -29,6 +29,8 @@ test("typed edits reject unknown authority fields and missing/ambiguous values",
   assert.throws(() => parseBrainEditPlan(plan("x", [{ kind: "create_interval", id: first, title: "Work", startsAt: `${date}T09:00:00`, endsAt: at(10) }])), /timezone/);
   assert.throws(() => parseBrainEditPlan(plan("x", [{ kind: "create_task", id: task, title: "Task" }])), /number/);
   assert.equal(parseBrainEditPlan(plan("x", [{ kind: "place_task", taskId: task, expectedRevision: 1, intervalId: null }])).operations.length, 1);
+  assert.equal(parseBrainEditPlan(plan("x", [{ kind: "archive_interval", id: first, expectedRevision: 1 }, { kind: "set_task_status", id: task, expectedRevision: 1, status: "done" }])).operations.length, 2);
+  assert.throws(() => parseBrainEditPlan(plan("x", [{ kind: "set_task_status", id: task, expectedRevision: 1, status: "maybe" }])), /status/);
 });
 
 test("transport loss remains uncertain, while a transactional SQL refusal is definite", async () => {
@@ -66,7 +68,7 @@ test("real PostgreSQL atomic edits enforce freshness, receipts, account, capacit
       create function auth.uid() returns uuid language sql as 'select nullif(current_setting(''request.jwt.claim.sub'',true),'''')::uuid';
       grant usage on schema auth to authenticated;grant execute on function auth.uid() to authenticated;
       insert into auth.users values('${owner}'),('${foreign}');create publication supabase_realtime;`);
-    for (const name of ["001_items", "003_interval_extended", "005_task_expected_duration", "006_subtasks", "007_task_scheduling", "008_item_links", "011_recurring_references", "012_brain_edits"]) {
+    for (const name of ["001_items", "003_interval_extended", "005_task_expected_duration", "006_subtasks", "007_task_scheduling", "008_item_links", "011_recurring_references", "012_brain_edits", "013_brain_edits_text_times", "014_brain_edits_status_archive"]) {
       await db.exec(await readFile(new URL(`../supabase/migrations/${name}.sql`, import.meta.url), "utf8"));
     }
     await db.exec(`grant select,insert,update,delete on public.items,public.item_links to authenticated;

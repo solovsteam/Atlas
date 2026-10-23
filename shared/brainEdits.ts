@@ -4,7 +4,9 @@ export type BrainEditOperation =
   | { kind: "update_interval"; id: string; expectedRevision: number; title?: string; startsAt?: string; endsAt?: string }
   | { kind: "create_task"; id: string; title: string; durationMinutes: number }
   | { kind: "update_task"; id: string; expectedRevision: number; durationMinutes?: number; fixedStartsAt?: string | null; fixedEndsAt?: string | null }
-  | { kind: "place_task"; taskId: string; expectedRevision: number; intervalId: string | null };
+  | { kind: "place_task"; taskId: string; expectedRevision: number; intervalId: string | null }
+  | { kind: "archive_interval"; id: string; expectedRevision: number }
+  | { kind: "set_task_status"; id: string; expectedRevision: number; status: "active" | "done" | "cancelled" };
 
 export type BrainEditPlan = {
   format: "brain-atlas.edits";
@@ -78,6 +80,15 @@ export function parseBrainEditPlan(value: unknown): BrainEditPlan {
     if (op.kind === "place_task") {
       exactKeys(op, ["kind", "taskId", "expectedRevision", "intervalId"]);
       return { kind: op.kind, taskId: uuid(op.taskId), expectedRevision: integer(op.expectedRevision, 0, 2147483646), intervalId: op.intervalId === null ? null : uuid(op.intervalId) };
+    }
+    if (op.kind === "archive_interval") {
+      exactKeys(op, ["kind", "id", "expectedRevision"]);
+      return { kind: op.kind, id: uuid(op.id), expectedRevision: integer(op.expectedRevision, 0, 2147483646) };
+    }
+    if (op.kind === "set_task_status") {
+      exactKeys(op, ["kind", "id", "expectedRevision", "status"]);
+      if (op.status !== "active" && op.status !== "done" && op.status !== "cancelled") throw new Error("Task status must be active, done or cancelled");
+      return { kind: op.kind, id: uuid(op.id), expectedRevision: integer(op.expectedRevision, 0, 2147483646), status: op.status };
     }
     if (op.kind === "update_interval") {
       exactKeys(op, ["kind", "id", "expectedRevision", "title", "startsAt", "endsAt"]);

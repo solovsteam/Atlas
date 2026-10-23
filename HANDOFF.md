@@ -1,5 +1,26 @@
 # Handoff
 
+## Archive and task-status edits added (22 Oct 2026)
+
+- **Migration `014_brain_edits_status_archive.sql`** adds two bounded operations:
+  - `archive_interval`: archives the block and unschedules tasks placed in it; nothing is deleted.
+  - `set_task_status`: active/done/cancelled.
+
+  Parser and contract are in `shared/brainEdits.ts` and `src/services/brainEdits.ts`; tests in `brain-edits-text-times.test.ts` and `brain-edits.test.ts`. `npm run check` passed.
+- **Applied once live** with guard and history row 014; read back. Evidence: `.handoff/renaissance-migration-014-*`. Never replay.
+- **Used by** Renaissance's live scheduler (`Renaissance/experiments/atlas-schedule/slice/live.mjs`), which writes under Tonio's standing permission. First live refresh: request `renaissance-live-2026-10-22T21-08-37-380Z-1`.
+- **Not committed:** all of 013 and 014.
+
+## Live text time columns fixed for the edit adapter (22 Oct 2026)
+
+From Renaissance (Tonio's request: write his designed week to Atlas, then "fix Atlas's edit tool").
+- **Cause:** live `public.items.task_due_at` and `task_fixed_starts_at`/`task_fixed_ends_at` are `TEXT NOT NULL DEFAULT ''` (007's `add column if not exists … timestamptz` was skipped on the live database). 012 assumed NULL timestamptz, so every edit touching an existing task failed ("Fixed appointment cannot be placed in an interval" or a timestamptz cast of `''`).
+- **Fix:** `supabase/migrations/013_brain_edits_text_times.sql` normalizes `''` to NULL when reading and writes `''` back on text columns; timestamptz schemas are unchanged.
+- **Test:** `scripts/brain-edits-text-times.test.ts` (live-like schema: preview, apply, undo, fixed-appointment refusal); 013 is also in `brain-edits.test.ts`. `npm run check` passed.
+- **Applied once live** through `supabase db query --linked` with guard and history row 013; read back. Evidence: `.handoff/renaissance-migration-013-*`. Never replay.
+- **First live use:** Renaissance request `renaissance-week-2026-10-26-v1` (Brain's 26 Oct – 1 Nov blocks moved to the new design, 3 intervals and 1 task created). Undo via the adapter while the context is unchanged.
+- **Not committed:** 013, the new test and the `package.json` test entry.
+
 ## Brain scheduling effect adapter deployed (15 Oct 2026)
 
 Code93a9bd4 (bfd93ac plus safety hardening) is integrated/pushed to main.

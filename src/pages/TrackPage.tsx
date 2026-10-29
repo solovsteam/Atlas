@@ -1,12 +1,13 @@
 import { Link, useParams } from "react-router-dom";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { trackersOf } from "@shared/documentationEntries";
+import { trackerConfig, trackersOf, type TrackerKind } from "@shared/documentationEntries";
 import { useAtlasData } from "../context/AtlasDataContext";
 import { trackCreateUndo, trackDeleteEntryUndo, useUndo } from "../context/UndoContext";
 import { useDocumentationEntries, useEntryMutations } from "../hooks/useDocumentationEntries";
 import { PlanEditor } from "../components/tracking/PlanEditor";
 import { TrackerButtons } from "../components/tracking/TrackerButtons";
 import { TrackerHistory } from "../components/tracking/TrackerHistory";
+import { TrackerSettings } from "../components/tracking/TrackerSettings";
 
 /** List of trackers, each with its log button, and a form to add one. */
 export function TrackPage() {
@@ -16,14 +17,14 @@ export function TrackPage() {
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  async function addTracker(event: FormEvent) {
+  async function addTracker(event: FormEvent, kind: TrackerKind) {
     event.preventDefault();
     const title = name.trim();
     if (!title) {
       return;
     }
     try {
-      const created = await createItem(title, { isDocumentation: true });
+      const created = await createItem(title, { isDocumentation: true, documentationSchema: { tracker: { kind, dailyGoal: null } } });
       trackCreateUndo(push, created.id);
       setName("");
       setError(null);
@@ -36,8 +37,8 @@ export function TrackPage() {
     <section>
       <h1 className="text-4xl font-bold tracking-tight">Track</h1>
       <p className="mt-2 max-w-xl text-sm text-neutral-400">
-        Record each time you notice a habit you want to break: at the urge, while doing it, or afterwards. "Urge now"
-        records an urge in one tap. The buttons also appear on Now.
+        Record each time you notice a habit to break, or do a habit to build. For a habit to break, "Urge now" records an
+        urge in one tap, and a time moved into the past counts as noticed in hindsight. The buttons also appear on Now.
       </p>
       {trackers.length > 0 ? (
         <ul className="mt-6 space-y-3">
@@ -53,17 +54,26 @@ export function TrackPage() {
       ) : (
         <p className="mt-6 text-sm text-neutral-500">No trackers yet.</p>
       )}
-      <form className="mt-6 flex max-w-md gap-2" onSubmit={(event) => void addTracker(event)}>
+      <form className="mt-6 max-w-md space-y-2" onSubmit={(event) => void addTracker(event, "break")}>
         <input
           aria-label="New tracker name"
-          className="min-w-0 flex-1 border border-neutral-700 bg-transparent px-3 py-2 text-white placeholder:text-neutral-600"
-          placeholder="New habit to notice, for example Scrolled"
+          className="w-full border border-neutral-700 bg-transparent px-3 py-2 text-white placeholder:text-neutral-600"
+          placeholder="New tracker, for example Scrolled"
           value={name}
           onChange={(event) => setName(event.target.value)}
         />
-        <button className="border border-neutral-600 px-4 py-2 text-sm text-neutral-200 hover:border-white" type="submit">
-          Add
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button className="border border-neutral-600 px-4 py-2 text-sm text-neutral-200 hover:border-white" type="submit">
+            Add habit to break
+          </button>
+          <button
+            className="border border-neutral-600 px-4 py-2 text-sm text-neutral-200 hover:border-white"
+            type="button"
+            onClick={(event) => void addTracker(event, "build")}
+          >
+            Add habit to build
+          </button>
+        </div>
       </form>
       {error ? <p className="mt-3 text-sm text-red-400">{error}</p> : null}
     </section>
@@ -123,12 +133,19 @@ export function TrackerPage() {
         <TrackerButtons size="large" tracker={tracker} />
       </div>
       <PlanEditor tracker={tracker} />
+      <TrackerSettings tracker={tracker} />
       {error ? <p className="mb-4 text-sm text-red-400">{error}</p> : null}
       {deleteError ? <p className="mb-4 text-sm text-red-400">{deleteError}</p> : null}
       {loading ? (
         <p className="text-sm text-neutral-500">Loading entries…</p>
       ) : (
-        <TrackerHistory entries={entries} now={now} trackerCreatedAt={tracker.createdAt} onDelete={(entry) => void remove(entry)} />
+        <TrackerHistory
+          config={trackerConfig(tracker)}
+          entries={entries}
+          now={now}
+          trackerCreatedAt={tracker.createdAt}
+          onDelete={(entry) => void remove(entry)}
+        />
       )}
     </section>
   );

@@ -1,15 +1,16 @@
 # Trackers: noticing habits
 
-A tracker records each time Tonio notices a habit he wants to break, such as scrolling social media. The design follows his theory that noticing is the most valuable step for avoiding a behaviour, and the research summarised below. Evidence is kept apart from design decisions.
+A tracker records each time Tonio notices a habit he wants to break, such as scrolling social media, or does a habit he wants to build, such as reality checks. The design follows his theory that noticing is the most valuable step for avoiding a behaviour, and the research summarised below. Evidence is kept apart from design decisions.
 
 ## How it works
 
-- **Three stages.** Each entry records when he noticed: at the urge (before starting), while doing it, or only afterwards. The time-wheel sheet has one button per stage, so choosing the stage also saves.
-- **Urge now.** One tap records "noticed the urge, right now".
-- **Plan.** One "when I notice, I will" plan per tracker, stored as the tracker item's body. It is shown right after each saved entry.
-- **Situations.** Optional tags, such as "in bed". Atlas offers the tags used before, most frequent first. They can be added in the sheet or after a one-tap save.
-- **History.** Columns per day, week or month split by stage, with a trailing average of the total. A second chart shows the share caught at the urge over the trailing window. Situations, time of day and every entry follow.
-- **Storage.** Entries are rows in `documentation_entries` (migration 015). Stage and situations live in the entry's `data` as `stage` and `tags`. Entries from before this design have no stage and show as "Not recorded".
+- **Two kinds**, set per tracker on its page (stored in the item's `documentation_schema` as `{ tracker: { kind, dailyGoal } }`; without a setting a tracker is a habit to break):
+  - **Habit to break** (for example Scrolled). "Urge now" records an urge in one tap. The tracker button opens the time wheel: saving at the present moment records "while doing it", a time moved into the past records "in hindsight". Entries saved before stages existed get their stage from the recording delay (more than 5 minutes after their time means in hindsight).
+  - **Habit to build** (for example Reality check). No urge button. Entries can be tagged with what triggered them, and an optional daily aim shows as progress ("1 of 3 today") and as a level in the chart. The aim is a guide, not a pass mark: Tonio's real rule is "whenever event X happens, do it", so a day without the event is not a failure.
+- **Plan or rule.** One per tracker, stored as the item's body: what to do when noticing a habit to break, or when to do a habit to build. It is shown right after each saved entry.
+- **Tags.** Optional situations (habit to break) or triggers (habit to build), offered from earlier entries, most frequent first. They can be added in the sheet or after saving.
+- **History.** A habit to break shows counts by stage and the share caught at the urge; a habit to build shows counts against the aim. Both show tags, time of day and every entry.
+- **Storage.** Entries are rows in `documentation_entries` (migration 015). Stage and tags live in the entry's `data` as `stage` and `tags`.
 
 ## Evidence (read from abstracts and summaries, October 2026)
 
@@ -24,6 +25,7 @@ A tracker records each time Tonio notices a habit he wants to break, such as scr
 
 ## Design reasons
 
+- **Stages come from the time, not from a choice** (Tonio, 29 October): fewer decisions while recording, and "in hindsight" is exactly "recorded later".
 - **The count alone is ambiguous.** Noticing more often can raise the count while the behaviour itself falls. The stage separates the two, so the share caught at the urge is the main measure. This is a hypothesis built from the evidence, not a tested finding.
 - **One plan, phrased as an action**, because of the if-then plan findings above.
 - **The plan appears at the moment of noticing**, because that is when a replacement action has to happen.
@@ -31,5 +33,6 @@ A tracker records each time Tonio notices a habit he wants to break, such as scr
 
 ## Not built
 
+- Timed routines (next step): a routine is a bundle of written or unwritten tasks; each task's time is recorded with a stopwatch; tasks run one after another and their times do not depend on earlier tasks.
 - A documentation task completed by typing a value, such as a daily weighing.
 - Opening the time wheel automatically when a chosen app opens (an iPhone Shortcuts automation).

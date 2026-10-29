@@ -2,10 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import {
   dateFromWheel,
   describeAgo,
-  ENTRY_STAGES,
   formatClock,
   isWheelInFuture,
-  STAGE_TEXT,
+  stageFromWheel,
   toggleTag,
   WHEEL_DAYS_BACK,
   WHEEL_MINUTE_STEP,
@@ -19,18 +18,21 @@ import { SituationChips } from "./SituationChips";
 import { WHEEL_ROW_HEIGHT, WheelColumn, type WheelOption } from "./TimeWheel";
 
 /**
- * Bottom sheet that asks "when?" and "when did you notice?". It opens at the
- * current time, so a stage button pressed straight away records "now";
- * scrolling the wheels moves the entry into the past. Situations are optional.
+ * Bottom sheet that asks "when?". It opens at the current time, so saving
+ * straight away records "now"; scrolling the wheels moves the entry into the
+ * past. The stage follows from that: the present moment means "while doing
+ * it", an earlier time means "in hindsight". The chips are optional.
  */
 export function LogEntrySheet({
   title,
-  situations,
+  chipsLabel,
+  chips,
   onSave,
   onClose
 }: {
   title: string;
-  situations: string[];
+  chipsLabel: string;
+  chips: string[];
   onSave: (occurredAt: Date, stage: EntryStage, tags: string[]) => Promise<void>;
   onClose: () => void;
 }) {
@@ -79,7 +81,7 @@ export function LogEntrySheet({
     setSelection((current) => ({ ...current, ...patch }));
   }
 
-  async function save(stage: EntryStage) {
+  async function save() {
     if (inFuture || saving) {
       return;
     }
@@ -87,6 +89,7 @@ export function LogEntrySheet({
     setError(null);
     try {
       // Untouched wheels mean "now", to the second.
+      const stage = stageFromWheel(touched, chosen, dateFromWheel(wheelSelectionForNow(openedAt), openedAt));
       await onSave(touched ? chosen : new Date(), stage, tags);
       onClose();
     } catch (err) {
@@ -133,28 +136,26 @@ export function LogEntrySheet({
             <WheelColumn label="Minute" options={minuteOptions} value={selection.minute} onChange={(minute) => change({ minute })} />
           </div>
         </div>
-        <p className="mb-2 mt-4 text-xs text-neutral-400">Situation (optional)</p>
-        <SituationChips options={situations} selected={tags} onToggle={(tag) => setTags((current) => toggleTag(current, tag))} />
+        <p className="mb-2 mt-4 text-xs text-neutral-400">{chipsLabel}</p>
+        <SituationChips options={chips} selected={tags} onToggle={(tag) => setTags((current) => toggleTag(current, tag))} />
         {error ? <p className="mt-2 text-sm text-red-400">{error}</p> : null}
-        <div className="mt-4 space-y-2">
-          {ENTRY_STAGES.map((stage, index) => (
-            <button
-              className={`block w-full rounded-xl px-4 py-2.5 text-left text-white disabled:opacity-40 ${
-                ["bg-indigo-500 hover:bg-indigo-400", "bg-indigo-700 hover:bg-indigo-600", "bg-indigo-900 hover:bg-indigo-800"][index]
-              }`}
-              disabled={inFuture || saving}
-              key={stage}
-              type="button"
-              onClick={() => void save(stage)}
-            >
-              <span className="block text-sm font-semibold">{STAGE_TEXT[stage].button}</span>
-              <span className="block text-xs text-indigo-100/80">{STAGE_TEXT[stage].hint}</span>
-            </button>
-          ))}
+        <div className="mt-4 grid grid-cols-[1fr_2fr] gap-2">
+          <button
+            className="rounded-xl border border-neutral-700 px-4 py-3 text-sm text-neutral-300 hover:border-neutral-500"
+            type="button"
+            onClick={onClose}
+          >
+            Cancel
+          </button>
+          <button
+            className="rounded-xl bg-indigo-500 px-4 py-3 text-sm font-semibold text-white hover:bg-indigo-400 disabled:opacity-40"
+            disabled={inFuture || saving}
+            type="button"
+            onClick={() => void save()}
+          >
+            {saving ? "Saving…" : "Save"}
+          </button>
         </div>
-        <button className="mt-3 w-full py-1 text-center text-sm text-neutral-400 hover:text-white" type="button" onClick={onClose}>
-          {saving ? "Saving…" : "Cancel"}
-        </button>
       </div>
     </div>
   );

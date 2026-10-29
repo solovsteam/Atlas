@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import type { Item } from "@shared/item";
+import { trackerConfig } from "@shared/documentationEntries";
 import { useAtlasData } from "../../context/AtlasDataContext";
 import { trackItemPatchUndo, useUndo } from "../../context/UndoContext";
 
 /**
- * The tracker's one "when I notice, I will" plan, stored as the item's body.
- * It is shown right after each recorded episode. Saved when the field loses
- * focus, with undo.
+ * The tracker's one plan, stored as the item's body: for a habit to break,
+ * what to do when noticing it; for a habit to build, when to do it. It is
+ * shown right after each entry. Saved when the field loses focus, with undo.
  */
 export function PlanEditor({ tracker }: { tracker: Item }) {
   const { updateItem } = useAtlasData();
@@ -14,6 +15,7 @@ export function PlanEditor({ tracker }: { tracker: Item }) {
   const [text, setText] = useState(tracker.body);
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const build = trackerConfig(tracker).kind === "build";
 
   useEffect(() => {
     if (!editing) {
@@ -42,15 +44,21 @@ export function PlanEditor({ tracker }: { tracker: Item }) {
   return (
     <section className="mb-6 max-w-xl">
       <label className="mb-1 block text-sm font-semibold text-neutral-200" htmlFor={`plan-${tracker.id}`}>
-        Your plan
+        {build ? "Your rule" : "Your plan"}
       </label>
       <p className="mb-2 text-xs text-neutral-500">
-        One action for the moment you notice. Name something to do, not something to avoid. It appears after each entry.
+        {build
+          ? "When do you want to do it? Name the event that should set it off. It appears after each entry."
+          : "One action for the moment you notice. Name something to do, not something to avoid. It appears after each entry."}
       </p>
       <textarea
         className="w-full border border-neutral-700 bg-transparent px-3 py-2 text-white placeholder:text-neutral-600"
         id={`plan-${tracker.id}`}
-        placeholder="When I notice the urge, I will put the phone on the charger in the hall."
+        placeholder={
+          build
+            ? "Whenever I go through a door, I do a reality check."
+            : "When I notice the urge, I will put the phone on the charger in the hall."
+        }
         rows={2}
         value={text}
         onBlur={() => void save()}

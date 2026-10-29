@@ -58,6 +58,7 @@ export type CreateItemOptions = {
   manualRelevance?: number;
   expectedDurationMinutes?: number;
   isDocumentation?: boolean;
+  documentationSchema?: unknown;
 };
 
 export async function createItem(
@@ -109,6 +110,7 @@ export async function createItem(
       ? { task_expected_minutes: options.expectedDurationMinutes }
       : {}),
     ...(options.isDocumentation ? { is_documentation: true } : {}),
+    ...(options.documentationSchema !== undefined ? { documentation_schema: options.documentationSchema } : {}),
   };
 
   const { data, error } = await client

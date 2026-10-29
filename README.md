@@ -20,7 +20,7 @@ The calendar and scheduling implementation was developed on `experiment/scientif
 
 ## Tracking
 
-A tracker records each time you notice a habit you want to break, such as scrolling social media. Create one on **Track**; its buttons then also appear on **Now**. **Urge now** records "I noticed the urge, right now" in one tap. The tracker button opens a time wheel that starts at the current time (up to 30 days back) and three buttons that save and record when you noticed: at the urge, while doing it, or only afterwards. Each save shows your "when I notice, I will" plan and lets you tag the situation. The tracker page shows the share caught at the urge, counts by stage with a trailing average, situations, time of day, and every entry (delete with undo). Design and evidence: [`docs/TRACKING.md`](docs/TRACKING.md).
+A tracker records a habit to break (for example scrolling social media) or a habit to build (for example reality checks). Create one on **Track**; its buttons also appear on **Now**. For a habit to break, **Urge now** records an urge in one tap, and the time wheel (up to 30 days back) records "while doing it" at the present moment or "in hindsight" for an earlier time. For a habit to build, entries can record what triggered them and count toward an optional daily aim. Each save shows the tracker's plan or rule. The tracker page sets the kind and aim and shows the history, tags, time of day and every entry (delete with undo). Design and evidence: [`docs/TRACKING.md`](docs/TRACKING.md).
 
 ## Schema-driven schedule loop
 

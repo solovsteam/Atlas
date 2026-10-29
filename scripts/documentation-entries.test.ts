@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  bucketGoal,
   buildHistory,
   cleanTags,
   countInLastDays,
@@ -15,6 +16,11 @@ import {
   groupEntriesByDay,
   isTracker,
   isWheelInFuture,
+  recordedStage,
+  schemaWithTrackerConfig,
+  stageFromWheel,
+  tagPrompt,
+  trackerConfig,
   tagVocabulary,
   toggleTag,
   urgeShare,
@@ -160,8 +166,9 @@ test("the chart scale uses the smallest of 1, 2, 5, 10, 20, … steps with at mo
 test("stage and situations live in the entry data; older entries have neither", () => {
   assert.deepEqual(entryData("urge"), { stage: "urge" });
   assert.deepEqual(entryData("during", [" in  bed ", "In bed", "", "waiting"]), { stage: "during", tags: ["in bed", "waiting"] });
-  assert.equal(entryStage(entry(at(1))), null);
-  assert.equal(entryStage(entry(at(1), { stage: "sometime" })), null, "unknown values are not stages");
+  assert.equal(recordedStage(entry(at(1))), null);
+  assert.equal(recordedStage(entry(at(1), { stage: "sometime" })), null, "unknown values are not stages");
+  assert.equal(entryStage(entry(at(1))), "during", "saved at its own time: noticed while doing it");
   assert.deepEqual(entryTags(entry(at(1), { tags: ["bored", 3, "Bored"] })), ["bored"]);
   const tagged = noticed(at(1), "after", ["bored"]);
   assert.deepEqual(dataWithTags(tagged, ["waiting"]), { stage: "after", tags: ["waiting"] }, "the stage survives a situation change");
@@ -183,10 +190,52 @@ test("the situations offered are the most frequent, then the most recently used"
   assert.deepEqual(tagVocabulary(entries, 2), ["waiting", "In bed"]);
 });
 
-test("the share caught at the urge counts only entries with a recorded stage", () => {
+test("the share caught at the urge counts every entry, older ones by their inferred stage", () => {
   assert.equal(urgeShare([]), null);
-  assert.equal(urgeShare([entry(at(1))]), null);
-  assert.equal(urgeShare([noticed(at(1), "urge"), noticed(at(1), "during"), noticed(at(1), "after"), noticed(at(1), "urge"), entry(at(1))]), 0.5);
+  assert.equal(urgeShare([entry(at(1))]), 0);
+  assert.equal(urgeShare([noticed(at(1), "urge"), noticed(at(1), "during"), noticed(at(1), "after"), noticed(at(1), "urge"), entry(at(1))]), 0.4);
+});
+
+test("older entries without a stage: recorded more than 5 minutes later means in hindsight", () => {
+  // Tonio's first entries: recorded 188 and 103 minutes after their time, and one 3 minutes after.
+  const late = (minutes: number) => ({ ...entry(at(29, 8, 5)), createdAt: new Date(at(29, 8, 5).getTime() + minutes * 60_000).toISOString() });
+  assert.equal(entryStage(late(188)), "after");
+  assert.equal(entryStage(late(103)), "after");
+  assert.equal(entryStage(late(3)), "during");
+  assert.equal(entryStage(late(5)), "during", "the wheel's 5-minute step still counts as the present");
+  assert.equal(entryStage(late(6)), "after");
+  assert.equal(entryStage({ ...noticed(at(29, 8), "urge"), createdAt: at(29, 12).toISOString() }), "urge", "a recorded stage wins");
+});
+
+test("the time wheel decides the stage: the present moment or an earlier time", () => {
+  const start = at(29, 14, 35);
+  assert.equal(stageFromWheel(false, start, start), "during", "untouched: now");
+  assert.equal(stageFromWheel(true, start, start), "during", "moved and back to the present");
+  assert.equal(stageFromWheel(true, at(29, 14, 30), start), "after", "one step back is the past");
+  assert.equal(stageFromWheel(true, at(28, 22, 0), start), "after");
+});
+
+test("tracker kinds: habit to break by default, habit to build with an optional daily aim", () => {
+  const item = (documentationSchema: unknown) => ({ documentationSchema }) as unknown as Item;
+  assert.deepEqual(trackerConfig(item(null)), { kind: "break", dailyGoal: null });
+  assert.deepEqual(trackerConfig(item([{ key: "weight", type: "number" }])), { kind: "break", dailyGoal: null }, "old field lists are not tracker settings");
+  assert.deepEqual(trackerConfig(item({ tracker: { kind: "build", dailyGoal: 3 } })), { kind: "build", dailyGoal: 3 });
+  assert.deepEqual(trackerConfig(item({ tracker: { kind: "build", dailyGoal: 2.5 } })), { kind: "build", dailyGoal: null });
+  assert.deepEqual(trackerConfig(item({ tracker: { kind: "break", dailyGoal: 3 } })), { kind: "break", dailyGoal: null }, "only habits to build have an aim");
+  assert.deepEqual(schemaWithTrackerConfig(item({ other: 1 }), { kind: "build", dailyGoal: 3 }), { other: 1, tracker: { kind: "build", dailyGoal: 3 } });
+  assert.equal(tagPrompt({ kind: "build", dailyGoal: 3 }), "What triggered it? (optional)");
+  assert.equal(tagPrompt({ kind: "break", dailyGoal: null }), "Situation (optional)");
+  assert.deepEqual(entryData(null, ["door"]), { tags: ["door"] }, "habits to build store no stage");
+});
+
+test("the daily aim per period: per day, per week, none before tracking", () => {
+  const now = at(29, 12);
+  const days = buildHistory([entry(at(28, 9))], { range: "30d", now, trackerCreatedAt: at(27, 8).toISOString() });
+  assert.equal(bucketGoal(days.buckets.at(-1)!, 3), 3);
+  assert.equal(bucketGoal(days.buckets.at(-1)!, null), null);
+  assert.equal(bucketGoal(days.buckets[0], 3), null, "not tracked yet");
+  const weeks = buildHistory([entry(at(28, 9))], { range: "90d", now, trackerCreatedAt: at(1, 8).toISOString() });
+  assert.equal(bucketGoal(weeks.buckets.at(-1)!, 3), 21);
 });
 
 test("week windows for the tiles: the last 7 days and the 7 days before", () => {
@@ -208,12 +257,12 @@ test("history splits each period by stage and tracks the urge share over the tra
   ];
   const history = buildHistory(entries, { range: "30d", now, trackerCreatedAt: at(26, 8).toISOString() });
   const [d26, d27, d28, d29] = history.buckets.slice(-4);
-  assert.deepEqual(d26.stages, { urge: 0, during: 0, after: 0, unknown: 1 });
-  assert.equal(d26.urgeShare, null, "no recorded stage yet");
+  assert.deepEqual(d26.stages, { urge: 0, during: 1, after: 0 }, "saved at its own time: inferred as while doing it");
+  assert.equal(d26.urgeShare, 0);
   assert.equal(d27.urgeShare, 0);
-  assert.equal(d28.urgeShare, 1 / 3);
-  assert.deepEqual(d29.stages, { urge: 2, during: 0, after: 0, unknown: 0 });
-  assert.equal(d29.urgeShare, 3 / 5, "3 urges among 5 staged entries in the 7-day window");
+  assert.equal(d28.urgeShare, 1 / 4);
+  assert.deepEqual(d29.stages, { urge: 2, during: 0, after: 0 });
+  assert.equal(d29.urgeShare, 3 / 6, "3 urges among 6 entries in the 7-day window");
   assert.equal(d29.count, 2);
   assert.deepEqual(history.byTag, [
     { tag: "bored", count: 2 },

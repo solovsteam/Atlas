@@ -1,5 +1,12 @@
 # Handoff
 
+## Tracker kinds: habit to break and habit to build (29 Oct 2026)
+
+Tonio's decisions: grow Atlas step by step around plans (what is intended) and records (what happened), no rebuild; stages come from the time; reality checks are a habit to build with a daily aim of 3 that is "not my fault" on days without the triggering event.
+- **Built:** `trackerConfig` (kind and daily aim in `documentation_schema.tracker`), `TrackerSettings` on the tracker page, kind choice when creating. Habit to break: single Save, stage from the wheel (`stageFromWheel`), inferred stage for older entries (`entryStage`, 5-minute rule). Habit to build: trigger tags, "x of 3 today", aim level in the chart (`bucketGoal`).
+- **Tests:** logic tests now 20 (four time zones). `npm run check` passed. Preview: past time saved "in hindsight", present "while doing it", build tracker saves trigger without stage, aim line, kind switch. (The preview's undo has no item access, so undo of the kind switch was not checked there; it uses the existing item-patch undo.)
+- **Next step (approved direction, not started):** timed routines with a stopwatch, per task, bundles of tasks.
+
 ## Fixed: blank page on the tracker page (29 Oct 2026)
 
 Tonio reported that after a refresh the app showed briefly and then went blank.

@@ -62,6 +62,38 @@ export function trackersOf(items: Item[]): Item[] {
 }
 
 // ---------------------------------------------------------------------------
+// Tracker kinds. A tracker's behaviour comes from its configuration, stored in
+// the item's documentation_schema as { tracker: { kind, dailyGoal } }.
+
+/** "break": a habit to break (Urge now, stages). "build": a habit to build (triggers, daily aim). */
+export type TrackerKind = "break" | "build";
+export type TrackerConfig = { kind: TrackerKind; dailyGoal: number | null };
+export const MAX_DAILY_GOAL = 100;
+
+export function trackerConfig(item: Item): TrackerConfig {
+  const schema = item.documentationSchema;
+  const raw = schema && typeof schema === "object" && !Array.isArray(schema) ? (schema as Record<string, unknown>).tracker : null;
+  const config = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const kind: TrackerKind = config.kind === "build" ? "build" : "break";
+  const goal = config.dailyGoal;
+  const dailyGoal =
+    kind === "build" && typeof goal === "number" && Number.isInteger(goal) && goal > 0 && goal <= MAX_DAILY_GOAL ? goal : null;
+  return { kind, dailyGoal };
+}
+
+/** The documentation_schema value for a configuration; other schema fields are kept. */
+export function schemaWithTrackerConfig(item: Item, config: TrackerConfig): Record<string, unknown> {
+  const schema = item.documentationSchema;
+  const base = schema && typeof schema === "object" && !Array.isArray(schema) ? (schema as Record<string, unknown>) : {};
+  return { ...base, tracker: { kind: config.kind, dailyGoal: config.kind === "build" ? config.dailyGoal : null } };
+}
+
+/** What a tracker's optional tags mean: the situation of a habit to break, the trigger of a habit to build. */
+export function tagPrompt(config: TrackerConfig): string {
+  return config.kind === "build" ? "What triggered it? (optional)" : "Situation (optional)";
+}
+
+// ---------------------------------------------------------------------------
 // Noticing: when an episode was noticed, and in which situation. Both live in
 // the entry's data, so entries recorded before this existed simply have no
 // stage and no situations.
@@ -70,17 +102,41 @@ export function trackersOf(items: Item[]): Item[] {
 export type EntryStage = "urge" | "during" | "after";
 export const ENTRY_STAGES: EntryStage[] = ["urge", "during", "after"];
 
-export const STAGE_TEXT: Record<EntryStage, { button: string; hint: string; short: string }> = {
-  urge: { button: "Caught the urge", hint: "I noticed before I started", short: "urge" },
-  during: { button: "Caught myself doing it", hint: "I noticed while it happened", short: "while doing it" },
-  after: { button: "Only noticed afterwards", hint: "I remembered it later", short: "afterwards" }
+export const STAGE_TEXT: Record<EntryStage, { label: string; short: string }> = {
+  urge: { label: "Caught the urge", short: "urge" },
+  during: { label: "While doing it", short: "while doing it" },
+  after: { label: "In hindsight", short: "in hindsight" }
 };
+
+/** An entry recorded more than this long after its time counts as recorded in hindsight. */
+export const HINDSIGHT_MINUTES = 5;
 
 export const MAX_TAG_LENGTH = 40;
 
-export function entryStage(entry: DocumentationEntry): EntryStage | null {
+/** The stage stored with the entry, if any. */
+export function recordedStage(entry: DocumentationEntry): EntryStage | null {
   const stage = entry.data.stage;
   return stage === "urge" || stage === "during" || stage === "after" ? stage : null;
+}
+
+/**
+ * When the episode was noticed. Entries saved before stages existed get it
+ * from the recording delay: recorded more than a few minutes after their
+ * time means in hindsight. (The time wheel moves in 5-minute steps, so
+ * "now" on the wheel can be up to 5 minutes before the save.)
+ */
+export function entryStage(entry: DocumentationEntry): EntryStage {
+  const recorded = recordedStage(entry);
+  if (recorded) {
+    return recorded;
+  }
+  const delay = new Date(entry.createdAt).getTime() - new Date(entry.occurredAt).getTime();
+  return delay > HINDSIGHT_MINUTES * 60_000 ? "after" : "during";
+}
+
+/** The stage for an entry saved from the time wheel: moved into the past means in hindsight. */
+export function stageFromWheel(touched: boolean, chosen: Date, wheelStart: Date): EntryStage {
+  return touched && chosen.getTime() < wheelStart.getTime() ? "after" : "during";
 }
 
 export function cleanTag(text: string): string {
@@ -107,9 +163,9 @@ export function entryTags(entry: DocumentationEntry): string[] {
   return Array.isArray(tags) ? cleanTags(tags.filter((tag): tag is string => typeof tag === "string")) : [];
 }
 
-export function entryData(stage: EntryStage, tags: string[] = []): Record<string, unknown> {
+export function entryData(stage: EntryStage | null, tags: string[] = []): Record<string, unknown> {
   const clean = cleanTags(tags);
-  return clean.length ? { stage, tags: clean } : { stage };
+  return { ...(stage ? { stage } : {}), ...(clean.length ? { tags: clean } : {}) };
 }
 
 /** The entry's data with its situations replaced; other fields stay as they are. */
@@ -144,20 +200,9 @@ export function tagVocabulary(entries: DocumentationEntry[], limit = 12): string
     .map((stat) => stat.tag);
 }
 
-/** Share of entries noticed at the urge, among entries with a recorded stage; null when none has one. */
+/** Share of entries noticed at the urge; null without entries. */
 export function urgeShare(entries: DocumentationEntry[]): number | null {
-  let known = 0;
-  let urge = 0;
-  for (const entry of entries) {
-    const stage = entryStage(entry);
-    if (stage) {
-      known += 1;
-      if (stage === "urge") {
-        urge += 1;
-      }
-    }
-  }
-  return known ? urge / known : null;
+  return entries.length ? entries.filter((entry) => entryStage(entry) === "urge").length / entries.length : null;
 }
 
 export function sortEntriesNewestFirst(entries: DocumentationEntry[]): DocumentationEntry[] {
@@ -253,9 +298,9 @@ export type HistoryBucket = {
   count: number | null;
   /** Mean count of this bucket and the earlier ones in the trailing window, from tracking start on. */
   average: number | null;
-  /** Counts by when the episode was noticed; "unknown" has no recorded stage. */
-  stages: Record<EntryStage | "unknown", number>;
-  /** Share noticed at the urge over the trailing window, among entries with a stage; null without any. */
+  /** Counts by when the episode was noticed. */
+  stages: Record<EntryStage, number>;
+  /** Share noticed at the urge over the trailing window; null without entries in it. */
   urgeShare: number | null;
 };
 
@@ -352,7 +397,7 @@ export function buildHistory(
   for (let cursor = from; cursor.getTime() <= now.getTime(); cursor = nextBucket(cursor, granularity)) {
     const end = nextBucket(cursor, granularity);
     const tracked = trackedFrom !== null && end.getTime() > trackedFrom.getTime();
-    buckets.push({ start: cursor, end, count: tracked ? 0 : null, average: null, stages: { urge: 0, during: 0, after: 0, unknown: 0 }, urgeShare: null });
+    buckets.push({ start: cursor, end, count: tracked ? 0 : null, average: null, stages: { urge: 0, during: 0, after: 0 }, urgeShare: null });
   }
 
   const byHour = new Array<number>(24).fill(0);
@@ -368,7 +413,7 @@ export function buildHistory(
       continue;
     }
     buckets[index].count = (buckets[index].count ?? 0) + 1;
-    buckets[index].stages[entryStage(entry) ?? "unknown"] += 1;
+    buckets[index].stages[entryStage(entry)] += 1;
     byHour[at.getHours()] += 1;
     for (const tag of entryTags(entry)) {
       const stat = tagCounts.get(tag.toLowerCase()) ?? { tag, count: 0 };
@@ -382,8 +427,8 @@ export function buildHistory(
     const window = buckets.slice(Math.max(0, index - trailing + 1), index + 1).filter((bucket) => bucket.count !== null);
     buckets[index].average = window.length ? window.reduce((sum, bucket) => sum + (bucket.count ?? 0), 0) / window.length : null;
     const urge = window.reduce((sum, bucket) => sum + bucket.stages.urge, 0);
-    const known = window.reduce((sum, bucket) => sum + bucket.stages.urge + bucket.stages.during + bucket.stages.after, 0);
-    buckets[index].urgeShare = known ? urge / known : null;
+    const all = window.reduce((sum, bucket) => sum + (bucket.count ?? 0), 0);
+    buckets[index].urgeShare = all ? urge / all : null;
   }
   const byTag = [...tagCounts.values()].sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
 
@@ -408,6 +453,11 @@ function findBucket(buckets: HistoryBucket[], at: Date): number {
     }
   }
   return -1;
+}
+
+/** The daily aim summed over the bucket's days; null before tracking started or without an aim. */
+export function bucketGoal(bucket: HistoryBucket, dailyGoal: number | null): number | null {
+  return dailyGoal === null || bucket.count === null ? null : dailyGoal * daysBetween(bucket.start, bucket.end);
 }
 
 export function bucketLabel(bucket: HistoryBucket, granularity: HistoryGranularity): string {

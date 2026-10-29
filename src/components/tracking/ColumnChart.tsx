@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import { niceScale } from "@shared/chartScale";
-import { CHART_LINE } from "./chartColors";
+import { CHART_AIM, CHART_LINE } from "./chartColors";
 
 const GRID = "#252c3a";
 const SURFACE = "#111620";
@@ -41,6 +41,7 @@ export function ColumnChart({
   stacks = [],
   line,
   lineColor = CHART_LINE,
+  reference,
   scale,
   tick,
   tooltip,
@@ -50,6 +51,8 @@ export function ColumnChart({
   stacks?: ColumnStack[];
   line?: (number | null)[];
   lineColor?: string;
+  /** A target per column, drawn as a level mark across each column's slot. */
+  reference?: (number | null)[];
   scale?: ChartScale;
   tick: (index: number) => string | null;
   tooltip: (index: number) => ColumnTooltip;
@@ -70,7 +73,7 @@ export function ColumnChart({
   }, []);
 
   const totals = Array.from({ length: count }, (_, index) => stacks.reduce((sum, stack) => sum + (stack.values[index] ?? 0), 0));
-  const lineValues = (line ?? []).filter((value): value is number => value !== null);
+  const lineValues = [...(line ?? []), ...(reference ?? [])].filter((value): value is number => value !== null);
   const { top, ticks, format } = scale ?? defaultScale(Math.max(1, ...totals, ...lineValues));
   // Wide enough for the longest axis label (about 6px per character at 10px).
   const leftGutter = Math.max(MIN_GUTTER, 10 + 6 * Math.max(...ticks.map((value) => format(value).length)));
@@ -153,6 +156,19 @@ export function ColumnChart({
               {columnSegments(index)}
             </g>
           ) : null
+        )}
+        {reference?.map((value, index) =>
+          value === null ? null : (
+            <line
+              key={`aim-${index}`}
+              stroke={CHART_AIM}
+              strokeWidth={2}
+              x1={leftGutter + index * slot}
+              x2={leftGutter + (index + 1) * slot}
+              y1={y(value)}
+              y2={y(value)}
+            />
+          )
         )}
         {linePath ? <path d={linePath} fill="none" stroke={lineColor} strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} /> : null}
         {line && lastLineIndex >= 0 && line[lastLineIndex] !== null ? (

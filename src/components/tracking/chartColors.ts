@@ -8,9 +8,10 @@ import type { EntryStage } from "@shared/documentationEntries";
 export const CHART_ACCENT = "#7a80f0";
 export const CHART_CONTEXT = "#5b6478";
 export const CHART_LINE = "#dce1e9";
-export const STAGE_COLORS: Record<EntryStage | "unknown", string> = {
+export const STAGE_COLORS: Record<EntryStage, string> = {
   urge: "#a5abf8",
   during: "#6d73e0",
-  after: "#3d4296",
-  unknown: CHART_CONTEXT
+  after: "#3d4296"
 };
+// The daily aim of a habit to build; checked against the bars and the average line.
+export const CHART_AIM = "#e7b65a";

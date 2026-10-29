@@ -11,4 +11,5 @@ export type UndoOp =
   | { kind: "deleteLink"; snapshot: ItemLink }
   | { kind: "batchLinks"; created: ItemLink[]; deleted: ItemLink[] }
   | { kind: "createEntry"; entry: DocumentationEntry }
+  | { kind: "updateEntry"; before: DocumentationEntry }
   | { kind: "deleteEntry"; snapshot: DocumentationEntry };

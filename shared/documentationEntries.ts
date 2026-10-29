@@ -61,6 +61,105 @@ export function trackersOf(items: Item[]): Item[] {
   return items.filter(isTracker).sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
 }
 
+// ---------------------------------------------------------------------------
+// Noticing: when an episode was noticed, and in which situation. Both live in
+// the entry's data, so entries recorded before this existed simply have no
+// stage and no situations.
+
+/** When the behaviour was noticed: at the urge (before it started), while it happened, or only afterwards. */
+export type EntryStage = "urge" | "during" | "after";
+export const ENTRY_STAGES: EntryStage[] = ["urge", "during", "after"];
+
+export const STAGE_TEXT: Record<EntryStage, { button: string; hint: string; short: string }> = {
+  urge: { button: "Caught the urge", hint: "I noticed before I started", short: "urge" },
+  during: { button: "Caught myself doing it", hint: "I noticed while it happened", short: "while doing it" },
+  after: { button: "Only noticed afterwards", hint: "I remembered it later", short: "afterwards" }
+};
+
+export const MAX_TAG_LENGTH = 40;
+
+export function entryStage(entry: DocumentationEntry): EntryStage | null {
+  const stage = entry.data.stage;
+  return stage === "urge" || stage === "during" || stage === "after" ? stage : null;
+}
+
+export function cleanTag(text: string): string {
+  return text.replace(/\s+/g, " ").trim().slice(0, MAX_TAG_LENGTH);
+}
+
+/** Cleaned, without empty tags or case-insensitive duplicates, in their original order. */
+export function cleanTags(tags: string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const raw of tags) {
+    const tag = cleanTag(raw);
+    const key = tag.toLowerCase();
+    if (tag && !seen.has(key)) {
+      seen.add(key);
+      result.push(tag);
+    }
+  }
+  return result;
+}
+
+export function entryTags(entry: DocumentationEntry): string[] {
+  const tags = entry.data.tags;
+  return Array.isArray(tags) ? cleanTags(tags.filter((tag): tag is string => typeof tag === "string")) : [];
+}
+
+export function entryData(stage: EntryStage, tags: string[] = []): Record<string, unknown> {
+  const clean = cleanTags(tags);
+  return clean.length ? { stage, tags: clean } : { stage };
+}
+
+/** The entry's data with its situations replaced; other fields stay as they are. */
+export function dataWithTags(entry: DocumentationEntry, tags: string[]): Record<string, unknown> {
+  const { tags: _old, ...rest } = entry.data;
+  const clean = cleanTags(tags);
+  return clean.length ? { ...rest, tags: clean } : rest;
+}
+
+export function toggleTag(tags: string[], tag: string): string[] {
+  const key = cleanTag(tag).toLowerCase();
+  return tags.some((existing) => existing.toLowerCase() === key) ? tags.filter((existing) => existing.toLowerCase() !== key) : cleanTags([...tags, tag]);
+}
+
+/** Situations used before, most frequent first (ties: most recently used first). */
+export function tagVocabulary(entries: DocumentationEntry[], limit = 12): string[] {
+  const stats = new Map<string, { tag: string; count: number; last: string }>();
+  for (const entry of sortEntriesNewestFirst(entries)) {
+    for (const tag of entryTags(entry)) {
+      const key = tag.toLowerCase();
+      const current = stats.get(key);
+      if (current) {
+        current.count += 1;
+      } else {
+        stats.set(key, { tag, count: 1, last: entry.occurredAt });
+      }
+    }
+  }
+  return [...stats.values()]
+    .sort((a, b) => b.count - a.count || b.last.localeCompare(a.last))
+    .slice(0, limit)
+    .map((stat) => stat.tag);
+}
+
+/** Share of entries noticed at the urge, among entries with a recorded stage; null when none has one. */
+export function urgeShare(entries: DocumentationEntry[]): number | null {
+  let known = 0;
+  let urge = 0;
+  for (const entry of entries) {
+    const stage = entryStage(entry);
+    if (stage) {
+      known += 1;
+      if (stage === "urge") {
+        urge += 1;
+      }
+    }
+  }
+  return known ? urge / known : null;
+}
+
 export function sortEntriesNewestFirst(entries: DocumentationEntry[]): DocumentationEntry[] {
   return [...entries].sort((a, b) => b.occurredAt.localeCompare(a.occurredAt) || b.id.localeCompare(a.id));
 }
@@ -154,6 +253,10 @@ export type HistoryBucket = {
   count: number | null;
   /** Mean count of this bucket and the earlier ones in the trailing window, from tracking start on. */
   average: number | null;
+  /** Counts by when the episode was noticed; "unknown" has no recorded stage. */
+  stages: Record<EntryStage | "unknown", number>;
+  /** Share noticed at the urge over the trailing window, among entries with a stage; null without any. */
+  urgeShare: number | null;
 };
 
 export type History = {
@@ -166,6 +269,8 @@ export type History = {
   total: number;
   /** Mean entries per tracked day inside the range; null when no day was tracked. */
   perDay: number | null;
+  /** Situations inside the range, most frequent first. */
+  byTag: { tag: string; count: number }[];
 };
 
 export function startOfLocalDay(date: Date): Date {
@@ -247,10 +352,11 @@ export function buildHistory(
   for (let cursor = from; cursor.getTime() <= now.getTime(); cursor = nextBucket(cursor, granularity)) {
     const end = nextBucket(cursor, granularity);
     const tracked = trackedFrom !== null && end.getTime() > trackedFrom.getTime();
-    buckets.push({ start: cursor, end, count: tracked ? 0 : null, average: null });
+    buckets.push({ start: cursor, end, count: tracked ? 0 : null, average: null, stages: { urge: 0, during: 0, after: 0, unknown: 0 }, urgeShare: null });
   }
 
   const byHour = new Array<number>(24).fill(0);
+  const tagCounts = new Map<string, { tag: string; count: number }>();
   let total = 0;
   for (const entry of entries) {
     const at = new Date(entry.occurredAt);
@@ -262,19 +368,29 @@ export function buildHistory(
       continue;
     }
     buckets[index].count = (buckets[index].count ?? 0) + 1;
+    buckets[index].stages[entryStage(entry) ?? "unknown"] += 1;
     byHour[at.getHours()] += 1;
+    for (const tag of entryTags(entry)) {
+      const stat = tagCounts.get(tag.toLowerCase()) ?? { tag, count: 0 };
+      stat.count += 1;
+      tagCounts.set(tag.toLowerCase(), stat);
+    }
     total += 1;
   }
 
   for (let index = 0; index < buckets.length; index += 1) {
     const window = buckets.slice(Math.max(0, index - trailing + 1), index + 1).filter((bucket) => bucket.count !== null);
     buckets[index].average = window.length ? window.reduce((sum, bucket) => sum + (bucket.count ?? 0), 0) / window.length : null;
+    const urge = window.reduce((sum, bucket) => sum + bucket.stages.urge, 0);
+    const known = window.reduce((sum, bucket) => sum + bucket.stages.urge + bucket.stages.during + bucket.stages.after, 0);
+    buckets[index].urgeShare = known ? urge / known : null;
   }
+  const byTag = [...tagCounts.values()].sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
 
   const firstTrackedDay = trackedFrom && trackedFrom.getTime() > from.getTime() ? trackedFrom : from;
   const trackedDays = trackedFrom ? daysBetween(firstTrackedDay, now) + 1 : 0;
 
-  return { granularity, trailing, buckets, byHour, total, perDay: trackedDays > 0 ? total / trackedDays : null };
+  return { granularity, trailing, buckets, byHour, total, perDay: trackedDays > 0 ? total / trackedDays : null, byTag };
 }
 
 function findBucket(buckets: HistoryBucket[], at: Date): number {
@@ -314,14 +430,23 @@ export function bucketTick(bucket: HistoryBucket, granularity: HistoryGranularit
   return `${pad2(bucket.start.getDate())}.${pad2(bucket.start.getMonth() + 1)}.`;
 }
 
-/** Entries in the last `days` calendar days, today included. */
-export function countInLastDays(entries: DocumentationEntry[], days: number, now: Date): number {
+/**
+ * Entries in `days` calendar days ending `skipDays` days before today (0:
+ * the window ends with today, up to now).
+ */
+export function entriesInDays(entries: DocumentationEntry[], days: number, now: Date, skipDays = 0): DocumentationEntry[] {
   const today = startOfLocalDay(now);
-  const from = new Date(today.getFullYear(), today.getMonth(), today.getDate() - days + 1).getTime();
+  const from = new Date(today.getFullYear(), today.getMonth(), today.getDate() - skipDays - days + 1).getTime();
+  const until = skipDays === 0 ? now.getTime() : new Date(today.getFullYear(), today.getMonth(), today.getDate() - skipDays + 1).getTime() - 1;
   return entries.filter((entry) => {
     const time = new Date(entry.occurredAt).getTime();
-    return time >= from && time <= now.getTime();
-  }).length;
+    return time >= from && time <= until;
+  });
+}
+
+/** Entries in the last `days` calendar days, today included. */
+export function countInLastDays(entries: DocumentationEntry[], days: number, now: Date): number {
+  return entriesInDays(entries, days, now).length;
 }
 
 export type EntryDay = { day: Date; label: string; entries: DocumentationEntry[] };

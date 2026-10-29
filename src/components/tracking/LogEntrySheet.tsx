@@ -2,34 +2,42 @@ import { useEffect, useMemo, useState } from "react";
 import {
   dateFromWheel,
   describeAgo,
+  ENTRY_STAGES,
   formatClock,
   isWheelInFuture,
+  STAGE_TEXT,
+  toggleTag,
   WHEEL_DAYS_BACK,
   WHEEL_MINUTE_STEP,
   wheelDayLabel,
   wheelSelectionForNow,
+  type EntryStage,
   type WheelSelection
 } from "@shared/documentationEntries";
 import { pad2 } from "@shared/locale";
+import { SituationChips } from "./SituationChips";
 import { WHEEL_ROW_HEIGHT, WheelColumn, type WheelOption } from "./TimeWheel";
 
 /**
- * Bottom sheet that asks only "when?". It opens at the current time, so
- * saving straight away records "now"; scrolling the wheels moves the entry
- * into the past.
+ * Bottom sheet that asks "when?" and "when did you notice?". It opens at the
+ * current time, so a stage button pressed straight away records "now";
+ * scrolling the wheels moves the entry into the past. Situations are optional.
  */
 export function LogEntrySheet({
   title,
+  situations,
   onSave,
   onClose
 }: {
   title: string;
-  onSave: (occurredAt: Date) => Promise<void>;
+  situations: string[];
+  onSave: (occurredAt: Date, stage: EntryStage, tags: string[]) => Promise<void>;
   onClose: () => void;
 }) {
   const [openedAt] = useState(() => new Date());
   const [selection, setSelection] = useState<WheelSelection>(() => wheelSelectionForNow(openedAt));
   const [touched, setTouched] = useState(false);
+  const [tags, setTags] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -71,7 +79,7 @@ export function LogEntrySheet({
     setSelection((current) => ({ ...current, ...patch }));
   }
 
-  async function save() {
+  async function save(stage: EntryStage) {
     if (inFuture || saving) {
       return;
     }
@@ -79,7 +87,7 @@ export function LogEntrySheet({
     setError(null);
     try {
       // Untouched wheels mean "now", to the second.
-      await onSave(touched ? chosen : new Date());
+      await onSave(touched ? chosen : new Date(), stage, tags);
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save");
@@ -125,24 +133,28 @@ export function LogEntrySheet({
             <WheelColumn label="Minute" options={minuteOptions} value={selection.minute} onChange={(minute) => change({ minute })} />
           </div>
         </div>
+        <p className="mb-2 mt-4 text-xs text-neutral-400">Situation (optional)</p>
+        <SituationChips options={situations} selected={tags} onToggle={(tag) => setTags((current) => toggleTag(current, tag))} />
         {error ? <p className="mt-2 text-sm text-red-400">{error}</p> : null}
-        <div className="mt-4 grid grid-cols-[1fr_2fr] gap-2">
-          <button
-            className="rounded-xl border border-neutral-700 px-4 py-3 text-sm text-neutral-300 hover:border-neutral-500"
-            type="button"
-            onClick={onClose}
-          >
-            Cancel
-          </button>
-          <button
-            className="rounded-xl bg-indigo-500 px-4 py-3 text-sm font-semibold text-white hover:bg-indigo-400 disabled:opacity-40"
-            disabled={inFuture || saving}
-            type="button"
-            onClick={() => void save()}
-          >
-            {saving ? "Saving…" : "Save"}
-          </button>
+        <div className="mt-4 space-y-2">
+          {ENTRY_STAGES.map((stage, index) => (
+            <button
+              className={`block w-full rounded-xl px-4 py-2.5 text-left text-white disabled:opacity-40 ${
+                ["bg-indigo-500 hover:bg-indigo-400", "bg-indigo-700 hover:bg-indigo-600", "bg-indigo-900 hover:bg-indigo-800"][index]
+              }`}
+              disabled={inFuture || saving}
+              key={stage}
+              type="button"
+              onClick={() => void save(stage)}
+            >
+              <span className="block text-sm font-semibold">{STAGE_TEXT[stage].button}</span>
+              <span className="block text-xs text-indigo-100/80">{STAGE_TEXT[stage].hint}</span>
+            </button>
+          ))}
         </div>
+        <button className="mt-3 w-full py-1 text-center text-sm text-neutral-400 hover:text-white" type="button" onClick={onClose}>
+          {saving ? "Saving…" : "Cancel"}
+        </button>
       </div>
     </div>
   );

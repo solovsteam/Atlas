@@ -20,7 +20,7 @@ The calendar and scheduling implementation was developed on `experiment/scientif
 
 ## Tracking
 
-A tracker records when something happens, such as catching yourself scrolling social media. Create one on **Track**; its button then also appears on **Now**. The button opens a time wheel that starts at the current time, so saving straight away records "now", and scrolling the wheel records an earlier time (up to 30 days back). Each tracker's page shows how often it happened per day, week or month with a trailing average, the time of day, and every entry (delete with undo). Entries live in `documentation_entries` ([`015_documentation_entries.sql`](supabase/migrations/015_documentation_entries.sql)); a tracker that still has entries cannot be deleted.
+A tracker records each time you notice a habit you want to break, such as scrolling social media. Create one on **Track**; its buttons then also appear on **Now**. **Urge now** records "I noticed the urge, right now" in one tap. The tracker button opens a time wheel that starts at the current time (up to 30 days back) and three buttons that save and record when you noticed: at the urge, while doing it, or only afterwards. Each save shows your "when I notice, I will" plan and lets you tag the situation. The tracker page shows the share caught at the urge, counts by stage with a trailing average, situations, time of day, and every entry (delete with undo). Design and evidence: [`docs/TRACKING.md`](docs/TRACKING.md).
 
 ## Schema-driven schedule loop
 

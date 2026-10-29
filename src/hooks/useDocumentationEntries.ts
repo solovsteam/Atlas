@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { sortEntriesNewestFirst, type DocumentationEntry } from "@shared/documentationEntries";
 import { supabase } from "../lib/supabase";
-import { createEntry, deleteEntry, fetchEntries, restoreEntry } from "../services/documentationEntries";
+import { createEntry, deleteEntry, fetchEntries, restoreEntry, updateEntryData } from "../services/documentationEntries";
 
 // Mutations in this tab announce themselves so every open view updates at once;
 // Realtime covers changes from other devices.
@@ -31,6 +31,15 @@ export function useEntryMutations(userId: string | undefined) {
     [requireUser]
   );
 
+  const update = useCallback(
+    async (entry: DocumentationEntry, data: Record<string, unknown>) => {
+      const updated = await updateEntryData(supabase, requireUser(), entry.id, data);
+      announce({ kind: "upsert", entry: updated });
+      return updated;
+    },
+    [requireUser]
+  );
+
   const remove = useCallback(
     async (entry: DocumentationEntry) => {
       await deleteEntry(supabase, requireUser(), entry.id);
@@ -47,10 +56,14 @@ export function useEntryMutations(userId: string | undefined) {
     [requireUser]
   );
 
-  return useMemo(() => ({ createEntry: create, deleteEntry: remove, restoreEntry: restore }), [create, remove, restore]);
+  return useMemo(
+    () => ({ createEntry: create, updateEntry: update, deleteEntry: remove, restoreEntry: restore }),
+    [create, update, remove, restore]
+  );
 }
 
-export function useDocumentationEntries(userId: string | undefined, itemId: string | undefined) {
+/** All entries of a tracker, newest first, or only the most recent `limit`. */
+export function useDocumentationEntries(userId: string | undefined, itemId: string | undefined, limit?: number) {
   const [entries, setEntries] = useState<DocumentationEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -63,13 +76,13 @@ export function useDocumentationEntries(userId: string | undefined, itemId: stri
     }
     try {
       setError(null);
-      setEntries(await fetchEntries(supabase, userId, itemId));
+      setEntries(await fetchEntries(supabase, userId, itemId, limit));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load entries");
     } finally {
       setLoading(false);
     }
-  }, [userId, itemId]);
+  }, [userId, itemId, limit]);
 
   useEffect(() => {
     setLoading(true);

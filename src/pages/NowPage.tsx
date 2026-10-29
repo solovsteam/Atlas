@@ -9,7 +9,7 @@ import { trackCreateLinkUndo, trackTaskStatusUndo, useUndo } from "../context/Un
 import { TaskStatusButtonsForItem } from "../components/TaskStatusButtons";
 import { WorkBlockButtons } from "../components/WorkBlockButtons";
 import { NudgeToggle } from "../components/NudgeToggle";
-import { LogButton } from "../components/tracking/LogButton";
+import { TrackerButtons } from "../components/tracking/TrackerButtons";
 import { trackersOf } from "@shared/documentationEntries";
 
 function currentInterval(items: Item[], now: Date): Item | null {
@@ -119,9 +119,9 @@ export function NowPage() {
         {remainingLabel ? ` ${remainingLabel} left in ${interval?.title || "this interval"}.` : ""}
       </p>
       {trackers.length > 0 ? (
-        <div className="mt-4 flex flex-wrap items-center gap-3">
+        <div className="mt-4 space-y-3">
           {trackers.map((tracker) => (
-            <LogButton key={tracker.id} tracker={tracker} />
+            <TrackerButtons key={tracker.id} tracker={tracker} />
           ))}
         </div>
       ) : null}

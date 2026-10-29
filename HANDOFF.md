@@ -1,5 +1,13 @@
 # Handoff
 
+## Trackers record when a habit was noticed (29 Oct 2026)
+
+From Renaissance: Tonio asked to generalize Track using the psychology of noticing, approved the proposal, added a one-tap "Urge now" button, and approved pushing once it works.
+- **Built:** stage buttons in the time-wheel sheet (at the urge, while doing it, afterwards), "Urge now", a plan per tracker (item body, shown after each save), optional situation tags (also after a one-tap save, with undo), and history by stage with the share caught at the urge. No migration: stage and tags live in entry `data`. Design and evidence: `docs/TRACKING.md`.
+- **Tests:** `scripts/documentation-entries.test.ts` now 16 tests (also in four time zones). `npm run check` passed. Screens checked at iPhone size with the real components and a simulated store (`/tmp/atlas-tracker-preview`, outside Git): one-tap save, tag, two undos, sheet save with stage and tag, charts.
+- **Known flaky test:** `scripts/recurrence.test.ts` "large preview evaluates offline…" failed once with "interrupted" (20 ms limit per date in `src/lib/recurrenceRuntime.ts`) while the machine was busy, then passed three times alone and in the full check.
+- Task note: `.handoff/tracking-psychology-20261029.md`.
+
 ## Trackers: scrolling log and history chart (29 Oct 2026)
 
 From Renaissance (Tonio's request: a quick "Scrolled" button with an iPhone-style time wheel, and a chart of how often he scrolled).

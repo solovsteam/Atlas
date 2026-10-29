@@ -86,6 +86,6 @@ When implementing Phase 2+ features:
 ## Current limits
 
 - Extended item fields (intervals, documentation, recurrence) are partially ported; item links and notifications are not shipped yet.
-- Documentation: trackers (documentation items) record time-stamped entries in `documentation_entries` (migration 015, `/track`). A documentation task completed by typing a value, such as a daily weighing, is not ported yet.
+- Documentation: trackers (documentation items) record time-stamped entries in `documentation_entries` (migration 015, `/track`; design in `docs/TRACKING.md`). A documentation task completed by typing a value, such as a daily weighing, is not ported yet.
 - No notification system shipped; follow roadmap in `docs/ROADMAP.md` when adding.
 - Local dev uses HTTP; production should use HTTPS (e.g. Vercel).

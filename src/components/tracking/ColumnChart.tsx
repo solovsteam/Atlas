@@ -1,45 +1,56 @@
 import { useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import { niceScale } from "@shared/chartScale";
+import { CHART_LINE } from "./chartColors";
 
-// Validated with the dataviz palette checker on the dark surfaces (#111620,
-// #0b0f17): both pass lightness, CVD separation and 3:1 contrast. The gray is
-// deliberately low-chroma: it is the context series, the accent is the point.
-export const CHART_ACCENT = "#7a80f0";
-export const CHART_CONTEXT = "#5b6478";
 const GRID = "#252c3a";
 const SURFACE = "#111620";
 
 const PLOT_HEIGHT = 150;
 const AXIS_BAND = 22;
-const LEFT_GUTTER = 26;
+const MIN_GUTTER = 26;
 const TOP_PAD = 8;
+const SEGMENT_GAP = 2;
 
 export type ColumnTooltip = { value: string; label: string; detail?: string };
+export type ColumnStack = { color: string; values: number[] };
+export type ChartScale = { top: number; ticks: number[]; format: (value: number) => string };
 
-function columnPath(x: number, width: number, baseline: number, height: number): string {
-  // Rounded data end, square at the baseline.
+function roundedTopPath(x: number, width: number, bottom: number, height: number): string {
+  // Rounded data end, square at the bottom.
   const r = Math.min(4, width / 2, height);
-  const top = baseline - height;
-  return `M${x},${baseline}V${top + r}Q${x},${top} ${x + r},${top}H${x + width - r}Q${x + width},${top} ${x + width},${top + r}V${baseline}Z`;
+  const top = bottom - height;
+  return `M${x},${bottom}V${top + r}Q${x},${top} ${x + r},${top}H${x + width - r}Q${x + width},${top} ${x + width},${top + r}V${bottom}Z`;
+}
+
+function defaultScale(max: number): ChartScale {
+  const { top, step } = niceScale(max);
+  const ticks: number[] = [];
+  for (let value = 0; value <= top + 1e-9; value += step) {
+    ticks.push(value);
+  }
+  return { top, ticks, format: (value) => (Number.isInteger(value) ? String(value) : value.toFixed(1)) };
 }
 
 /**
- * Columns from one baseline, optionally with a line on the same axis (never a
- * second scale). `null` values are not drawn: they mean "no data", not zero.
+ * Stacked columns from one baseline (bottom stack first), optionally with a
+ * line on the same axis (never a second scale). A line value of `null` is a
+ * gap. Columns or a line may be left out, so this also draws a line chart.
  */
 export function ColumnChart({
-  columns,
+  count,
+  stacks = [],
   line,
-  columnColor,
-  lineColor = CHART_ACCENT,
+  lineColor = CHART_LINE,
+  scale,
   tick,
   tooltip,
   label
 }: {
-  columns: (number | null)[];
+  count: number;
+  stacks?: ColumnStack[];
   line?: (number | null)[];
-  columnColor: string;
   lineColor?: string;
+  scale?: ChartScale;
   tick: (index: number) => string | null;
   tooltip: (index: number) => ColumnTooltip;
   label: string;
@@ -58,30 +69,26 @@ export function ColumnChart({
     return () => observer.disconnect();
   }, []);
 
-  const count = columns.length;
-  const plotWidth = width - LEFT_GUTTER;
+  const totals = Array.from({ length: count }, (_, index) => stacks.reduce((sum, stack) => sum + (stack.values[index] ?? 0), 0));
+  const lineValues = (line ?? []).filter((value): value is number => value !== null);
+  const { top, ticks, format } = scale ?? defaultScale(Math.max(1, ...totals, ...lineValues));
+  // Wide enough for the longest axis label (about 6px per character at 10px).
+  const leftGutter = Math.max(MIN_GUTTER, 10 + 6 * Math.max(...ticks.map((value) => format(value).length)));
+  const plotWidth = width - leftGutter;
   const slot = count ? plotWidth / count : plotWidth;
   const gap = slot >= 4 ? 2 : 0;
   const barWidth = Math.max(1, Math.min(24, slot - gap));
   const baseline = TOP_PAD + PLOT_HEIGHT;
-  const values = [...columns, ...(line ?? [])].filter((value): value is number => value !== null);
-  const { top, step } = niceScale(values.length ? Math.max(...values) : 1);
   const y = (value: number) => baseline - (value / top) * PLOT_HEIGHT;
-  const centre = (index: number) => LEFT_GUTTER + index * slot + slot / 2;
-
-  const ticks: number[] = [];
-  for (let value = 0; value <= top + 1e-9; value += step) {
-    ticks.push(value);
-  }
+  const centre = (index: number) => leftGutter + index * slot + slot / 2;
 
   const linePath = line
     ? line
         .map((value, index) => (value === null ? null : `${centre(index).toFixed(1)},${y(value).toFixed(1)}`))
         .reduce<string[]>((parts, point, index) => {
-          if (point === null) {
-            return parts;
+          if (point !== null) {
+            parts.push(`${index > 0 && line[index - 1] !== null ? "L" : "M"}${point}`);
           }
-          parts.push(`${index > 0 && line[index - 1] !== null ? "L" : "M"}${point}`);
           return parts;
         }, [])
         .join("")
@@ -97,8 +104,27 @@ export function ColumnChart({
     setActive(Math.min(count - 1, Math.max(0, start + (event.key === "ArrowLeft" ? -1 : 1))));
   }
 
+  function columnSegments(index: number) {
+    const x = centre(index) - barWidth / 2;
+    const parts = stacks.map((stack) => ({ color: stack.color, value: stack.values[index] ?? 0 })).filter((part) => part.value > 0);
+    let bottom = baseline;
+    return parts.map((part, order) => {
+      const fullHeight = Math.max(1, baseline - y(part.value));
+      const isTop = order === parts.length - 1;
+      // A surface-coloured gap separates touching segments.
+      const height = Math.max(1, fullHeight - (isTop ? 0 : SEGMENT_GAP));
+      const shape = isTop ? (
+        <path d={roundedTopPath(x, barWidth, bottom, height)} fill={part.color} key={order} />
+      ) : (
+        <rect fill={part.color} height={height} key={order} width={barWidth} x={x} y={bottom - height} />
+      );
+      bottom -= fullHeight;
+      return shape;
+    });
+  }
+
   const tip = active !== null ? tooltip(active) : null;
-  const tipLeft = active !== null ? Math.min(Math.max(centre(active), 70), width - 70) : 0;
+  const tipLeft = active !== null ? Math.min(Math.max(centre(active), 80), width - 80) : 0;
 
   return (
     <div className="relative" ref={containerRef}>
@@ -115,20 +141,17 @@ export function ColumnChart({
       >
         {ticks.map((value) => (
           <g key={value}>
-            <line stroke={GRID} strokeWidth={1} x1={LEFT_GUTTER} x2={width} y1={y(value) + 0.5} y2={y(value) + 0.5} />
-            <text className="fill-neutral-500 text-[10px] tabular-nums" dominantBaseline="middle" textAnchor="end" x={LEFT_GUTTER - 6} y={y(value)}>
-              {Number.isInteger(value) ? value : value.toFixed(1)}
+            <line stroke={GRID} strokeWidth={1} x1={leftGutter} x2={width} y1={y(value) + 0.5} y2={y(value) + 0.5} />
+            <text className="fill-neutral-500 text-[10px] tabular-nums" dominantBaseline="middle" textAnchor="end" x={leftGutter - 6} y={y(value)}>
+              {format(value)}
             </text>
           </g>
         ))}
-        {columns.map((value, index) =>
-          value !== null && value > 0 ? (
-            <path
-              d={columnPath(centre(index) - barWidth / 2, barWidth, baseline, Math.max(1, baseline - y(value)))}
-              fill={columnColor}
-              key={index}
-              opacity={active === null || active === index ? 1 : 0.55}
-            />
+        {totals.map((total, index) =>
+          total > 0 ? (
+            <g key={index} opacity={active === null || active === index ? 1 : 0.55}>
+              {columnSegments(index)}
+            </g>
           ) : null
         )}
         {linePath ? <path d={linePath} fill="none" stroke={lineColor} strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} /> : null}
@@ -138,27 +161,27 @@ export function ColumnChart({
         {active !== null ? (
           <line stroke="#6c768a" strokeWidth={1} x1={centre(active)} x2={centre(active)} y1={TOP_PAD} y2={baseline} />
         ) : null}
-        {columns.map((_, index) => {
+        {Array.from({ length: count }, (_, index) => {
           const text = tick(index);
           return text ? (
             <text
               className="fill-neutral-500 text-[10px] tabular-nums"
               key={`tick-${index}`}
               textAnchor={index === 0 ? "start" : index === count - 1 ? "end" : "middle"}
-              x={index === 0 ? LEFT_GUTTER + index * slot : index === count - 1 ? width : centre(index)}
+              x={index === 0 ? leftGutter : index === count - 1 ? width : centre(index)}
               y={baseline + 15}
             >
               {text}
             </text>
           ) : null;
         })}
-        {columns.map((_, index) => (
+        {Array.from({ length: count }, (_, index) => (
           <rect
             fill="transparent"
             height={PLOT_HEIGHT + TOP_PAD}
             key={`hit-${index}`}
             width={slot}
-            x={LEFT_GUTTER + index * slot}
+            x={leftGutter + index * slot}
             y={0}
             onPointerDown={() => setActive(index)}
             onPointerEnter={() => setActive(index)}
@@ -172,7 +195,7 @@ export function ColumnChart({
         >
           <p className="text-sm font-semibold text-white">{tip.value}</p>
           <p className="text-neutral-400">{tip.label}</p>
-          {tip.detail ? <p className="mt-0.5 text-neutral-400">{tip.detail}</p> : null}
+          {tip.detail ? <p className="mt-0.5 whitespace-pre-line text-neutral-400">{tip.detail}</p> : null}
         </div>
       ) : null}
     </div>

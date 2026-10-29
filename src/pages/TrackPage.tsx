@@ -4,7 +4,8 @@ import { trackersOf } from "@shared/documentationEntries";
 import { useAtlasData } from "../context/AtlasDataContext";
 import { trackCreateUndo, trackDeleteEntryUndo, useUndo } from "../context/UndoContext";
 import { useDocumentationEntries, useEntryMutations } from "../hooks/useDocumentationEntries";
-import { LogButton } from "../components/tracking/LogButton";
+import { PlanEditor } from "../components/tracking/PlanEditor";
+import { TrackerButtons } from "../components/tracking/TrackerButtons";
 import { TrackerHistory } from "../components/tracking/TrackerHistory";
 
 /** List of trackers, each with its log button, and a form to add one. */
@@ -35,13 +36,14 @@ export function TrackPage() {
     <section>
       <h1 className="text-4xl font-bold tracking-tight">Track</h1>
       <p className="mt-2 max-w-xl text-sm text-neutral-400">
-        Record when something happens. The buttons also appear on Now, so one tap and the time wheel are enough.
+        Record each time you notice a habit you want to break: at the urge, while doing it, or afterwards. "Urge now"
+        records an urge in one tap. The buttons also appear on Now.
       </p>
       {trackers.length > 0 ? (
         <ul className="mt-6 space-y-3">
           {trackers.map((tracker) => (
-            <li className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-neutral-800 p-4" key={tracker.id}>
-              <LogButton tracker={tracker} />
+            <li className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-neutral-800 p-4" key={tracker.id}>
+              <TrackerButtons tracker={tracker} />
               <Link className="text-sm text-neutral-400 underline hover:text-white" to={`/track/${tracker.id}`}>
                 History
               </Link>
@@ -55,7 +57,7 @@ export function TrackPage() {
         <input
           aria-label="New tracker name"
           className="min-w-0 flex-1 border border-neutral-700 bg-transparent px-3 py-2 text-white placeholder:text-neutral-600"
-          placeholder="New tracker, for example Scrolled"
+          placeholder="New habit to notice, for example Scrolled"
           value={name}
           onChange={(event) => setName(event.target.value)}
         />
@@ -118,8 +120,9 @@ export function TrackerPage() {
       </div>
       <h1 className="mb-4 text-3xl font-bold tracking-tight">{tracker.title || "Untitled tracker"}</h1>
       <div className="mb-6">
-        <LogButton size="large" tracker={tracker} />
+        <TrackerButtons size="large" tracker={tracker} />
       </div>
+      <PlanEditor tracker={tracker} />
       {error ? <p className="mb-4 text-sm text-red-400">{error}</p> : null}
       {deleteError ? <p className="mb-4 text-sm text-red-400">{deleteError}</p> : null}
       {loading ? (

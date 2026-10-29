@@ -104,7 +104,7 @@ function AppShell() {
   const { session, loading, signInWithGoogle, signOut } = useAuthSession();
   const { userId, items, itemsLoading, itemsError, linksError, updateItem, deleteItem, restoreItem, deleteLink, restoreLink } =
     useAtlasData();
-  const { deleteEntry, restoreEntry } = useEntryMutations(userId);
+  const { deleteEntry, restoreEntry, updateEntry } = useEntryMutations(userId);
   const { pathname } = useLocation();
 
   if (loading) {
@@ -128,6 +128,7 @@ function AppShell() {
       restoreLink={restoreLink}
       deleteEntry={deleteEntry}
       restoreEntry={restoreEntry}
+      updateEntry={updateEntry}
     >
       <RelevanceProvider items={items}>
         <NudgeProvider>

@@ -25,7 +25,8 @@ export function UndoProvider({
   deleteLink,
   restoreLink,
   deleteEntry,
-  restoreEntry
+  restoreEntry,
+  updateEntry
 }: {
   children: ReactNode;
   items: Item[];
@@ -36,6 +37,7 @@ export function UndoProvider({
   restoreLink: (link: ItemLink) => Promise<void>;
   deleteEntry: (entry: DocumentationEntry) => Promise<void>;
   restoreEntry: (entry: DocumentationEntry) => Promise<void>;
+  updateEntry: (entry: DocumentationEntry, data: Record<string, unknown>) => Promise<unknown>;
 }) {
   const stackRef = useRef<UndoOp[]>([]);
   const [canUndo, setCanUndo] = useState(false);
@@ -108,6 +110,11 @@ export function UndoProvider({
       return;
     }
 
+    if (op.kind === "updateEntry") {
+      await updateEntry(op.before, op.before.data);
+      return;
+    }
+
     const revision = getRevision(op.id);
     if (revision === undefined) {
       return;
@@ -121,7 +128,7 @@ export function UndoProvider({
     if (op.kind === "setTaskStatus") {
       await updateItem(op.id, JSON.stringify({ taskStatus: op.before }), revision);
     }
-  }, [deleteEntry, deleteItem, deleteLink, getRevision, refresh, restoreEntry, restoreItem, restoreLink, updateItem]);
+  }, [deleteEntry, deleteItem, deleteLink, getRevision, refresh, restoreEntry, restoreItem, restoreLink, updateEntry, updateItem]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -183,4 +190,8 @@ export function trackCreateEntryUndo(push: UndoContextValue["push"], entry: Docu
 
 export function trackDeleteEntryUndo(push: UndoContextValue["push"], entry: DocumentationEntry) {
   push({ kind: "deleteEntry", snapshot: entry });
+}
+
+export function trackUpdateEntryUndo(push: UndoContextValue["push"], before: DocumentationEntry) {
+  push({ kind: "updateEntry", before });
 }

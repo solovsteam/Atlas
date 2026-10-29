@@ -7,7 +7,7 @@ From Renaissance (Tonio's request: a quick "Scrolled" button with an iPhone-styl
 - **Tests:** `scripts/documentation-entries.test.ts` (logic, also run in four time zones) and `scripts/documentation-entries-db.test.ts` (015 on PGlite with row level security). `npm run check` passed. The screens were checked at iPhone size with sample data in a temporary page outside the repository; the signed-in app itself was not driven.
 - **Applied once live** with guard and history row 015; read back (table, 4 policies, grants, realtime, history). Evidence: `.handoff/renaissance-migration-015-*`. Never replay.
 - **Not yet ported:** a documentation task completed by typing a value (the original weighing example). The entries table already allows values in `data`.
-- **Push:** waiting for Tonio's OK (feature push, not a bug fix). Task note: `.handoff/scrolling-log-20261029.md`.
+- **Push:** approved by Tonio on 29 Oct ("push it to github"). Task note: `.handoff/scrolling-log-20261029.md`.
 
 ## Archive and task-status edits added (22 Oct 2026)
 

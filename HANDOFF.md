@@ -2,7 +2,7 @@
 
 ## Tracker buttons on Now: refresh repair (29 Oct 2026)
 
-Tonio reported that tracker quick access buttons appear only after refreshing. Atlas now refreshes items after creation, when a page becomes visible again, and after the live connection subscribes or reconnects. Older requests cannot replace newer results. The exact trigger on Tonio’s phone is not yet confirmed. Browser fixture with invented data verified the visibility and reconnect paths. No signed-in phone test or live data change was made. Task note: `.handoff/now-tracker-refresh-20261029.md`.
+Tonio reported that tracker quick access buttons appear only after refreshing. Atlas now refreshes items after creation, when a page becomes visible again, and after the live connection subscribes or reconnects. Older requests cannot replace newer results. Tonio confirmed that this happens after returning to an already open Atlas page. Browser fixture with invented data verified the visibility and reconnect paths. No signed-in phone test or live data change was made. Task note: `.handoff/now-tracker-refresh-20261029.md`.
 
 ## Tracker kinds: habit to break and habit to build (29 Oct 2026)
 

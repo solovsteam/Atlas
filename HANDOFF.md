@@ -1,5 +1,9 @@
 # Handoff
 
+## Separate account for verification (29 Oct 2026)
+
+Tonio approved an isolated Atlas test account and said agents should have maximum access to verification in Renaissance. Google refused T3 browser sign-in. A separate Supabase email account was created without changing auth settings. Its credentials and a temporary session bridge are in ignored `.handoff/` files. A T3 browser signed in to the live site, created a sample tracker, and showed its button on Now. A direct test-account read found the sample and could not read Tonio's scrolling tracker. The session bridge is stopped. Account and browser setup: `.handoff/atlas-test-account-investigation-20261029.md`.
+
 ## Tracker buttons on Now: refresh repair (29 Oct 2026)
 
 Tonio reported that tracker quick access buttons appear only after refreshing. Atlas now refreshes items after creation, when a page becomes visible again, and after the live connection subscribes or reconnects. Older requests cannot replace newer results. Tonio confirmed that this happens after returning to an already open Atlas page. Browser fixture with invented data verified the visibility and reconnect paths. No signed-in phone test or live data change was made. Task note: `.handoff/now-tracker-refresh-20261029.md`.

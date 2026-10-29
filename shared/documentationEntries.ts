@@ -54,7 +54,9 @@ export function entryToDbInsert(entry: DocumentationEntry): DocumentationEntryRo
  * use of the same storage.)
  */
 export function isTracker(item: Item): boolean {
-  return item.isDocumentation && !item.isTask && !item.isInterval && !item.recurrenceRule && !item.generatedFromId;
+  const schema = item.documentationSchema;
+  const isRoutine = !!schema && typeof schema === "object" && !Array.isArray(schema) && "routine" in schema;
+  return item.isDocumentation && !isRoutine && !item.isTask && !item.isInterval && !item.recurrenceRule && !item.generatedFromId;
 }
 
 export function trackersOf(items: Item[]): Item[] {

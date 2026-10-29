@@ -1,5 +1,9 @@
 # Handoff
 
+## Timed routines (29 Oct 2026)
+
+Tonio asked for easily editable routine lists and accepted a suggested morning list. Implemented in the working tree: routine lists, timestamp-based recording, skipping and reordering upcoming steps, undo, history and time correction. A sample routine was tested through the real Supabase test account, including reload and undo. `npm run check` passed on the second attempt; a known timing-sensitive recurrence test failed once. The iPhone itself and offline behavior were not tested. Tonio approved publication after reviewing the description. See `.handoff/timed-routines-build-20261029.md`.
+
 ## Separate account for verification (29 Oct 2026)
 
 Tonio approved an isolated Atlas test account and said agents should have maximum access to verification in Renaissance. Google refused T3 browser sign-in. A separate Supabase email account was created without changing auth settings. Its credentials and a temporary session bridge are in ignored `.handoff/` files. A T3 browser signed in to the live site, created a sample tracker, and showed its button on Now. A direct test-account read found the sample and could not read Tonio's scrolling tracker. The session bridge is stopped. Account and browser setup: `.handoff/atlas-test-account-investigation-20261029.md`.
@@ -13,7 +17,7 @@ Tonio reported that tracker quick access buttons appear only after refreshing. A
 Tonio's decisions: grow Atlas step by step around plans (what is intended) and records (what happened), no rebuild; stages come from the time; reality checks are a habit to build with a daily aim of 3 that is "not my fault" on days without the triggering event.
 - **Built:** `trackerConfig` (kind and daily aim in `documentation_schema.tracker`), `TrackerSettings` on the tracker page, kind choice when creating. Habit to break: single Save, stage from the wheel (`stageFromWheel`), inferred stage for older entries (`entryStage`, 5-minute rule). Habit to build: trigger tags, "x of 3 today", aim level in the chart (`bucketGoal`).
 - **Tests:** logic tests now 20 (four time zones). `npm run check` passed. Preview: past time saved "in hindsight", present "while doing it", build tracker saves trigger without stage, aim line, kind switch. (The preview's undo has no item access, so undo of the kind switch was not checked there; it uses the existing item-patch undo.)
-- **Next step (approved direction, not started):** timed routines with a stopwatch, per task, bundles of tasks.
+- **Follow-up:** timed routines are described in the section above.
 
 ## Fixed: blank page on the tracker page (29 Oct 2026)
 

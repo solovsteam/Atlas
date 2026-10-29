@@ -8,6 +8,7 @@ import { NudgeProvider } from "./context/NudgeContext";
 import { CaptureBar } from "./components/CaptureBar";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { NowPage } from "./pages/NowPage";
+import { RoutinesPage, RoutinePage } from "./pages/RoutinesPage";
 import { ItemPage } from "./pages/ItemPage";
 import { TasksPage } from "./pages/TasksPage";
 import { ItemsPage } from "./pages/ItemsPage";
@@ -195,6 +196,8 @@ function AppShell() {
               <Route path="/calendar" element={<CalendarPage />} />
               <Route path="/archive" element={<ArchivePage />} />
               <Route path="/track" element={<TrackPage />} />
+              <Route path="/routines" element={<RoutinesPage />} />
+              <Route path="/routines/:id" element={<RoutinePage />} />
               <Route path="/track/:id" element={<TrackerPage />} />
               <Route path="/item/:id" element={<ItemPage />} />
               <Route

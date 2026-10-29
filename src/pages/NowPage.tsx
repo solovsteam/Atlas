@@ -126,6 +126,7 @@ export function NowPage() {
         </div>
       ) : null}
       <div className="mt-4 flex flex-wrap items-center gap-3">
+        <Link className="rounded border border-neutral-700 px-3 py-2 text-sm hover:border-white" to="/routines">Timed routines</Link>
         <WorkBlockButtons />
         <NudgeToggle />
       </div>

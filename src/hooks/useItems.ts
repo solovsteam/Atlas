@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Item } from "@shared/item";
 import { supabase } from "../lib/supabase";
 import { fetchOwnedItems } from "../services/items";
@@ -9,8 +9,10 @@ export function useItems(userId: string | undefined) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [extendedSchema, setExtendedSchema] = useState(true);
+  const requestVersion = useRef(0);
 
   const refresh = useCallback(async () => {
+    const version = ++requestVersion.current;
     if (!userId) {
       setItems([]);
       setLoading(false);
@@ -20,19 +22,36 @@ export function useItems(userId: string | undefined) {
     try {
       setError(null);
       const schema = await probeExtendedItemSchema(supabase);
-      setExtendedSchema(schema);
       const next = await fetchOwnedItems(supabase, userId);
+      if (version !== requestVersion.current) return;
+      setExtendedSchema(schema);
       setItems(next);
       setLoading(false);
     } catch (err) {
+      if (version !== requestVersion.current) return;
       setError(err instanceof Error ? err.message : "Failed to load items");
       setLoading(false);
     }
   }, [userId]);
 
   useEffect(() => {
+    const versionRef = requestVersion;
     void refresh();
+    return () => { versionRef.current++; };
   }, [refresh]);
+
+  useEffect(() => {
+    if (!userId) return;
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void refresh();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("pageshow", onVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("pageshow", onVisible);
+    };
+  }, [userId, refresh]);
 
   const removeItemById = useCallback((id: string) => {
     setItems((current) => current.filter((entry) => entry.id !== id));
@@ -64,7 +83,9 @@ export function useItems(userId: string | undefined) {
       )
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'items', filter: `owner_id=eq.${userId}` }, () => { void refresh(); })
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'items' }, () => { void refresh(); })
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") void refresh();
+      });
 
     return () => {
       void supabase.removeChannel(channel);

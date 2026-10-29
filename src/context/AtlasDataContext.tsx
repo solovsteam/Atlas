@@ -22,6 +22,13 @@ export function AtlasDataProvider({ children }: { children: ReactNode }) {
   const itemsRef = useRef(items);
   itemsRef.current = items;
   const updateChainsRef = useRef(new Map<string, Promise<UpdateItemResult>>());
+  const createItemMutation = mutations.createItem;
+
+  const createItem = useCallback(async (...args: Parameters<typeof createItemMutation>) => {
+    const result = await createItemMutation(...args);
+    await refresh();
+    return result;
+  }, [createItemMutation, refresh]);
 
   const updateItem = useCallback(
     async (id: string, patchJson: string, expectedRevision: number): Promise<UpdateItemResult> => {
@@ -175,7 +182,7 @@ export function AtlasDataProvider({ children }: { children: ReactNode }) {
         extendedSchema,
         links,
         linksError,
-        createItem: mutations.createItem,
+        createItem,
         updateItem,
         deleteItem,
         restoreItem,

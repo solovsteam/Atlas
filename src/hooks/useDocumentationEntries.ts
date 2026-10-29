@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { sortEntriesNewestFirst, type DocumentationEntry } from "@shared/documentationEntries";
 import { supabase } from "../lib/supabase";
-import { createEntry, deleteEntry, fetchEntries, restoreEntry, updateEntryData } from "../services/documentationEntries";
+import {
+  createEntry,
+  deleteEntry,
+  fetchEntries,
+  restoreEntry,
+  subscribeToEntryChanges,
+  updateEntryData
+} from "../services/documentationEntries";
 
 // Mutations in this tab announce themselves so every open view updates at once;
 // Realtime covers changes from other devices.
@@ -111,24 +118,14 @@ export function useDocumentationEntries(userId: string | undefined, itemId: stri
     if (!userId || !itemId) {
       return;
     }
-    const channel = supabase
-      .channel(`documentation_entries:${itemId}`)
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "documentation_entries", filter: `item_id=eq.${itemId}` },
-        () => void refresh()
-      )
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "documentation_entries", filter: `item_id=eq.${itemId}` },
-        () => void refresh()
-      )
-      // DELETE payloads only carry the id, so a filtered DELETE listener would miss them.
-      .on("postgres_changes", { event: "DELETE", schema: "public", table: "documentation_entries" }, () => void refresh())
-      .subscribe();
-    return () => {
-      void supabase.removeChannel(channel);
-    };
+    // Live updates from other devices are a convenience: if they cannot start,
+    // the page keeps working without them.
+    try {
+      return subscribeToEntryChanges(supabase, itemId, () => void refresh());
+    } catch (err) {
+      console.warn("Live updates for tracker entries are unavailable", err);
+      return undefined;
+    }
   }, [userId, itemId, refresh]);
 
   return { entries, loading, error, refresh };

@@ -7,6 +7,29 @@ type Client = SupabaseClient<Database>;
 // Supabase returns at most 1000 rows per request; read in pages.
 const PAGE_SIZE = 1000;
 
+let channelCount = 0;
+
+/**
+ * Calls `onChange` after any insert, update or delete of the tracker's
+ * entries, and returns the function that stops listening. Each call gets its
+ * own channel name: the realtime client returns an existing channel when the
+ * name repeats, and adding listeners to a subscribed channel throws. Two views
+ * of one tracker (the buttons and the history page) both listen.
+ */
+export function subscribeToEntryChanges(client: Client, itemId: string, onChange: () => void): () => void {
+  channelCount += 1;
+  const channel = client
+    .channel(`documentation_entries:${itemId}:${channelCount}`)
+    .on("postgres_changes", { event: "INSERT", schema: "public", table: "documentation_entries", filter: `item_id=eq.${itemId}` }, onChange)
+    .on("postgres_changes", { event: "UPDATE", schema: "public", table: "documentation_entries", filter: `item_id=eq.${itemId}` }, onChange)
+    // DELETE payloads only carry the id, so a filtered DELETE listener would miss them.
+    .on("postgres_changes", { event: "DELETE", schema: "public", table: "documentation_entries" }, onChange)
+    .subscribe();
+  return () => {
+    void client.removeChannel(channel);
+  };
+}
+
 /** Newest first; `limit` keeps only the most recent entries. */
 export async function fetchEntries(client: Client, userId: string, itemId: string, limit?: number): Promise<DocumentationEntry[]> {
   const rows: DbDocumentationEntryRow[] = [];

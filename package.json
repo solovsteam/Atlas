@@ -13,7 +13,7 @@
     "typecheck:brain-mcp": "tsc -p tsconfig.brain-mcp.json",
     "atlas:brain": "tsx --tsconfig tsconfig.brain-mcp.json scripts/brain-atlas-mcp.ts",
     "test:brain-contract": "tsx --tsconfig tsconfig.brain-mcp.json scripts/brain-contract.test.ts",
-    "test": "npm run test:scheduling && npm run test:brain-mcp && npm run test:brain-contract && tsx --test scripts/decision-schedule.test.ts scripts/calendar-layout.test.ts scripts/clock-skew-fetch.test.ts scripts/documentation-entries.test.ts && node --test scripts/web-handoff.test.mjs && tsx --tsconfig tsconfig.brain-mcp.json --test scripts/recurrence.test.ts scripts/recurrence-storage.test.ts scripts/brain-edits.test.ts scripts/brain-edits-text-times.test.ts scripts/documentation-entries-db.test.ts && node --test scripts/recurrence-compiler.test.mjs",
+    "test": "npm run test:scheduling && npm run test:brain-mcp && npm run test:brain-contract && tsx --test scripts/decision-schedule.test.ts scripts/calendar-layout.test.ts scripts/clock-skew-fetch.test.ts scripts/documentation-entries.test.ts && node --test scripts/web-handoff.test.mjs && tsx --tsconfig tsconfig.brain-mcp.json --test scripts/recurrence.test.ts scripts/recurrence-storage.test.ts scripts/brain-edits.test.ts scripts/brain-edits-text-times.test.ts scripts/documentation-entries-db.test.ts scripts/documentation-entries-realtime.test.ts && node --test scripts/recurrence-compiler.test.mjs",
     "check": "npm run lint && npm run build && npm run typecheck:brain-mcp && npm test",
     "atlas:compile": "node scripts/recurrence-compiler.mjs"
   },

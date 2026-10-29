@@ -6,6 +6,7 @@ import { RelevanceProvider } from "./context/RelevanceContext";
 import { UndoProvider, useUndo } from "./context/UndoContext";
 import { NudgeProvider } from "./context/NudgeContext";
 import { CaptureBar } from "./components/CaptureBar";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { NowPage } from "./pages/NowPage";
 import { ItemPage } from "./pages/ItemPage";
 import { TasksPage } from "./pages/TasksPage";
@@ -185,6 +186,8 @@ function AppShell() {
               <p>Generator changes need review. These occurrences keep their earlier version:</p>
               {items.filter(item=>item.recurrenceView?.needsReview).map(item=><Link className="mr-3 underline" key={item.id} to={`/item/${item.id}`}>{item.title || item.occurrenceKey} ({item.occurrenceKey})</Link>)}
             </aside>:null}
+            {/* Keyed by path, so moving to another page clears an error. */}
+            <ErrorBoundary key={pathname}>
             <Routes>
               <Route path="/" element={<NowPage />} />
               <Route path="/tasks" element={<TasksPage />} />
@@ -206,6 +209,7 @@ function AppShell() {
                 }
               />
             </Routes>
+            </ErrorBoundary>
           </section>
         </main>
         </NudgeProvider>

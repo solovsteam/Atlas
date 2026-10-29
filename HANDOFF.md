@@ -1,5 +1,13 @@
 # Handoff
 
+## Fixed: blank page on the tracker page (29 Oct 2026)
+
+Tonio reported that after a refresh the app showed briefly and then went blank.
+- **Cause (reproduced with the real realtime library):** the tracker page has two views of one tracker (buttons and history), and both opened a realtime channel with the same name. The client returns the existing, already subscribed channel for a repeated name, and adding listeners to it throws. The error came from an effect, so React unmounted the whole app.
+- **Fix:** `subscribeToEntryChanges` (`src/services/documentationEntries.ts`) gives every listener its own channel name; the hook catches a failing subscription (live updates are optional); `src/components/ErrorBoundary.tsx` around the routes shows an error message with Reload instead of a blank page.
+- **Test:** `scripts/documentation-entries-realtime.test.ts` uses the real client against a closed local port. It passes with the fix and fails with the old fixed name. `npm run check` passed. Preview: tracker page renders with a simulated client that copies the reuse behaviour; the boundary shows an effect error.
+- **Lesson:** the earlier preview used a simulated realtime client that did not copy the library's channel reuse, so it could not catch this.
+
 ## Trackers record when a habit was noticed (29 Oct 2026)
 
 From Renaissance: Tonio asked to generalize Track using the psychology of noticing, approved the proposal, added a one-tap "Urge now" button, and approved pushing once it works.

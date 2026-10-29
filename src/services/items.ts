@@ -57,6 +57,7 @@ export type CreateItemOptions = {
   intervalStatus?: string;
   manualRelevance?: number;
   expectedDurationMinutes?: number;
+  isDocumentation?: boolean;
 };
 
 export async function createItem(
@@ -107,6 +108,7 @@ export async function createItem(
     ...(options.expectedDurationMinutes !== undefined
       ? { task_expected_minutes: options.expectedDurationMinutes }
       : {}),
+    ...(options.isDocumentation ? { is_documentation: true } : {}),
   };
 
   const { data, error } = await client
@@ -258,6 +260,11 @@ export async function deleteItem(
     .eq("id", id)
     .eq("owner_id", userId)
     .select("id");
+
+  // 23503: documentation entries still point at this tracker (015 refuses).
+  if (error?.code === "23503" && error.message.includes("documentation_entries")) {
+    throw new Error("This tracker still has entries. Delete its entries first.");
+  }
 
   if (error) {
     throw new Error(error.message);

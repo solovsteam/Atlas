@@ -1,5 +1,14 @@
 # Handoff
 
+## Trackers: scrolling log and history chart (29 Oct 2026)
+
+From Renaissance (Tonio's request: a quick "Scrolled" button with an iPhone-style time wheel, and a chart of how often he scrolled).
+- **Built:** migration `015_documentation_entries.sql` (one row per entry, row level security, realtime; a tracker with entries cannot be deleted), `shared/documentationEntries.ts` (wheel, history buckets, trailing average), `src/services/documentationEntries.ts`, `src/hooks/useDocumentationEntries.ts`, `src/components/tracking/`, `src/pages/TrackPage.tsx` (`/track`, `/track/:id`), the Track tab, tracker buttons on Now, and undo for entry create and delete.
+- **Tests:** `scripts/documentation-entries.test.ts` (logic, also run in four time zones) and `scripts/documentation-entries-db.test.ts` (015 on PGlite with row level security). `npm run check` passed. The screens were checked at iPhone size with sample data in a temporary page outside the repository; the signed-in app itself was not driven.
+- **Applied once live** with guard and history row 015; read back (table, 4 policies, grants, realtime, history). Evidence: `.handoff/renaissance-migration-015-*`. Never replay.
+- **Not yet ported:** a documentation task completed by typing a value (the original weighing example). The entries table already allows values in `data`.
+- **Push:** waiting for Tonio's OK (feature push, not a bug fix). Task note: `.handoff/scrolling-log-20261029.md`.
+
 ## Archive and task-status edits added (22 Oct 2026)
 
 - **Migration `014_brain_edits_status_archive.sql`** adds two bounded operations:

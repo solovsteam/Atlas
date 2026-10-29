@@ -26,6 +26,13 @@ export const NowIcon = ({ className }: IconProps) => (
   </Icon>
 );
 
+export const TrackIcon = ({ className }: IconProps) => (
+  <Icon className={className}>
+    <path d="M4.5 19.5h15" />
+    <path d="M7.5 16v-4M12 16V7.5M16.5 16v-6" />
+  </Icon>
+);
+
 export const TasksIcon = ({ className }: IconProps) => (
   <Icon className={className}>
     <rect height="16" rx="3" width="16" x="4" y="4" />

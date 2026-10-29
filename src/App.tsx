@@ -12,7 +12,9 @@ import { TasksPage } from "./pages/TasksPage";
 import { ItemsPage } from "./pages/ItemsPage";
 import { CalendarPage } from "./pages/CalendarPage";
 import { ArchivePage } from "./pages/ArchivePage";
-import { ArchiveIcon, CalendarIcon, ItemsIcon, NowIcon, TasksIcon, UndoIcon } from "./components/icons";
+import { TrackerPage, TrackPage } from "./pages/TrackPage";
+import { useEntryMutations } from "./hooks/useDocumentationEntries";
+import { ArchiveIcon, CalendarIcon, ItemsIcon, NowIcon, TasksIcon, TrackIcon, UndoIcon } from "./components/icons";
 
 function AuthAvatar({ label, picture }: { label: string; picture?: string }) {
   const initial = label.trim().slice(0, 1).toUpperCase() || "?";
@@ -76,6 +78,7 @@ const NAV: { to: string; label: string; icon: ComponentType<{ className?: string
   { to: "/tasks", label: "Tasks", icon: TasksIcon },
   { to: "/items", label: "Items", icon: ItemsIcon },
   { to: "/calendar", label: "Calendar", icon: CalendarIcon },
+  { to: "/track", label: "Track", icon: TrackIcon },
   { to: "/archive", label: "Archive", icon: ArchiveIcon }
 ];
 
@@ -99,8 +102,9 @@ function LoginScreen({ onSignIn }: { onSignIn: () => void }) {
 
 function AppShell() {
   const { session, loading, signInWithGoogle, signOut } = useAuthSession();
-  const { items, itemsLoading, itemsError, linksError, updateItem, deleteItem, restoreItem, deleteLink, restoreLink } =
+  const { userId, items, itemsLoading, itemsError, linksError, updateItem, deleteItem, restoreItem, deleteLink, restoreLink } =
     useAtlasData();
+  const { deleteEntry, restoreEntry } = useEntryMutations(userId);
   const { pathname } = useLocation();
 
   if (loading) {
@@ -122,6 +126,8 @@ function AppShell() {
       restoreItem={restoreItem}
       deleteLink={deleteLink}
       restoreLink={restoreLink}
+      deleteEntry={deleteEntry}
+      restoreEntry={restoreEntry}
     >
       <RelevanceProvider items={items}>
         <NudgeProvider>
@@ -154,7 +160,7 @@ function AppShell() {
                 <AccountMenu label={label} picture={picture} onSignOut={signOut} />
               </div>
             </header>
-            <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-neutral-800 bg-neutral-950/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden">
+            <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-6 border-t border-neutral-800 bg-neutral-950/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden">
               {NAV.map(({ to, label: navLabel, icon: NavIcon }) => (
                 <NavLink
                   className={({ isActive }) =>
@@ -184,6 +190,8 @@ function AppShell() {
               <Route path="/items" element={<ItemsPage />} />
               <Route path="/calendar" element={<CalendarPage />} />
               <Route path="/archive" element={<ArchivePage />} />
+              <Route path="/track" element={<TrackPage />} />
+              <Route path="/track/:id" element={<TrackerPage />} />
               <Route path="/item/:id" element={<ItemPage />} />
               <Route
                 path="*"

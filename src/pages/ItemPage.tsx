@@ -53,6 +53,11 @@ export function ItemPage() {
         </button>
       </div>
 
+      {currentItem.isDocumentation ? (
+        <Link className="mb-4 inline-block text-sm text-indigo-300 underline hover:text-indigo-200" to={`/track/${currentItem.id}`}>
+          Open this tracker's history
+        </Link>
+      ) : null}
       <ItemEditor item={currentItem} updateItem={updateItem} />
       {currentItem.isTask && subtasks.length > 0 ? <SubtasksPanel item={currentItem} /> : null}
     </section>

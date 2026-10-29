@@ -110,6 +110,24 @@ export type DbSchemaScheduleRunInsert = {
   updated_at?: string;
 };
 
+export type DbDocumentationEntryRow = {
+  id: string;
+  owner_id: string;
+  item_id: string;
+  occurred_at: string;
+  data: unknown;
+  created_at: string;
+};
+
+export type DbDocumentationEntryInsert = {
+  id?: string;
+  owner_id: string;
+  item_id: string;
+  occurred_at: string;
+  data?: unknown;
+  created_at?: string;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -123,6 +141,12 @@ export type Database = {
         Row: DbItemLinkRow;
         Insert: DbItemLinkInsert;
         Update: Partial<Omit<DbItemLinkRow, "id" | "owner_id" | "created_at">>;
+        Relationships: [];
+      };
+      documentation_entries: {
+        Row: DbDocumentationEntryRow;
+        Insert: DbDocumentationEntryInsert;
+        Update: Partial<Omit<DbDocumentationEntryRow, "id" | "owner_id" | "created_at">>;
         Relationships: [];
       };
       schema_schedule_runs: {

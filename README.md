@@ -18,6 +18,10 @@ Unified notes, tasks, and calendar app — **Vite + React + Supabase**.
 
 The calendar and scheduling implementation was developed on `experiment/scientific-atlas` and has been promoted to `main`. It includes Tasks, Items, Calendar, Archive, work intervals, task placement, automatic scheduling, and `.ics` export. See [`docs/EXPERIMENT.md`](docs/EXPERIMENT.md) for the design and current limits.
 
+## Tracking
+
+A tracker records when something happens, such as catching yourself scrolling social media. Create one on **Track**; its button then also appears on **Now**. The button opens a time wheel that starts at the current time, so saving straight away records "now", and scrolling the wheel records an earlier time (up to 30 days back). Each tracker's page shows how often it happened per day, week or month with a trailing average, the time of day, and every entry (delete with undo). Entries live in `documentation_entries` ([`015_documentation_entries.sql`](supabase/migrations/015_documentation_entries.sql)); a tracker that still has entries cannot be deleted.
+
 ## Schema-driven schedule loop
 
 In Codex, run the `schedule-set` schema for the intentions and constraints you select. Import its finite plan JSON from **Calendar → Schema generated schedule**. Atlas creates only those tasks, places them into existing work blocks, and stores an idempotent schedule run. Inspect and edit the schedule in Atlas, then export its feedback receipt and attach it in Codex with your explanation. The `schedule-feedback-review` schema can also accept words-only feedback. It treats edits as observations and does not infer standing preferences without your explanation.

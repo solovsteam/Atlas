@@ -9,6 +9,8 @@ import { trackCreateLinkUndo, trackTaskStatusUndo, useUndo } from "../context/Un
 import { TaskStatusButtonsForItem } from "../components/TaskStatusButtons";
 import { WorkBlockButtons } from "../components/WorkBlockButtons";
 import { NudgeToggle } from "../components/NudgeToggle";
+import { LogButton } from "../components/tracking/LogButton";
+import { trackersOf } from "@shared/documentationEntries";
 
 function currentInterval(items: Item[], now: Date): Item | null {
   return (
@@ -64,6 +66,7 @@ export function NowPage() {
   const [error, setError] = useState<string | null>(null);
   const focus = useMemo(() => buildNowFocus(items, links, new Date()), [items, links]);
   const interval = useMemo(() => currentInterval(items, new Date()), [items]);
+  const trackers = useMemo(() => trackersOf(items), [items]);
   const laterCount = useMemo(
     () => items.filter((item) => item.isTask && item.taskStatus === "later").length,
     [items]
@@ -115,6 +118,13 @@ export function NowPage() {
         One thing. Capture lives on Tasks; this page is for starting.
         {remainingLabel ? ` ${remainingLabel} left in ${interval?.title || "this interval"}.` : ""}
       </p>
+      {trackers.length > 0 ? (
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          {trackers.map((tracker) => (
+            <LogButton key={tracker.id} tracker={tracker} />
+          ))}
+        </div>
+      ) : null}
       <div className="mt-4 flex flex-wrap items-center gap-3">
         <WorkBlockButtons />
         <NudgeToggle />

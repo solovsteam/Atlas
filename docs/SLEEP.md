@@ -63,15 +63,23 @@ These facts were checked in the code on 14 November 2026.
 
 The target is under 20 seconds in the evening and under 20 seconds in the morning. Every field has a default, so one tap saves a normal night. Every value can be corrected later. Every save can be undone.
 
-### Evening log (when he goes to bed)
+### Evening log (during the evening routine)
+
+Tonio decided (16 November) to keep the evening log apart from the last tap before sleep.
 
 | Field | Input | Required | Why the field is needed |
 |---|---|---|---|
-| Lights out | One tap for "now". The time wheel changes the time. | Yes | Start of the sleep opportunity. |
+| Supplements tonight | During the trial: tonight's assignment, confirmed with one tap. Otherwise: one button per supplement with the usual dose and the time "now". | Yes, when supplements were taken | The trial in section 14 needs the dose and the time. |
 | Alarm for tomorrow | Prefilled with the anchor wake time. Choices: a time, or "no alarm". | Yes | Records the choice between Keep and Extend. |
-| Day rating for today | Five buttons. | Yes | The outcome that the two losses are compared on. |
+| Day rating for today | Five buttons. | Yes | One of the four measures. |
+| Hard night | One tap: "tonight will be hard", for example before an important appointment or when distressed. | No | The trial reports hard nights separately. |
+| Early obligation tomorrow | A time, only when tomorrow needs an earlier wake time than the weekday setting. | No | One-off appointments are often not in Atlas. |
 | Unusual today | Tags, for example alcohol, nap, late caffeine, sick, travel. | No | Explains nights that should not count as normal. |
-| Reason for a late lights out | Tags, shown only on a late night. | No | A late night with a party differs from a late night with work. |
+| Reason for a late night | Tags, shown only on a late night. | No | A late night with a party differs from a late night with work. |
+
+### Lights out (the last tap before sleep)
+
+One screen with the sleepiness scale (Karolinska, 1 to 9). One tap on a number saves both the sleepiness and lights out at this moment. The time wheel can correct the time afterwards.
 
 Day rating anchors:
 
@@ -113,7 +121,7 @@ Out of bed time is not asked. The start of the morning routine already records i
 - Estimated sleep, in minutes: time in bed minus the time to fall asleep minus the time awake during the night. The button choices count as 10, 30 and 60 minutes, and as 0, 10 and 45 minutes. These six numbers are assumptions and settings.
 - Usual sleep: the median of estimated sleep over the last 28 logged nights. This is a description of what he does. It is not a claim about what he needs.
 - Shortfall and shift, as defined in section 3.
-- Required wake time: start of the first obligation minus the time that he needs to get ready. The default is 90 minutes. After ten recorded morning routines, Atlas uses his own recorded times.
+- Required wake time: start of the first obligation minus the time that he needs to get ready. The default is 90 minutes. After ten recorded morning routines, Atlas uses his own recorded times. The first obligation is the earliest of three sources: a weekday setting (Monday to Friday, required wake time 08:00), the first work appointment in Atlas that day, and an early obligation entered in the evening log. Only his work appointments are in Atlas. Other appointments in Atlas, such as shopping or workouts, do not count (Tonio, 16 November).
 
 ### Missing data and time zones
 
@@ -248,7 +256,7 @@ Decided by Tonio on 16 November 2026:
 Still open:
 
 8. Should he buy a watch or a ring? Recommendation: not now (see below).
-9. The open questions of section 14.
+9. Section 14: all answered on 16 November.
 10. Approval of this specification and of the task briefs in [SLEEP_TASKS.md](SLEEP_TASKS.md).
 
 ### Recommendation about a watch or a ring
@@ -329,26 +337,21 @@ Further rules:
 - **Limit: no blinding.** He knows what he took, and that knowledge alone can change how he feels. The reaction test is less sensitive to expectation than a rating. A helper who prepares identical-looking doses would remove this limit, but that is hard with a spray and a powder.
 - **Limit: few hard nights.** He falls asleep easily on most nights. A sleep aid can only show an effect where there is a problem. Atlas therefore reports the effect separately for nights that he marks in advance as hard, for example before an important appointment.
 
-### Proposed plan (open)
+### The plan
 
-1. **Weeks 1 and 2: normal level.** All evening supplements stopped, as Tonio proposed. Coffee in the morning continues. Methylphenidate as prescribed.
-2. **From week 3: the trial.** Each evening, the evening log tells him what to take tonight:
+Decided by Tonio on 16 November 2026, after the questions above.
+
+1. **Weeks 1 and 2: normal level.** All evening supplements stopped. Coffee in the morning continues. Methylphenidate as prescribed.
+2. **Day supplements stay constant.** He also takes glycine for effects that are not related to sleep. The rest of his usual glycine (5 g) moves to breakfast or lunch, every day, also during weeks 1 and 2. The vitamins and minerals move to lunch, because Atlas recommended lunch (a meal with some fat). A constant daily dose does not disturb the trial. This reading of "the other" in his answer is the agent's: "the other" was read as the rest of the glycine.
+3. **From week 3: the trial.** Each evening, the evening log tells him what to take tonight:
    - melatonin 0.5 mg, 30 to 60 minutes before lights out, or nothing, at random each night;
-   - glycine 3 g, about 1 hour before lights out, or nothing, at random each night and independently of melatonin. 3 g is the dose in the studies. A 2023 review reported worse thinking performance in studies with a larger single dose;
+   - glycine 3 g, about 1 hour before lights out, or nothing, at random each night and independently of melatonin;
    - magnesium 200 mg in random periods of two weeks on and two weeks off.
-3. Ashwagandha stays out of the trial for now: weak evidence, slow action, and a rare risk to the liver.
-4. After about four to six weeks, Atlas reports which supplements show an effect, and plans tests of dose and timing for those.
+4. Ashwagandha stays out for now.
+5. After about four to six weeks, Atlas reports which supplements show an effect, and plans tests of dose and timing for those.
 
-### Limits for supplement suggestions (open)
+### Limit for dose suggestions
 
-The grant above has no stated limit. The draft proposes one condition, which Tonio has not yet confirmed: Atlas never suggests a dose above the maximum on the product label or above an official upper safety limit.
-
-### Open questions
-
-1. May the condition about the label and the safety limit be added?
-2. Ashwagandha: leave it out of the trial, or test it in periods of four weeks or more?
-3. Glycine at 3 g, the dose in the studies, instead of 8 g?
-4. Is it acceptable that the evening log tells him each evening what to take?
-5. The vitamins and minerals: stay with the evening meal, or move to lunch before week 1 starts?
+Tonio (16 November): "I don't care about the product label, but instead whatever the scientific consensus is on what is safe; the product label is just for what's actually in the product." Atlas therefore never suggests a dose above the scientific consensus on a safe dose. Each suggested dose shows the source of its safe limit.
 
 Sources: Burgess and others 2010, J Clin Endocrinol Metab 95(7) 3325-3331. Gardiner and others 2023, Sleep Medicine Reviews 69. Sateia and others 2017, J Clin Sleep Med 13(2) 307-349. Mah and Pitre 2021, BMC Complementary Medicine and Therapies. Yamadera and others 2007, Sleep and Biological Rhythms 5. Cheah and others 2021, PLoS One. MSD Manual, ashwagandha. Only abstracts and summaries were read.

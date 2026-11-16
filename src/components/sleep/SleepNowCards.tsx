@@ -1,15 +1,17 @@
 import { Link } from 'react-router-dom';
 import { localClock, sleepScreenState } from '@shared/sleepScreens';
+import { reactionTestCardDue } from '@shared/sleepIntegration';
 import { useSleepLog } from '../../hooks/useSleepLog';
 import { useSleepClock } from '../../hooks/useSleepClock';
 
 export function SleepNowCards() {
-  const { entries, loading, error } = useSleepLog();
+  const { entries, tests, settings, loading, error } = useSleepLog();
   const now = useSleepClock();
   if (loading || error) return null;
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const state = sleepScreenState(entries, now, timeZone);
   const cards = [
+    ...(reactionTestCardDue(now, timeZone, settings.testTime, tests.map(row => row.result)) ? [{ title: 'Reaction test', to: '/sleep/test' }] : []),
     ...(state.morningMissing ? [{ title: 'Log last night', to: '/sleep/morning' }] : []),
     ...(Number(localClock(now, timeZone).slice(0, 2)) >= 20 && state.eveningMissing ? [{ title: 'Evening log', to: '/sleep/evening' }] : []),
     ...(!state.eveningMissing && state.lightsOutMissing ? [{ title: 'Lights out', to: '/sleep/lights-out' }] : []),

@@ -1,5 +1,23 @@
 # Handoff
 
+## Sleep integration (16 Nov 2026)
+
+Branch `sleep/integrate`, based on `6c3c4c4`, in `/Users/tonio/apps/Atlas-wt/integrate`.
+Connected the stored history, trial start and undo, phase-specific evening intake,
+choice nights with random selection and saved follow-up windows, and the reaction
+card on Now. The contract is in [docs/SLEEP_SCREENS.md](docs/SLEEP_SCREENS.md).
+Trial dates are wake dates. The confirmation records self-report. Shortfall uses
+measured usual sleep, or an explicitly labelled setting fallback. Work appointments
+still need a reliable work marker, as described below.
+
+The first full `npm run check` passed without a recurrence retry. New pure tests
+cover four time zones. At 390px, the in-memory fixture checked trial start and undo,
+both phases, confirmation, deviation and undo, random choice, the two-Keep refusal,
+manual Extend and its alarm, history with gaps and marks, and the reaction card's
+time boundaries and completed-test suppression. No real sign-in or live write.
+Final verification and commit are recorded in `.handoff/sleep-integrate-20261116.md`.
+Do not push this branch.
+
 ## Sleep screens (16 Nov 2026)
 
 Branch `sleep/task2-screens`, based on `73520b2`, in `/Users/tonio/apps/Atlas-wt/task2`.

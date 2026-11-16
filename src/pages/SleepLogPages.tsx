@@ -1,14 +1,18 @@
-import { useState, useRef, useEffect, type ReactNode } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { atLocalClock, addDays, dateInput } from '@shared/recurringReferences';
 import { toggleTag } from '@shared/documentationEntries';
 import { sleepNight, sleepNightDate, targetLightsOut, type SleepEvening, type SleepMorning, type SleepRating } from '@shared/sleepLog';
 import { KAROLINSKA_SLEEPINESS_SCALE } from '@shared/reactionTest';
-import { activeSleepWakeDate, localClock, requiredWakeForDate, sleepScreenState, usualOnset } from '@shared/sleepScreens';
+import { localClock, requiredWakeForDate, sleepScreenState, usualOnset } from '@shared/sleepScreens';
 import { useSleepLog } from '../hooks/useSleepLog';
 import { Choices, ClockField, Field, InstantField, SleepFrame, sleepButton, sleepInput } from '../components/sleep/SleepFields';
 import { useSleepSave } from '../hooks/useSleepSave';
-import { SupplementsTonight } from '../components/sleep/SupplementsTonight';
+import { TrialSupplements } from '../components/sleep/TrialSupplements';
+import { SleepChoiceCard } from '../components/sleep/SleepChoiceCard';
+import { previousSleepChoices, recordedSleepWakeDate, sleepChoiceCard, sleepTrialDisplay } from '@shared/sleepIntegration';
+import { randomSleepChoice, type SleepChoice } from '@shared/sleepTrial';
+import { newSleepSeed } from '../lib/sleepRandom';
 import { SituationChips } from '../components/tracking/SituationChips';
 import { WheelColumn } from '../components/tracking/TimeWheel';
 
@@ -38,7 +42,7 @@ export function SleepLogPage({ kind }: { kind: LogKind }) {
   if (entryId && !store.nights.some(row => row.entry.id === entryId)) return <SleepFrame title="Night unavailable"><p>This night no longer exists.</p></SleepFrame>;
   return <LogForm key={`${kind}:${entryId ?? requestedWakeDate ?? 'current'}`} kind={kind} store={store} requestedId={entryId} requestedWakeDate={requestedWakeDate} />;
 }
-function LogForm({ kind, store, requestedId, requestedWakeDate, supplementAssignment }: { kind: LogKind; store: Store; requestedId?: string; requestedWakeDate?: string; supplementAssignment?: ReactNode }) {
+function LogForm({ kind, store, requestedId, requestedWakeDate }: { kind: LogKind; store: Store; requestedId?: string; requestedWakeDate?: string }) {
   const [deviceZone] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone);
   const [openedAt] = useState(() => new Date());
   const state = sleepScreenState(store.entries, openedAt, deviceZone, requestedWakeDate);
@@ -64,15 +68,39 @@ function LogForm({ kind, store, requestedId, requestedWakeDate, supplementAssign
   const [memory, setMemory] = useState(!!original?.morning && !original?.evening || !!original?.evening?.fromMemory);
   const [obligation, setObligation] = useState(!!original?.evening?.earlyObligationAt);
   const save = useSleepSave();
-  const wakeDate = original && initial ? sleepNightDate(original) ?? activeSleepWakeDate(new Date(original.evening?.lightsOut ?? initial.occurredAt), timeZone) : state.wakeDate;
+  const wakeDate = original && initial ? recordedSleepWakeDate(initial, original) : state.wakeDate;
   const target = targetLightsOut(store.nights.map(row => row.night), wakeDate, timeZone, store.settings);
   const late = Date.parse(lightsAt ?? openedAt.toISOString()) > Date.parse(target.lightsOutAt);
   const required = requiredWakeForDate(wakeDate, timeZone, store.settings, obligation ? evening.earlyObligationAt : undefined);
+  const opportunity = sleepChoiceCard(lightsAt ?? initial?.occurredAt ?? openedAt.toISOString(), wakeDate, timeZone, store.nights.map(row => row.night), store.settings, obligation ? evening.earlyObligationAt : undefined);
+  const previousTwo = previousSleepChoices(store.nights, wakeDate);
+  const ownChoiceOnly = randomSleepChoice(store.settings.choiceSeed ?? 'eligibility', wakeDate, previousTwo) === 'own-choice-only';
+  const trial = sleepTrialDisplay(store.settings.trial, wakeDate);
+  const choiceSeed = useRef<string | undefined>(store.settings.choiceSeed);
+  const [choosing, setChoosing] = useState(false);
+  async function choose(outcome: SleepChoice | 'random') {
+    if (!opportunity || choosing) return;
+    setChoosing(true);
+    try {
+      let selected: SleepChoice;
+      if (outcome === 'random') {
+        // Persist the seed before drawing. Reopening the night must not redraw it.
+        if (!choiceSeed.current) choiceSeed.current = newSleepSeed();
+        if (!store.settings.choiceSeed) await store.saveSettings({ ...store.settings, choiceSeed: choiceSeed.current });
+        const result = randomSleepChoice(choiceSeed.current, wakeDate, previousTwo);
+        if (result === 'own-choice-only') return;
+        selected = result;
+      } else selected = outcome;
+      const alarmAt = selected === 'keep' ? opportunity.anchorWakeAt : opportunity.extendWakeAt;
+      patchEvening({ alarm: localClock(alarmAt, timeZone), choice: { wakeDate, outcome: selected, random: outcome === 'random', alarmAt, followUpWindow: opportunity.followUpWindow } });
+    } finally { setChoosing(false); }
+  }
   const patchEvening = (patch: Partial<SleepEvening>) => setEvening(value => ({ ...value, ...patch }));
   const patchMorning = (patch: Partial<SleepMorning>) => setMorning(value => ({ ...value, ...patch }));
   async function persistEvening(value: SleepEvening) {
     if (value.supplements?.some(row => !Number.isFinite(row.dose) || row.dose <= 0)) throw new Error('Enter a dose greater than zero.');
-    const entry = await store.saveEvening(value, entryId);
+    const assignment = value.trial?.assignment ?? trial.assignment;
+    const entry = await store.saveEvening(kind === 'evening' && assignment ? { ...value, trial: value.trial ?? { assignment, adherence: 'unknown', targetLightsOutAt: target.lightsOutAt } } : value, entryId, initial ? new Date(initial.occurredAt) : openedAt);
     setSavedId(entry.id);
   }
   const currentNight = entryId ? store.nights.find(row => row.entry.id === entryId)?.night : undefined;
@@ -94,11 +122,12 @@ function LogForm({ kind, store, requestedId, requestedWakeDate, supplementAssign
   return <SleepFrame title={title}>
     {kind === 'evening' ? <>
       <p className="text-sm text-neutral-400">Tonight’s target lights out: <span className="text-white">{target.lightsOut}</span>. {required ? `Required wake time: ${localClock(required, timeZone)}.` : 'Tomorrow has no required wake time.'}</p>
-      <Field title="Supplements tonight"><SupplementsTonight assignment={supplementAssignment} value={evening.supplements ?? []} settings={store.settings} timeZone={timeZone} onChange={supplements => patchEvening({ supplements })} /></Field>
-      <Field title="Alarm for tomorrow"><Choices label="Alarm" value={evening.alarm === 'none' ? 'none' : 'time'} options={[{ value: 'time', label: 'Set an alarm' }, { value: 'none', label: 'No alarm' }]} onChange={value => patchEvening({ alarm: value === 'none' ? 'none' : store.settings.anchorWake })} />{evening.alarm !== 'none' ? <ClockField label="Alarm" value={evening.alarm ?? store.settings.anchorWake} onChange={alarm => patchEvening({ alarm })} /> : null}</Field>
+      <Field title="Supplements tonight"><TrialSupplements evening={evening} settings={store.settings} wakeDate={wakeDate} targetLightsOutAt={target.lightsOutAt} timeZone={timeZone} onChange={patchEvening} /></Field>
+      {opportunity && !memory ? <SleepChoiceCard opportunity={opportunity} choice={evening.choice} timeZone={timeZone} busy={choosing || save.busy} ownChoiceOnly={ownChoiceOnly} onChoose={outcome => void save.run(() => choose(outcome), 'The alarm was selected. Save the evening log to record the choice.')} /> : null}
+      <Field title="Alarm for tomorrow"><Choices label="Alarm" value={evening.alarm === 'none' ? 'none' : 'time'} options={[{ value: 'time', label: 'Set an alarm' }, { value: 'none', label: 'No alarm' }]} onChange={value => patchEvening({ alarm: value === 'none' ? 'none' : store.settings.anchorWake, choice: undefined })} />{evening.alarm !== 'none' ? <ClockField label="Alarm" value={evening.alarm ?? store.settings.anchorWake} onChange={alarm => patchEvening({ alarm, choice: undefined })} /> : null}</Field>
       <Field title="How did today go?"><div className="space-y-2">{DAY_RATINGS.map(row => <button key={row.value} type="button" aria-pressed={evening.dayRating === row.value} className={`${sleepButton} w-full text-left ${evening.dayRating === row.value ? 'border-indigo-400 bg-indigo-500/20' : ''}`} onClick={() => patchEvening({ dayRating: row.value })}><span className="mr-2 text-indigo-300">{row.value}</span>{row.label}</button>)}</div></Field>
       <button aria-pressed={!!evening.hardNight} className={`${sleepButton} w-full text-left ${evening.hardNight ? 'border-indigo-400 bg-indigo-500/20' : ''}`} type="button" onClick={() => patchEvening({ hardNight: !evening.hardNight })}>{evening.hardNight ? '✓ ' : ''}Tonight will be hard</button>
-      <Field title="Early obligation tomorrow"><p className="text-xs text-neutral-400">Enter when the appointment starts. Atlas subtracts {store.settings.preparationMinutes} minutes for preparation.</p><button aria-pressed={obligation} className={sleepButton} type="button" onClick={() => { setObligation(!obligation); if (!evening.earlyObligationAt) patchEvening({ earlyObligationAt: atLocalClock(wakeDate, '08:00:00', timeZone) }); }}>{obligation ? 'Remove the early obligation' : 'Add an early obligation'}</button>{obligation ? <ClockField label="Appointment starts" value={localClock(evening.earlyObligationAt!, timeZone)} onChange={clock => patchEvening({ earlyObligationAt: atLocalClock(wakeDate, `${clock}:00`, timeZone) })} /> : null}</Field>
+      <Field title="Early obligation tomorrow"><p className="text-xs text-neutral-400">Enter when the appointment starts. Atlas subtracts {store.settings.preparationMinutes} minutes for preparation.</p><button aria-pressed={obligation} className={sleepButton} type="button" onClick={() => { setObligation(!obligation); patchEvening({ choice: undefined }); if (!evening.earlyObligationAt) patchEvening({ earlyObligationAt: atLocalClock(wakeDate, '08:00:00', timeZone) }); }}>{obligation ? 'Remove the early obligation' : 'Add an early obligation'}</button>{obligation ? <ClockField label="Appointment starts" value={localClock(evening.earlyObligationAt!, timeZone)} onChange={clock => patchEvening({ earlyObligationAt: atLocalClock(wakeDate, `${clock}:00`, timeZone), choice: undefined })} /> : null}</Field>
       <Field title="Unusual today"><SituationChips options={['alcohol', 'nap', 'late caffeine', 'sick', 'travel']} selected={evening.tags ?? []} onToggle={tag => patchEvening({ tags: toggleTag(evening.tags ?? [], tag) })} /></Field>
       {late ? <Field title="Reason for a late night"><SituationChips options={['party', 'work', 'stress', 'screen time']} selected={evening.lateReasons ?? []} onToggle={tag => patchEvening({ lateReasons: toggleTag(evening.lateReasons ?? [], tag) })} /></Field> : null}
       {memory ? <Field title="Evening from memory"><p className="text-sm text-neutral-400">This evening will be marked as recorded from memory.</p><InstantField label="Lights out" value={lightsAt ?? atLocalClock(addDays(wakeDate, -1), `${target.lightsOut}:00`, timeZone)} timeZone={timeZone} onChange={setLightsAt} /></Field> : <button className="text-sm text-neutral-400 underline" type="button" onClick={() => setMemory(true)}>Fill the evening from memory</button>}

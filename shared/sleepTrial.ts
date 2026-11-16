@@ -400,3 +400,12 @@ export function checkSuggestedTrialDose(substance: TrialSubstance, dose: number,
   const allowed = totalDailyMg <= limit.upperDailyMg;
   return { allowed, reason: allowed ? 'within limit' : 'above limit', totalDailyMg, limit };
 }
+
+export type StoredSleepTrial = { seed: string; normalLevelStartDate: string };
+export function parseStoredSleepTrial(value: unknown): StoredSleepTrial | null {
+  if (!value || typeof value !== 'object') return null;
+  const trial = value as StoredSleepTrial;
+  if (typeof trial.seed !== 'string' || !trial.seed.length) return null;
+  try { createSleepTrialConfig(trial.normalLevelStartDate); } catch { return null; }
+  return { seed: trial.seed, normalLevelStartDate: trial.normalLevelStartDate };
+}

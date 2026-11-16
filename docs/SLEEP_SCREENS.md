@@ -1,6 +1,6 @@
 # Sleep screens
 
-Implemented in the local `sleep/task2-screens` branch. The storage contract remains in [REACTION_TEST.md](REACTION_TEST.md).
+The screens are connected to the stored history and trial in the local `sleep/integrate` branch. The storage contract remains in [REACTION_TEST.md](REACTION_TEST.md).
 
 The Sleep tab is one entry in `NAV` in `src/App.tsx`. Routes are `/sleep`, `/sleep/evening`, `/sleep/lights-out` and `/sleep/morning`. The overview links to the existing `/sleep/test` route. Sleep pages hide the general capture bar.
 
@@ -18,7 +18,33 @@ Additional settings are `usualDoses` with `melatonin`, `glycine` and `magnesium`
 
 `SleepEvening.supplements` is an array of `{ supplement, dose, takenAt, timeZone }`. Units come from `SUPPLEMENTS` in `shared/sleepScreens.ts`. `earlyObligationAt` is an appointment's start instant. It is not a wake time.
 
-`SupplementsTonight` exports an `assignment` prop. A later trial component can provide the assignment and one-tap confirmation through that prop. This branch makes no trial assignments.
+`TrialSupplements` uses the manual `SupplementsTonight` controls for changes.
+Before a trial starts, the controls keep their usual behavior. The normal-level
+phase shows the instruction to take no evening supplements. The trial phase
+uses `sleepTrialTonight`. The stored assignment takes precedence during corrections.
+The confirmation is an explicit self-report, not an inferred dose or intake time.
+A changed intake is marked as a deviation. An unconfirmed assignment stays unknown.
+
+The Start action saves `settings.trial = { seed, normalLevelStartDate }` through
+the existing settings service and undo. The seed comes from `crypto.getRandomValues`
+and has no editable field. Dates refer to wake dates. The normal level lasts
+14 dates. The trial starts on the next date and has no fixed end in this screen.
+
+Choice nights show both expected losses and use `randomSleepChoice` for the
+random option and the two-Keep refusal. A separate `settings.choiceSeed` is saved
+before the first draw so choice nights also work before the supplement trial.
+The two outcomes come from the immediately preceding calendar nights, including
+own choices. A missing night breaks the sequence. Selecting an outcome changes
+the draft alarm. Saving records `evening.choice` with the outcome, random flag,
+wake date, alarm instant and follow-up window. A manual alarm or obligation edit
+clears the draft choice. Shortfall uses measured usual sleep. With no measured
+value, the screen labels its fallback to the sleep-duration setting.
+
+The Sleep overview supplies `SleepHistory` with stored nights and reaction tests,
+today's local date, and context from `sleepHistoryContext`. The context contains
+recorded choices, required wake times, and saved follow-up windows. The Now card
+for the reaction test appears from the configured test time until local midnight
+while today's completed test is missing. A practice test also completes that day.
 
 ## Required wake time
 

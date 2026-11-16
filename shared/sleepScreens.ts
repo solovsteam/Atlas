@@ -1,3 +1,4 @@
+import { parseStoredSleepTrial, type StoredSleepTrial } from './sleepTrial';
 import type { DocumentationEntry } from './documentationEntries';
 import { addDays, atLocalClock, civilDate, dateInput } from './recurringReferences';
 import { median, matchingSleepNight, parseSleepSettings, sleepNight, sleepNightDate, type SleepNight, type SleepSettings } from './sleepLog';
@@ -10,6 +11,8 @@ export const SUPPLEMENTS = [
 export type SupplementId = typeof SUPPLEMENTS[number]['id'];
 export type SupplementIntake = { supplement: SupplementId; dose: number; takenAt: string; timeZone: string };
 export type SleepScreenSettings = SleepSettings & {
+  trial?: StoredSleepTrial | null;
+  choiceSeed?: string;
   usualDoses: Record<SupplementId, number>;
   coffeeTeaspoons: number;
   /** Local latest wake times. These already include preparation. Sunday = 0. */
@@ -27,6 +30,8 @@ export function sleepScreenSettings(schema: unknown): SleepScreenSettings {
   const weekdays = record(settings.weekdayWake);
   return {
     ...parseSleepSettings(settings),
+    trial: parseStoredSleepTrial(settings.trial),
+    choiceSeed: typeof settings.choiceSeed === 'string' && settings.choiceSeed.length ? settings.choiceSeed : undefined,
     usualDoses: Object.fromEntries(SUPPLEMENTS.map(s => [s.id, positive(doses[s.id], s.dose)])) as Record<SupplementId, number>,
     coffeeTeaspoons: positive(settings.coffeeTeaspoons, 1),
     weekdayWake: Object.fromEntries(Array.from({ length: 7 }, (_, day) => {

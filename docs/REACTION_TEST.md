@@ -58,8 +58,7 @@ returns to Start with an explanation. It does not resume or complete that run.
 
 ## Storage and route
 
-`/sleep/test` hosts the component behind the normal Atlas sign-in. There is no
-Sleep tab. `useSleepLog` waits for the stored entries before supplying the practice
+`/sleep/test` hosts the component behind the normal Atlas sign-in. The Sleep tab links to the route. `useSleepLog` waits for the stored entries before supplying the practice
 count. The page shows a save result and a link to Now after completion.
 
 The container is a documentation item named "Sleep", with

@@ -1,3 +1,4 @@
+import { civilDate } from '@shared/recurringReferences';
 import { useMemo, useState } from 'react';
 import type { SleepNight, SleepSettings } from '@shared/sleepLog';
 import type { SleepReactionTest } from '@shared/sleepReactionTest';
@@ -26,9 +27,7 @@ export function SleepHistory({ nights, tests, settings, throughDate, theme = 'da
   const rows = useMemo(() => nightHistoryRows(nights, settings, context), [nights, settings, context]);
   const recordedDates = [...rows.flatMap(row => row.date ? [row.date] : []), ...tests.flatMap(test => {
     try {
-      const parts = new Intl.DateTimeFormat('en-CA', { timeZone: test.timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(test.startedAt));
-      const get = (name: string) => parts.find(part => part.type === name)!.value;
-      return [`${get('year')}-${get('month')}-${get('day')}`];
+      return [civilDate(new Date(test.startedAt), test.timeZone)];
     } catch { return []; }
   })].sort();
   const end = throughDate ?? recordedDates.at(-1);

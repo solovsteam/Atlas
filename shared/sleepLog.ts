@@ -21,6 +21,20 @@ export type MethylphenidateEntry = SleepLogPart & {
   takenAt?: string;
 };
 export type SleepEvening = SleepLogPart & {
+  choice?: {
+    wakeDate: string;
+    outcome: import('./sleepTrial').SleepChoice;
+    random: boolean;
+    alarmAt: string;
+    followUpWindow: FollowUpWindow;
+  };
+  trial?: {
+    assignment: import('./sleepTrial').SleepTrialAssignment;
+    adherence: import('./sleepTrial').AdherenceStatus;
+    confirmation?: 'self-report' | 'edited';
+    confirmedAt?: string;
+    targetLightsOutAt: string;
+  };
   lightsOut?: string;
   supplements?: import('./sleepScreens').SupplementIntake[];
   /** Start of an appointment, before preparation time is subtracted. */

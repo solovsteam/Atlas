@@ -7,6 +7,8 @@ import { UndoProvider, useUndo } from "./context/UndoContext";
 import { NudgeProvider } from "./context/NudgeContext";
 import { CaptureBar } from "./components/CaptureBar";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { SleepPage } from "./pages/SleepPage";
+import { SleepLogPage } from "./pages/SleepLogPages";
 import { SleepTestPage } from "./pages/SleepTestPage";
 import { NowPage } from "./pages/NowPage";
 import { RoutinesPage, RoutinePage } from "./pages/RoutinesPage";
@@ -82,8 +84,13 @@ const NAV: { to: string; label: string; icon: ComponentType<{ className?: string
   { to: "/items", label: "Items", icon: ItemsIcon },
   { to: "/calendar", label: "Calendar", icon: CalendarIcon },
   { to: "/track", label: "Track", icon: TrackIcon },
+  { to: "/sleep", label: "Sleep", icon: SleepIcon },
   { to: "/archive", label: "Archive", icon: ArchiveIcon }
 ];
+
+function SleepIcon({ className }: { className?: string }) {
+  return <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d="M20.8 13.1A9 9 0 0 1 10.9 3.2a9 9 0 1 0 9.9 9.9Z" /></svg>;
+}
 
 function LoginScreen({ onSignIn }: { onSignIn: () => void }) {
   return (
@@ -164,7 +171,7 @@ function AppShell() {
                 <AccountMenu label={label} picture={picture} onSignOut={signOut} />
               </div>
             </header>
-            <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-6 border-t border-neutral-800 bg-neutral-950/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden">
+            <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-7 border-t border-neutral-800 bg-neutral-950/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden">
               {NAV.map(({ to, label: navLabel, icon: NavIcon }) => (
                 <NavLink
                   className={({ isActive }) =>
@@ -180,7 +187,7 @@ function AppShell() {
               ))}
             </nav>
             {/* The calendar opens with the calendar itself; capture stays on every other page. */}
-            {pathname === "/calendar" ? null : <CaptureBar />}
+            {pathname === "/calendar" || pathname.startsWith("/sleep") ? null : <CaptureBar />}
             {itemsLoading ? <p className="text-sm text-neutral-500">Loading items…</p> : null}
             {itemsError ? <p className="mb-4 text-sm text-red-400">{itemsError}</p> : null}
             {linksError ? <p className="mb-4 text-sm text-red-400">{linksError}</p> : null}
@@ -196,6 +203,10 @@ function AppShell() {
               <Route path="/items" element={<ItemsPage />} />
               <Route path="/calendar" element={<CalendarPage />} />
               <Route path="/archive" element={<ArchivePage />} />
+              <Route path="/sleep" element={<SleepPage />} />
+              <Route path="/sleep/evening" element={<SleepLogPage kind="evening" />} />
+              <Route path="/sleep/lights-out" element={<SleepLogPage kind="lights-out" />} />
+              <Route path="/sleep/morning" element={<SleepLogPage kind="morning" />} />
               <Route path="/sleep/test" element={<SleepTestPage />} />
               <Route path="/track" element={<TrackPage />} />
               <Route path="/routines" element={<RoutinesPage />} />

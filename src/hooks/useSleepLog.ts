@@ -1,17 +1,18 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import type { Item } from '@shared/item';
-import { isSleepLog, sleepNight, sleepSettings, type SleepEvening, type SleepMorning } from '@shared/sleepLog';
+import { isSleepLog, sleepNight, type SleepEvening, type SleepMorning } from '@shared/sleepLog';
+import { sleepScreenSettings, sleepSettingsSchema, type SleepScreenSettings } from '@shared/sleepScreens';
 import { sleepReactionTest } from '@shared/sleepReactionTest';
 import type { ReactionTestResult } from '@shared/reactionTest';
 import { useAtlasData } from '../context/AtlasDataContext';
-import { trackCreateEntryUndo, trackDeleteEntryUndo, trackUpdateEntryUndo, useUndo } from '../context/UndoContext';
+import { trackCreateEntryUndo, trackDeleteEntryUndo, trackUpdateEntryUndo, trackItemPatchUndo, useUndo } from '../context/UndoContext';
 import { useDocumentationEntries, useEntryMutations } from './useDocumentationEntries';
 import { findOrCreateSleepLog, sleepLogStore, type SleepEntryChange } from '../services/sleepLog';
 import { supabase } from '../lib/supabase';
 
 /** Reading never creates an item. The first save creates the Sleep container if needed. */
 export function useSleepLog() {
-  const { items, userId, itemsLoading, itemsError } = useAtlasData();
+  const { items, userId, itemsLoading, itemsError, updateItem } = useAtlasData();
   const { push } = useUndo();
   const [createdItem, setCreatedItem] = useState<Item | null>(null);
   const item = items.find(row => row.isDocumentation && isSleepLog(row))
@@ -22,14 +23,14 @@ export function useSleepLog() {
   const chain = useRef<Promise<unknown>>(Promise.resolve());
 
   // Serialize writes from this hook, including two fast morning saves.
-  const mutate = useCallback(<T,>(action: (id: string, service: NonNullable<typeof store>) => Promise<T>) => {
+  const mutate = useCallback(<T,>(action: (id: string, service: NonNullable<typeof store>, container: Item) => Promise<T>) => {
     const run = chain.current.catch(() => undefined).then(async () => {
       if (!userId || !store) throw new Error('Not signed in');
       if (itemsLoading) throw new Error('The sleep log is still loading.');
       if (itemsError) throw new Error(itemsError);
       const container = await findOrCreateSleepLog(supabase, userId);
       setCreatedItem(container);
-      return action(container.id, store);
+      return action(container.id, store, container);
     });
     chain.current = run;
     return run;
@@ -39,6 +40,13 @@ export function useSleepLog() {
     else trackCreateEntryUndo(push, change.entry);
     return change.entry;
   }, [push]);
+  const saveSettings = useCallback((settings: SleepScreenSettings) => mutate(async (_id, _service, container) => {
+    const schema = sleepSettingsSchema(container.documentationSchema, settings);
+    const result = await updateItem(container.id, JSON.stringify({ documentationSchema: schema }), container.revision);
+    if (!('ok' in result)) throw new Error('The settings changed elsewhere. Reload before saving.');
+    trackItemPatchUndo(push, container.id, { documentationSchema: container.documentationSchema });
+    setCreatedItem({ ...container, documentationSchema: schema, revision: result.revision });
+  }), [mutate, updateItem, push]);
   const saveEvening = useCallback((evening: SleepEvening, entryId?: string, at = new Date()) => mutate(async (id, service) =>
     record(await service.saveEvening(id, evening, new Date(evening.lightsOut ?? at), entryId))), [mutate, record]);
   const saveMorning = useCallback((morning: SleepMorning, entryId?: string, at = new Date()) => mutate(async (id, service) =>
@@ -58,9 +66,10 @@ export function useSleepLog() {
     const result = sleepReactionTest(entry);
     return result ? [{ entry, result }] : [];
   }), [entries]);
+  const settings = useMemo(() => sleepScreenSettings(item?.documentationSchema), [item?.documentationSchema]);
   return {
-    item, settings: sleepSettings(item ?? { documentationSchema: null }), entries, nights, tests,
+    item, settings, entries, nights, tests,
     loading: itemsLoading || (item !== null && loading), error: itemsError ?? error, refresh,
-    saveEvening, saveMorning, saveReactionTest, deleteEntry,
+    saveEvening, saveMorning, saveReactionTest, saveSettings, deleteEntry,
   };
 }

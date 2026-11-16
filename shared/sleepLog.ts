@@ -22,6 +22,9 @@ export type MethylphenidateEntry = SleepLogPart & {
 };
 export type SleepEvening = SleepLogPart & {
   lightsOut?: string;
+  supplements?: import('./sleepScreens').SupplementIntake[];
+  /** Start of an appointment, before preparation time is subtracted. */
+  earlyObligationAt?: string;
   /** A local HH:mm clock, or an explicit absence of an alarm. */
   alarm?: string | 'none';
   dayRating?: SleepRating;

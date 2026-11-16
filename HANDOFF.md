@@ -1,5 +1,25 @@
 # Handoff
 
+## Sleep screens (16 Nov 2026)
+
+Branch `sleep/task2-screens`, based on `73520b2`, in `/Users/tonio/apps/Atlas-wt/task2`.
+Built the Sleep tab, overview and settings, evening, lights-out and morning logs,
+and missing-log cards on Now. Entry saves and settings have undo. Correction links
+accept `?entry=<id>`. Manual supplement intake has an assignment prop for the trial.
+The settings and integration contract are in [docs/SLEEP_SCREENS.md](docs/SLEEP_SCREENS.md).
+
+The required wake rule uses the weekday setting and the evening's early obligation.
+There is no reliable work marker, so other Atlas appointments are excluded.
+A reserved work tag or a dedicated field would permit work-only integration.
+
+`npm run check` passed three times, including the final code and documentation. No recurrence retry was needed.
+Eleven new tests cover four time zones, daylight saving, settings, and night selection.
+At 390px, the actual app with a local simulated Supabase store passed log saves,
+corrections, undo, intake defaults, missing-evening recovery, Now cards, settings,
+and a refused write. The reaction test link opened the existing screen.
+No physical phone, real sign-in or live database write was used. No migration or push.
+Task note: `.handoff/sleep-screens-20261116.md`.
+
 ## Sleep storage and reaction route (16 Nov 2026)
 
 Branch `sleep/storage`, based on `efbc452`, in `/Users/tonio/apps/Atlas-wt/storage`.

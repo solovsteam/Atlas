@@ -1,3 +1,4 @@
+import { SleepNowCards } from "../components/sleep/SleepNowCards";
 import { Link } from "react-router-dom";
 import { useMemo, useState } from "react";
 import type { Item, TaskStatus } from "@shared/item";
@@ -118,6 +119,7 @@ export function NowPage() {
         One thing. Capture lives on Tasks; this page is for starting.
         {remainingLabel ? ` ${remainingLabel} left in ${interval?.title || "this interval"}.` : ""}
       </p>
+      <SleepNowCards />
       {trackers.length > 0 ? (
         <div className="mt-4 space-y-3">
           {trackers.map((tracker) => (

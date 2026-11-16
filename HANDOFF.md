@@ -1,5 +1,18 @@
 # Handoff
 
+## Sleep weekday obligation (16 Nov 2026)
+
+Branch `sleep/obligation`, based on `29b2f85`, in `/Users/tonio/apps/Atlas-wt/obligation`.
+Weekday obligations default to 09:30 to 19:30 for work, travel and groceries.
+The required wake time subtracts preparation. Existing explicit wake constraints remain supported.
+The settings editor includes each weekday, both times, the label and the resulting wake time.
+It uses the existing settings save and undo. Tests cover defaults, preparation, removal,
+explicit wake constraints, weekends and malformed settings. Documentation matches the change.
+Morning routines remain unconnected. The sleep hook reads only entries for the sleep log,
+and routines do not have a reliable morning marker. No new data access was added.
+Verification and the local commit are recorded in `.handoff/sleep-obligation-20261116.md`.
+No migration, live write, real sign-in or push is authorized.
+
 ## Sleep integration (16 Nov 2026)
 
 Branch `sleep/integrate`, based on `6c3c4c4`, in `/Users/tonio/apps/Atlas-wt/integrate`.

@@ -44,7 +44,7 @@ test('preparation uses elapsed minutes across a daylight-saving transition', () 
 test('defaults, invalid settings and unknown fields survive schema updates', () => {
   assert.deepEqual(settings.usualDoses, { melatonin: 0.5, glycine: 3, magnesium: 200 });
   assert.equal(settings.coffeeTeaspoons, 1);
-  assert.equal(sleepScreenSettings({ sleepLog: { settings: { weekdayWake: { 1: '24:00', 2: null }, usualDoses: { glycine: -2 }, coffeeTeaspoons: null } } }).weekdayWake[1], '08:00');
+  assert.equal(sleepScreenSettings({ sleepLog: { settings: { weekdayWake: { 1: '24:00', 2: null }, usualDoses: { glycine: -2 }, coffeeTeaspoons: null } } }).weekdayWake[1], null);
   assert.equal(sleepScreenSettings({ sleepLog: { settings: { weekdayWake: { 2: null } } } }).weekdayWake[2], null);
   const updated = sleepSettingsSchema({ other: 7, sleepLog: { trial: { active: true }, settings: { future: 42 } } }, settings) as any;
   assert.equal(updated.other, 7);
@@ -55,4 +55,24 @@ test('the default onset uses measured minutes and rounds to five', () => {
   assert.equal(usualOnset([]), 15);
   assert.equal(usualOnset([{ morning: { fallAsleepMinutes: 12 } }, { morning: { fallAsleepMinutes: 21 } }, {}]), 15);
   assert.equal(usualOnset([{ morning: { fallAsleepMinutes: -5 } }]), 15);
+});
+
+
+test('weekday obligations use preparation and preserve explicit wake constraints', () => {
+  const zone = 'Europe/Berlin';
+  const monday = '2026-11-16';
+  const clock = (value: string | null) => value && new Intl.DateTimeFormat('en-GB', { timeZone: zone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(value));
+  assert.equal(clock(requiredWakeForDate(monday, zone, settings)), '08:00');
+  assert.equal(clock(requiredWakeForDate(monday, zone, { ...settings, preparationMinutes: 60 })), '08:30');
+  assert.equal(requiredWakeForDate(monday, zone, { ...settings, weekdayObligation: { ...settings.weekdayObligation, 1: null } }), null);
+  const stored = sleepScreenSettings({ sleepLog: { settings: { weekdayWake: { 1: '07:30' } } } });
+  assert.equal(clock(requiredWakeForDate(monday, zone, stored)), '07:30');
+  assert.equal(settings.weekdayWake[1], null);
+  assert.equal(settings.weekdayObligation[0], null);
+  assert.equal(settings.weekdayObligation[6], null);
+  assert.equal(requiredWakeForDate('2026-11-22', zone, settings), null);
+  const parsed = sleepScreenSettings({ sleepLog: { settings: { weekdayObligation: { 1: { start: 'bad', end: '19:30', label: 'Work' }, 2: null, 3: { start: '10:00', end: '18:00', label: 'Appointment' } } } } });
+  assert.equal(parsed.weekdayObligation[1]?.start, '09:30');
+  assert.equal(parsed.weekdayObligation[2], null);
+  assert.equal(parsed.weekdayObligation[3]?.start, '10:00');
 });

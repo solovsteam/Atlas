@@ -14,7 +14,7 @@ Direct bedtime routes and Now cards treat midnight to noon as the preceding even
 
 `useSleepLog().saveSettings` uses the existing item service and records item undo. Settings live under `documentation_schema.sleepLog.settings`. Unknown fields and sibling markers are preserved.
 
-Additional settings are `usualDoses` with `melatonin`, `glycine` and `magnesium`, `coffeeTeaspoons`, and `weekdayWake`. Weekday keys use Sunday 0 through Saturday 6. A null value means no required wake time. Preparation remains `preparationMinutes`.
+Additional settings are `usualDoses` with `melatonin`, `glycine` and `magnesium`, `coffeeTeaspoons`, and `weekdayObligation`. Each obligation stores `start`, `end` and `label`. Weekday keys use Sunday 0 through Saturday 6. A null value means no obligation. Monday to Friday default to 09:30 to 19:30 for work, travel and groceries. `weekdayWake` remains an optional explicit wake constraint, with null defaults. Preparation remains `preparationMinutes`. The required wake time is the earliest candidate, including the obligation start minus preparation.
 
 `SleepEvening.supplements` is an array of `{ supplement, dose, takenAt, timeZone }`. Units come from `SUPPLEMENTS` in `shared/sleepScreens.ts`. `earlyObligationAt` is an appointment's start instant. It is not a wake time.
 

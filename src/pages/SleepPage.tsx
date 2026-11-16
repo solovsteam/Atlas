@@ -55,13 +55,26 @@ function SleepSettings({ settings, saveSettings, reminderAt, timeZone, today }: 
     </Field>
     <Field title="Usual evening doses">{SUPPLEMENTS.map(s => <label className="flex items-center justify-between gap-3 text-sm" key={s.id}>{s.label} ({s.unit})<input className={`${sleepInput} w-24`} aria-label={`${s.label}: usual dose`} type="number" min="0.01" step="any" value={draft.usualDoses[s.id]} onChange={e => patch({ usualDoses: { ...draft.usualDoses, [s.id]: e.target.valueAsNumber } })} /></label>)}</Field>
     <label className="flex items-center justify-between gap-3 text-sm">Instant coffee (teaspoons)<input className={`${sleepInput} w-24`} aria-label="Usual coffee amount" type="number" min="0.01" step="any" value={draft.coffeeTeaspoons} onChange={e => patch({ coffeeTeaspoons: e.target.valueAsNumber })} /></label>
-    <Field title="Required wake time"><p className="text-xs text-neutral-400">These are wake times. Preparation is already included. Weekends have no required wake time.</p>{['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].map((day, i) => <div key={day} className="space-y-2"><label className="flex items-center gap-3 text-sm"><input className="size-5 accent-indigo-400" type="checkbox" checked={!!draft.weekdayWake[i + 1]} onChange={e => patch({ weekdayWake: { ...draft.weekdayWake, [i + 1]: e.target.checked ? '08:00' : null } })} />{day} has a required wake time</label>{draft.weekdayWake[i + 1] ? <ClockField label={day} value={draft.weekdayWake[i + 1]!} onChange={clock => patch({ weekdayWake: { ...draft.weekdayWake, [i + 1]: clock } })} /> : null}</div>)}</Field>
+    <Field title="Weekday obligation"><p className="text-xs text-neutral-400">The obligation includes work, travel and groceries. Weekends have no obligation by default.</p>{['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].map((day, i) => {
+      const weekday = i + 1;
+      const obligation = draft.weekdayObligation[weekday];
+      const wakeDate = addDays(today, (weekday - dateInput(today).weekday + 7) % 7);
+      const required = requiredWakeForDate(wakeDate, timeZone, draft);
+      const update = (value: Partial<NonNullable<typeof obligation>>) => obligation && patch({ weekdayObligation: { ...draft.weekdayObligation, [weekday]: { ...obligation, ...value } } });
+      return <div key={day} className="space-y-3 rounded-xl border border-neutral-800 p-3">
+        <label className="flex items-center gap-3 text-sm"><input className="size-5 accent-indigo-400" type="checkbox" checked={!!obligation} onChange={e => patch({ weekdayObligation: { ...draft.weekdayObligation, [weekday]: e.target.checked ? { start: '09:30', end: '19:30', label: 'Work, travel and groceries' } : null } })} />{day}</label>
+        {obligation ? <><div className="grid min-w-0 grid-cols-2 gap-3"><ClockField label={`${day} start`} value={obligation.start} onChange={start => update({ start })} /><ClockField label={`${day} end`} value={obligation.end} onChange={end => update({ end })} /></div><label className="block space-y-2 text-sm"><span className="block">{day} label</span><input className={`${sleepInput} w-full`} value={obligation.label} onChange={e => update({ label: e.target.value })} /></label></> : null}
+        <p className="text-sm text-neutral-400">{required ? `Up by ${localClock(required, timeZone)}, ${draft.preparationMinutes} min to get ready` : 'There is no required wake time.'}</p>
+        {draft.weekdayWake[weekday] ? <p className="text-xs text-neutral-400">The saved explicit wake time is {draft.weekdayWake[weekday]}.</p> : null}
+      </div>;
+    })}</Field>
     <label className="flex items-center justify-between gap-3 text-sm">Preparation (minutes)<input className={`${sleepInput} w-24`} aria-label="Preparation minutes" type="number" min="0" max="1440" step="5" value={draft.preparationMinutes} onChange={e => patch({ preparationMinutes: e.target.valueAsNumber })} /></label>
     <ClockField label="Anchor wake time" value={draft.anchorWake} onChange={anchorWake => patch({ anchorWake })} />
     <p className="text-sm text-neutral-400">Set the evening automation to {localClock(reminderAt, timeZone)}. Set the reaction test automation to {settings.testTime}.</p>
     <button className={`${sleepButton} w-full bg-indigo-500 font-semibold`} disabled={save.busy} type="button" onClick={() => void save.run(async () => {
       if ([...Object.values(draft.usualDoses), draft.coffeeTeaspoons].some(n => !Number.isFinite(n) || n <= 0)) throw new Error('Enter an amount greater than zero.');
       if (!Number.isFinite(draft.preparationMinutes) || draft.preparationMinutes < 0 || draft.preparationMinutes > 1440) throw new Error('Enter preparation minutes from 0 to 1440.');
+      if (Object.values(draft.weekdayObligation).some(value => value && (!/^([01]\d|2[0-3]):[0-5]\d$/.test(value.start) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(value.end) || !value.label.trim()))) throw new Error('Enter a start time, end time and label for each obligation.');
       await saveSettings(draft);
     }, 'The settings were saved.')}>{save.busy ? 'Saving…' : 'Save the settings'}</button>{save.feedback}
   </div></details>;

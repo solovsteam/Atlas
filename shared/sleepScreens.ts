@@ -17,6 +17,7 @@ export type SleepScreenSettings = SleepSettings & {
   coffeeTeaspoons: number;
   /** Local latest wake times. These already include preparation. Sunday = 0. */
   weekdayWake: Record<number, string | null>;
+  weekdayObligation: Record<number, { start: string; end: string; label: string } | null>;
 };
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -28,15 +29,24 @@ export function sleepScreenSettings(schema: unknown): SleepScreenSettings {
   const settings = record(record(record(schema).sleepLog).settings);
   const doses = record(settings.usualDoses);
   const weekdays = record(settings.weekdayWake);
+  const obligations = record(settings.weekdayObligation);
+  const validClock = (value: unknown): value is string => typeof value === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
   return {
     ...parseSleepSettings(settings),
     trial: parseStoredSleepTrial(settings.trial),
     choiceSeed: typeof settings.choiceSeed === 'string' && settings.choiceSeed.length ? settings.choiceSeed : undefined,
     usualDoses: Object.fromEntries(SUPPLEMENTS.map(s => [s.id, positive(doses[s.id], s.dose)])) as Record<SupplementId, number>,
     coffeeTeaspoons: positive(settings.coffeeTeaspoons, 1),
+    weekdayObligation: Object.fromEntries(Array.from({ length: 7 }, (_, day) => {
+      const value = obligations[day];
+      const obligation = record(value);
+      const fallback = day > 0 && day < 6 ? { start: '09:30', end: '19:30', label: 'Work, travel and groceries' } : null;
+      return [day, value === null ? null : validClock(obligation.start) && validClock(obligation.end) && typeof obligation.label === 'string' && obligation.label.trim()
+        ? { start: obligation.start, end: obligation.end, label: obligation.label } : fallback];
+    })),
     weekdayWake: Object.fromEntries(Array.from({ length: 7 }, (_, day) => {
       const value = weekdays[day];
-      return [day, value === null ? null : typeof value === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(value) ? value : day > 0 && day < 6 ? '08:00' : null];
+      return [day, validClock(value) ? value : null];
     })),
   };
 }
@@ -50,6 +60,8 @@ export function requiredWakeForDate(wakeDate: string, timeZone: string, settings
   const weekday = dateInput(wakeDate).weekday;
   const clock = settings.weekdayWake[weekday];
   const candidates: number[] = clock ? [Date.parse(atLocalClock(wakeDate, `${clock}:00`, timeZone))] : [];
+  const obligation = settings.weekdayObligation[weekday];
+  if (obligation) candidates.push(Date.parse(atLocalClock(wakeDate, `${obligation.start}:00`, timeZone)) - settings.preparationMinutes * 60000);
   for (const value of [earlyObligationAt, ...workAppointments]) {
     if (!value || !/T.*(?:Z|[+-]\d{2}:\d{2})$/.test(value)) continue;
     const start = new Date(value);

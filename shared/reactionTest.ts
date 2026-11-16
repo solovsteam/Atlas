@@ -118,7 +118,7 @@ export const KAROLINSKA_SLEEPINESS_SCALE = [
 export type KarolinskaSleepiness = typeof KAROLINSKA_SLEEPINESS_SCALE[number]["value"];
 
 /** JSON-safe payload for a documentation entry's data. No storage dependency. */
-export interface ReactionTestResult {
+export type ReactionTestResult = {
   kind: "reaction-test";
   protocolVersion: typeof REACTION_PROTOCOL.version;
   startedAt: string;
@@ -130,7 +130,7 @@ export interface ReactionTestResult {
   reactionTimesMs: (number | null)[];
   events: ReactionEvent[];
   summary: ReactionSummary;
-}
+};
 
 export function createReactionTestResult(input: {
   startedAt: string;

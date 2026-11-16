@@ -1,5 +1,6 @@
 import type { Item } from "./item";
 import { formatEuropeanDate, pad2 } from "./locale";
+import { isSleepLog } from "./sleepLog";
 
 /**
  * One observation recorded for a documentation item (a tracker), such as
@@ -56,7 +57,7 @@ export function entryToDbInsert(entry: DocumentationEntry): DocumentationEntryRo
 export function isTracker(item: Item): boolean {
   const schema = item.documentationSchema;
   const isRoutine = !!schema && typeof schema === "object" && !Array.isArray(schema) && "routine" in schema;
-  return item.isDocumentation && !isRoutine && !item.isTask && !item.isInterval && !item.recurrenceRule && !item.generatedFromId;
+  return item.isDocumentation && !isRoutine && !isSleepLog(item) && !item.isTask && !item.isInterval && !item.recurrenceRule && !item.generatedFromId;
 }
 
 export function trackersOf(items: Item[]): Item[] {

@@ -55,3 +55,43 @@ returns to Start with an explanation. It does not resume or complete that run.
   Atlas uses the fixed timeout to advance after a missing response.
 - [Åkerstedt Miley, Kecklund and Åkerstedt, 2016](https://pmc.ncbi.nlm.nih.gov/articles/PMC5511283/)
   compares the two KSS versions and gives the nine labels.
+
+## Storage and route
+
+`/sleep/test` hosts the component behind the normal Atlas sign-in. There is no
+Sleep tab. `useSleepLog` waits for the stored entries before supplying the practice
+count. The page shows a save result and a link to Now after completion.
+
+The container is a documentation item named "Sleep", with
+`documentationSchema.sleepLog.settings`. Reading does not create the container.
+The first save finds or creates the container. A stable owner-specific UUID
+prevents two simultaneous first saves from creating two new containers. An
+existing container keeps its id. Duplicate containers cause an error.
+
+The rows use the existing `documentation_entries` table:
+
+- Nights use `data.kind = 'night'` and `data.sleepLog = { evening?, morning? }`.
+  `sleepNight` also reads older night payloads without `kind`.
+- Tests use `data.kind = 'reactionTest'` and `data.reactionTest` for the complete
+  `ReactionTestResult` plus `timeZone`. `sleepReactionTest` validates this payload.
+
+`useSleepLog()` exposes `item`, `settings`, `entries`, `nights`, `tests`, `loading`,
+`error`, `refresh`, `saveEvening`, `saveMorning`, `saveReactionTest`, and
+`deleteEntry`. The save methods return the saved entry. Every entry mutation
+records undo through the existing documentation operations and updates other
+views in the same tab. The existing subscription supplies updates from other
+clients, including deletions.
+
+`saveEvening(evening, entryId?, at?)` creates a night unless an entry id specifies
+a correction. `saveMorning(morning, entryId?, at?)` uses the latest unfinished
+evening within 20 elapsed hours before `morning.wakeAt`. Without a match, the
+method creates a morning-only night. The interval includes its endpoints.
+When lights out is absent, matching uses the evening entry's `occurredAt`.
+The optional `at` is the recording time when the part has no lights out or wake
+time. A correction replaces the specified part and preserves the other part.
+Each part must include its time zone. `saveReactionTest(result, timeZone)` creates
+a separate test entry. `deleteEntry(entryId)` removes either kind.
+
+The service module also exports `findSleepLog`, `findOrCreateSleepLog`, and
+`sleepLogStore` for consumers outside React. The hook supplies writers that
+announce local changes. The default service writers do not register UI undo.

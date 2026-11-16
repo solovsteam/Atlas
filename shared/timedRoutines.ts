@@ -1,3 +1,4 @@
+import { isSleepLog } from './sleepLog';
 import type { Item } from './item';
 import type { DocumentationEntry } from './documentationEntries';
 
@@ -6,6 +7,7 @@ export type RoutineRun = { version: 1; startedAt: string; endedAt: string | null
 export const MORNING_STEPS = ['Dream recall', 'Shower', 'Get dressed', 'Brush teeth and wash face', 'Coffee', 'Breakfast', 'Medication if needed', 'Shoes, coat and backpack'];
 
 export function routineConfig(item: Item): { steps: string[] } | null {
+  if (isSleepLog(item)) return null;
   const schema = item.documentationSchema;
   if (!schema || typeof schema !== 'object' || Array.isArray(schema)) return null;
   const routine = (schema as Record<string, unknown>).routine;

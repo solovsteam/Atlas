@@ -1,3 +1,4 @@
+import { isSleepLog } from "./sleepLog";
 import type { Item, TaskStatus } from "./item";
 import { generatorRule } from './recurringReferences';
 
@@ -96,7 +97,7 @@ export function sortItemsByRelevance(items: Item[], ctx: RelevanceContext): Item
 }
 
 export function buildInboxEntries(items: Item[], ctx: RelevanceContext): InboxEntry[] {
-  return sortItemsByRelevance(items, ctx);
+  return sortItemsByRelevance(items.filter(item => !isSleepLog(item)), ctx);
 }
 
 export function collectTags(items: Item[]): string[] {
@@ -120,7 +121,7 @@ export function isParkedTask(item: Item): boolean {
 }
 
 export function isLibraryItem(item: Item): boolean {
-  return !isArchivedTask(item) && generatorRule(item)?.status!=='deleted';
+  return !isSleepLog(item) && !isArchivedTask(item) && generatorRule(item)?.status!=='deleted';
 }
 
 export function searchItems(items: Item[], query: string): Item[] {
@@ -129,6 +130,6 @@ export function searchItems(items: Item[], query: string): Item[] {
     return [];
   }
   return items
-    .filter((item) => item.title.toLowerCase().includes(needle) || item.body.toLowerCase().includes(needle))
+    .filter((item) => !isSleepLog(item) && (item.title.toLowerCase().includes(needle) || item.body.toLowerCase().includes(needle)))
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }

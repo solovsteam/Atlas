@@ -1,5 +1,21 @@
 # Handoff
 
+## Sleep storage and reaction route (16 Nov 2026)
+
+Branch `sleep/storage`, based on `efbc452`, in `/Users/tonio/apps/Atlas-wt/storage`.
+The sleep service and hook store nights and separate reaction tests in the existing
+entries table. The hook provides correction, deletion, and undo. Morning matching
+uses the latest unfinished evening within 20 elapsed hours. The route `/sleep/test`
+uses the existing component and counts completed entries for practice. Sleep stays
+out of generic lists. The contract is in `docs/REACTION_TEST.md`.
+
+`npm run check` passed twice without a recurrence retry. New PGlite tests exercise the actual service
+with row level security. A 390px background browser checked the real route and
+an in-memory Supabase fixture. An accelerated clock checked completion, stored
+metadata, fourth-test practice marking, undo and a refused write. No real sign-in or external database write occurred. Final
+checks and local commit are recorded in `.handoff/sleep-storage-20261116.md`.
+No migration or navigation tab was added. Do not push this branch.
+
 ## Timed routines (29 Oct 2026)
 
 Tonio asked for easily editable routine lists and accepted a suggested morning list. Implemented in the working tree: routine lists, timestamp-based recording, skipping and reordering upcoming steps, undo, history and time correction. A sample routine was tested through the real Supabase test account, including reload and undo. `npm run check` passed on the second attempt; a known timing-sensitive recurrence test failed once. The iPhone itself and offline behavior were not tested. Tonio approved publication after reviewing the description. See `.handoff/timed-routines-build-20261029.md`.

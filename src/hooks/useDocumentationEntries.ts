@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { sortEntriesNewestFirst, type DocumentationEntry } from "@shared/documentationEntries";
 import { supabase } from "../lib/supabase";
 import {
@@ -71,25 +71,41 @@ export function useEntryMutations(userId: string | undefined) {
 
 /** All entries of a tracker, newest first, or only the most recent `limit`. */
 export function useDocumentationEntries(userId: string | undefined, itemId: string | undefined, limit?: number) {
+  const key = userId && itemId ? `${userId}:${itemId}` : null;
+  const activeKey = useRef(key);
+  activeKey.current = key;
+  const request = useRef(0);
+  const requestedKey = useRef(key);
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
   const [entries, setEntries] = useState<DocumentationEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
+    const sequence = ++request.current;
+    if (requestedKey.current !== key) {
+      requestedKey.current = key;
+      setEntries([]);
+    }
     if (!userId || !itemId) {
+      setLoadedKey(null);
       setEntries([]);
       setLoading(false);
       return;
     }
     try {
       setError(null);
-      setEntries(await fetchEntries(supabase, userId, itemId, limit));
+      const fetched = await fetchEntries(supabase, userId, itemId, limit);
+      if (activeKey.current === key && request.current === sequence) setEntries(fetched);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not load entries");
+      if (activeKey.current === key && request.current === sequence) setError(err instanceof Error ? err.message : "Could not load entries");
     } finally {
-      setLoading(false);
+      if (activeKey.current === key && request.current === sequence) {
+        setLoadedKey(key);
+        setLoading(false);
+      }
     }
-  }, [userId, itemId, limit]);
+  }, [userId, itemId, limit, key]);
 
   useEffect(() => {
     setLoading(true);
@@ -102,7 +118,7 @@ export function useDocumentationEntries(userId: string | undefined, itemId: stri
         if (change.kind === "remove") {
           return current.filter((entry) => entry.id !== change.id);
         }
-        if (change.entry.itemId !== itemId) {
+        if (change.entry.itemId !== itemId || change.entry.ownerId !== userId) {
           return current;
         }
         return sortEntriesNewestFirst([...current.filter((entry) => entry.id !== change.entry.id), change.entry]);
@@ -112,7 +128,7 @@ export function useDocumentationEntries(userId: string | undefined, itemId: stri
     return () => {
       listeners.delete(listener);
     };
-  }, [itemId]);
+  }, [itemId, userId]);
 
   useEffect(() => {
     if (!userId || !itemId) {
@@ -128,5 +144,5 @@ export function useDocumentationEntries(userId: string | undefined, itemId: stri
     }
   }, [userId, itemId, refresh]);
 
-  return { entries, loading, error, refresh };
+  return { entries: loadedKey === key ? entries : [], loading: loading || loadedKey !== key, error, refresh };
 }

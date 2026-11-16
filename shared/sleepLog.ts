@@ -105,6 +105,7 @@ export function sleepSettings(item: Pick<Item, 'documentationSchema'>): SleepSet
   return parseSleepSettings(marker?.settings);
 }
 export function sleepNight(entry: Pick<DocumentationEntry, 'data'>): SleepNight | null {
+  if (entry.data.kind !== undefined && entry.data.kind !== 'night') return null;
   const raw = object(entry.data.sleepLog);
   if (!raw) return null;
   // Ignore another entry kind (for example a reaction test) rather than inventing a night.
@@ -121,6 +122,21 @@ function instant(value: string | undefined): number | null {
   const time = Date.parse(value);
   return Number.isFinite(time) ? time : null;
 }
+/** Match by elapsed time before the reported wake, not by calendar date or save time. */
+export function matchingSleepNight(
+  entries: readonly DocumentationEntry[],
+  morningAt: string,
+): DocumentationEntry | null {
+  const end = instant(morningAt);
+  if (end === null) throw new Error('Choose a valid morning time with a time zone offset.');
+  return entries.flatMap(entry => {
+    const night = sleepNight(entry);
+    if (!night?.evening || night.morning) return [];
+    const start = instant(night.evening.lightsOut ?? entry.occurredAt);
+    return start !== null && start <= end && end - start <= 20 * 3600000 ? [{ entry, start }] : [];
+  }).sort((a, b) => b.start - a.start || a.entry.id.localeCompare(b.entry.id))[0]?.entry ?? null;
+}
+
 function zone(value: string | undefined): string | null {
   if (!value) return null;
   try {

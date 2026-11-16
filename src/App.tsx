@@ -7,6 +7,7 @@ import { UndoProvider, useUndo } from "./context/UndoContext";
 import { NudgeProvider } from "./context/NudgeContext";
 import { CaptureBar } from "./components/CaptureBar";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { SleepTestPage } from "./pages/SleepTestPage";
 import { NowPage } from "./pages/NowPage";
 import { RoutinesPage, RoutinePage } from "./pages/RoutinesPage";
 import { ItemPage } from "./pages/ItemPage";
@@ -195,6 +196,7 @@ function AppShell() {
               <Route path="/items" element={<ItemsPage />} />
               <Route path="/calendar" element={<CalendarPage />} />
               <Route path="/archive" element={<ArchivePage />} />
+              <Route path="/sleep/test" element={<SleepTestPage />} />
               <Route path="/track" element={<TrackPage />} />
               <Route path="/routines" element={<RoutinesPage />} />
               <Route path="/routines/:id" element={<RoutinePage />} />

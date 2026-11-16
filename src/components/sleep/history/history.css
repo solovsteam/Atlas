@@ -1,0 +1,27 @@
+.sleep-history-panel {
+  --sleep-bg: #111620;
+  --sleep-text: #eceff4;
+  --sleep-muted: #97a1b3;
+  --sleep-grid: #343d4f;
+  --sleep-soft: #181e29;
+  color: var(--sleep-text);
+  background: var(--sleep-bg);
+  border: 1px solid var(--sleep-grid);
+  border-radius: 1rem;
+  padding: 1rem;
+  min-width: 0;
+}
+.sleep-history-panel[data-theme="light"] {
+  color-scheme: light;
+  --sleep-bg: #f6f7f9;
+  --sleep-text: #252c3a;
+  --sleep-muted: #4a5468;
+  --sleep-grid: #dce1e9;
+  --sleep-soft: #eceff4;
+}
+.sleep-history-panel summary { cursor: pointer; }
+.sleep-history-panel button:focus-visible, .sleep-history-panel summary:focus-visible { outline: 2px solid #7a80f0; outline-offset: 3px; }
+.sleep-history-panel[data-theme="light"] .sleep-measure-plot svg line[stroke="#252c3a"] { stroke: #dce1e9; }
+.sleep-history-panel .sleep-measure-plot svg text { fill: var(--sleep-muted); }
+.sleep-history-panel .sleep-measure-plot .absolute { background: var(--sleep-soft); border-color: var(--sleep-grid); max-width: 100%; white-space: normal; }
+.sleep-history-panel .sleep-measure-plot .absolute p { color: var(--sleep-text); }

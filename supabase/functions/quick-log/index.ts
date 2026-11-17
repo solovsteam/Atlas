@@ -31,14 +31,14 @@ Deno.serve(async request => {
   try { body = await request.json(); } catch { return reply(400, { error: 'invalid_json' }); }
   if (!validQuickLogRequest(body)) return reply(400, { error: 'invalid_request' });
 
-  const model = Deno.env.get('QUICK_LOG_MODEL') || 'claude-opus-5-5';
+  const model = Deno.env.get('QUICK_LOG_MODEL') || 'claude-haiku-5-5';
   const client = new Anthropic({ apiKey, maxRetries: 1, timeout: 30000 });
   const started = Date.now();
   try {
     const response = await client.messages.create({
       model,
       max_tokens: 4000,
-      // Low effort: the task is a short, bounded extraction and speed matters.
+      // Low effort: the task is a short, bounded extraction and speed matters. Raise it only after a measured failure.
       output_config: { effort: 'low', format: { type: 'json_schema', schema: QUICK_LOG_SCHEMA } },
       system: QUICK_LOG_SYSTEM,
       messages: [{ role: 'user', content: quickLogUserMessage(body) }],

@@ -22,7 +22,7 @@ export function QuickLogWithStore() {
 }
 
 /**
- * One sentence becomes drink, intake and tracker records.
+ * One sentence becomes drink, intake, tracker and task records.
  * Simple sentences are read on the device. Others go to the interpreter.
  * Records are saved at once and share one Undo.
  */
@@ -89,32 +89,42 @@ export function QuickLog({ store }: { store: Store }) {
         lines.push({ summary: r.summary, to: `/track/${r.trackerId}` });
       } catch (cause) { failure = cause instanceof Error ? cause : new Error(String(cause)); }
     }
-    if (changes.length) push({ kind: 'batchEntries', changes });
+    const createdItems: string[] = [];
+    for (const r of result.records) {
+      if (failure || r.type !== 'task') continue;
+      try {
+        const created = await createItem(r.title, { isTask: true, body: `Saved from the Log box: “${sentence}”.` });
+        createdItems.push(created.id);
+        lines.push({ summary: r.summary, to: `/item/${created.id}` });
+      } catch (cause) { failure = cause instanceof Error ? cause : new Error(String(cause)); }
+    }
+    if (changes.length || createdItems.length) push({ kind: 'batchEntries', changes, createdItems });
     setBusy('');
     if (failure) {
-      setProblem({ text: sentence, partial: changes.length > 0, reason: `${changes.length ? 'Only part of the sentence was saved. Undo removes that part. ' : ''}${failure.message}` });
+      const partial = changes.length + createdItems.length > 0;
+      setProblem({ text: sentence, partial, reason: `${partial ? 'Only part of the sentence was saved. Undo removes that part. ' : ''}${failure.message}` });
       return;
     }
     setSaved({ text: sentence, lines, method, unmatched: result.unmatched });
     setText('');
   }
 
-  async function saveNote(note: string) {
+  async function saveNote(note: string, isTask = false) {
     try {
-      const created = await createItem(note, { body: `Saved from the Log box on ${new Date().toLocaleString()}.` });
+      const created = await createItem(note, { isTask, body: `Saved from the Log box on ${new Date().toLocaleString()}.` });
       trackCreateUndo(push, created.id);
-      setNoteSaved(note);
+      setNoteSaved(`Saved “${note}” as ${isTask ? 'a task' : 'a note in Items'}.`);
       setProblem(current => current?.text === note ? null : current);
       if (problem?.text === note) setText('');
     } catch (cause) {
-      setProblem({ text: note, reason: cause instanceof Error ? cause.message : 'Could not save the note.' });
+      setProblem({ text: note, reason: cause instanceof Error ? cause.message : `Could not save the ${isTask ? 'task' : 'note'}.` });
     }
   }
 
   return <section aria-label="Log" className="space-y-2">
     <form className="flex gap-2" onSubmit={event => void submit(event)}>
       <input ref={input} aria-label="Log a sentence" autoComplete="off" enterKeyHint="send" className={`${sleepInput} flex-1`} disabled={store.loading}
-        placeholder="Log: cola 250 ml at 15:00" value={text} onChange={event => { setText(event.target.value); setProblem(null); }} />
+        placeholder="cola 250 ml at 15:00, buy milk…" value={text} onChange={event => { setText(event.target.value); setProblem(null); }} />
       <button className={`${sleepButton} shrink-0 bg-indigo-500 text-white`} disabled={!text.trim() || !!busy || store.loading} type="submit">
         {busy === 'interpreting' ? 'Reading…' : busy === 'saving' ? 'Saving…' : 'Log'}
       </button>
@@ -124,15 +134,18 @@ export function QuickLog({ store }: { store: Store }) {
       {saved ? <div className="rounded-xl border border-indigo-500/40 p-3" role="status">
         <p className="text-neutral-300">Recorded{saved.method.method === 'model' ? ` with the interpreter in ${(saved.method.ms / 1000).toFixed(1)} s` : ''}:</p>
         <ul className="mt-1 space-y-1">{saved.lines.map(line => <li key={line.to + line.summary}><Link className="text-indigo-200 underline" to={line.to}>{line.summary}</Link></li>)}</ul>
-        {saved.unmatched ? <p className="mt-2 text-amber-200">Not recorded: “{saved.unmatched}”. <button className="min-h-11 underline" type="button" onClick={() => void saveNote(saved.unmatched!)}>Save it as a note</button></p> : null}
+        {saved.unmatched ? <p className="mt-2 text-amber-200">Not recorded: “{saved.unmatched}”. <button className="min-h-11 underline" type="button" onClick={() => void saveNote(saved.unmatched!, true)}>Save it as a task</button> · <button className="min-h-11 underline" type="button" onClick={() => void saveNote(saved.unmatched!)}>Save it as a note</button></p> : null}
         {canUndo ? <button className="min-h-11 underline" type="button" onClick={() => void undo().then(() => { setText(saved.text); setSaved(null); input.current?.focus(); })}>Undo and edit the sentence</button> : null}
       </div> : null}
       {problem ? <div className="rounded-xl border border-amber-600/50 p-3" role="alert">
         <p className="break-words text-amber-100">{problem.reason}</p>
         {problem.partial ? null : <p className="mt-1 text-neutral-400">Nothing was saved. Change the sentence and press Log again.</p>}
-        <button className="min-h-11 underline" type="button" onClick={() => void saveNote(problem.text)}>Save the sentence as a note instead</button>
+        <div className="flex flex-wrap gap-x-4">
+          <button className="min-h-11 underline" type="button" onClick={() => void saveNote(problem.text, true)}>Save the sentence as a task</button>
+          <button className="min-h-11 underline" type="button" onClick={() => void saveNote(problem.text)}>Save it as a note</button>
+        </div>
       </div> : null}
-      {noteSaved ? <p className="text-neutral-300" role="status">Saved “{noteSaved}” as a note in Items.</p> : null}
+      {noteSaved ? <p className="text-neutral-300" role="status">{noteSaved}</p> : null}
     </div>
   </section>;
 }

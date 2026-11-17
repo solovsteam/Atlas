@@ -105,6 +105,7 @@ export function UndoProvider({
         if (change.before) await updateEntry(change.before, change.before.data);
         else await deleteEntry(change.entry);
       }
+      for (const id of op.createdItems ?? []) await deleteItem(id);
       return;
     }
 

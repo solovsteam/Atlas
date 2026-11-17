@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import { addDays, civilDate } from '@shared/recurringReferences';
 import { DEFAULT_INTAKE_BUTTONS, intakeAmountText, intakeNow, intakesOnDate, lastTakenToday, type Intake, type IntakeButton, type IntakeRecord } from '@shared/intake';
 import { caffeineMg, withAmountMl } from '@shared/drinks';
-import { QuickLog } from '../components/QuickLog';
 import { DrinkSettings } from '../components/DrinkSettings';
 import { localClock } from '@shared/sleepScreens';
 import { sleepTrialDisplay } from '@shared/sleepIntegration';
@@ -41,8 +40,7 @@ export function IntakePage() {
   const buttons = store.settings.intakeButtons;
   return <section className="mx-auto max-w-xl space-y-6 pb-4">
     <h1 className="text-3xl font-semibold tracking-tight">Intake</h1>
-    <QuickLog store={store} />
-    <p className="text-sm text-neutral-400">Or tap once to record what you took now.</p>
+    <p className="text-sm text-neutral-400">Tap once to record what you took now. To type a sentence instead, use the Log box on Now.</p>
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">{buttons.filter(b => !b.hidden).map(button => {
       const last = lastTakenToday(store.intakes, button.substance, now, zone);
       const factor = assignment?.factors.find(f => f.factorId === button.substance);

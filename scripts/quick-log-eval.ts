@@ -48,7 +48,9 @@ const CASES: [string, string[][]][] = [
   ['cola 250 ml at 18:00', [['coca-cola 25mg @-1d 18:00']]],
   ['scrolled at 3pm and again at 3:30pm', [['scrolled after @15:00', 'scrolled after @15:30']]],
   ['kaffee', [['coffee 1teaspoon @16:00']]],
-  ['buy milk tomorrow', [['refused']]],
+  ['buy milk tomorrow', [['task buy milk tomorrow']]],
+  ['cola 0,33 l und morgen Zahnarzt anrufen', [['coca-cola 33mg @16:00', 'task morgen Zahnarzt anrufen'], ['coca-cola 33mg @16:00', 'task Zahnarzt anrufen morgen']]],
+  ['called the dentist', [['refused']]],
   ['cola zero 33cl', [['coca-cola-zero 33mg @16:00']]],
   ['2 tsp coffee at 7', [['coffee 2teaspoon @07:00']]],
   ['red bull 250', [['question'], ['red-bull 80mg @16:00']]],
@@ -64,7 +66,7 @@ function when(at: string): string {
 }
 function outcome(result: QuickLogResult, question: boolean): string[] {
   if (!result.ok) return [question ? 'question' : 'refused'];
-  const lines = result.records.map(r => r.type === 'intake'
+  const lines = result.records.map(r => r.type === 'task' ? `task ${r.title.toLowerCase()}` : r.type === 'intake'
     ? `${r.intake.drink?.drinkId ?? r.intake.substance} ${r.intake.dose}${r.intake.unit} ${when(r.intake.takenAt)}`
     : `${r.trackerId}${r.stage && r.trackerId === 'scrolled' ? ` ${r.stage}` : ''} ${when(r.occurredAt)}`);
   return result.unmatched ? [...lines, 'unmatched'] : lines;

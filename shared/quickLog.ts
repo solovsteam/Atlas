@@ -18,7 +18,7 @@ export type QuickLogContext = {
   drinks: readonly Drink[];
   trackers: readonly QuickLogTracker[];
 };
-export type QuickLogKind = 'drink' | 'intake' | 'tracker';
+export type QuickLogKind = 'drink' | 'intake' | 'tracker' | 'task';
 /** The exact shape the model must return. The local parser returns the same shape. */
 export type QuickLogProposal = {
   kind: QuickLogKind;
@@ -29,6 +29,8 @@ export type QuickLogProposal = {
   localTime: string | null;
   /** "urge" only when a habit to break was noticed as an urge. */
   stage: 'urge' | 'none';
+  /** Only for kind "task": the task in the person's words. optionId is "task" then. The local parser never proposes tasks. */
+  taskTitle?: string | null;
 };
 export type QuickLogOutput = {
   records: QuickLogProposal[];
@@ -40,7 +42,8 @@ export type QuickLogOutput = {
 export type QuickLogMethod = { method: 'local' } | { method: 'model'; model: string; ms: number };
 export type QuickLogRecord =
   | { type: 'intake'; intake: Intake; summary: string }
-  | { type: 'tracker'; trackerId: string; title: string; occurredAt: string; stage: EntryStage | null; summary: string };
+  | { type: 'tracker'; trackerId: string; title: string; occurredAt: string; stage: EntryStage | null; summary: string }
+  | { type: 'task'; title: string; summary: string };
 export type QuickLogResult =
   | { ok: true; records: QuickLogRecord[]; unmatched: string | null }
   | { ok: false; reason: string };
@@ -62,11 +65,12 @@ export function validQuickLogOutput(value: unknown): value is QuickLogOutput {
   return Array.isArray(v.records) && v.records.length <= MAX_QUICK_LOG_RECORDS && nullableText(v.unmatched) && nullableText(v.question)
     && v.records.every(raw => {
       const r = object(raw);
-      return ['drink', 'intake', 'tracker'].includes(r.kind as string) && typeof r.optionId === 'string'
+      return ['drink', 'intake', 'tracker', 'task'].includes(r.kind as string) && typeof r.optionId === 'string'
         && (r.amount === null || (typeof r.amount === 'number' && Number.isFinite(r.amount)))
         && (r.unit === null || typeof r.unit === 'string')
         && (r.localTime === null || (typeof r.localTime === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(r.localTime)))
-        && (r.stage === 'urge' || r.stage === 'none');
+        && (r.stage === 'urge' || r.stage === 'none')
+        && (r.taskTitle === undefined || nullableText(r.taskTitle));
     });
 }
 
@@ -109,9 +113,16 @@ export function normalUnit(unit: string): string {
 /** Turns proposals into validated records. Any invalid proposal refuses the whole sentence. */
 export function resolveQuickLog(output: QuickLogOutput, ctx: QuickLogContext): QuickLogResult {
   if (output.question) return { ok: false, reason: output.question };
-  if (!output.records.length) return { ok: false, reason: output.unmatched ? `Atlas has no record type for “${output.unmatched}”.` : 'Nothing in the sentence matches a drink, an intake or a tracker.' };
+  if (!output.records.length) return { ok: false, reason: output.unmatched ? `Atlas has no record type for “${output.unmatched}”.` : 'Nothing in the sentence matches a drink, an intake, a tracker or a task.' };
   const records: QuickLogRecord[] = [];
   for (const p of output.records) {
+    if (p.kind === 'task') {
+      // A task is created now. Atlas does not read due dates from the sentence yet.
+      const title = (p.taskTitle ?? '').trim();
+      if (!title) return { ok: false, reason: 'The interpretation proposed a task without a title.' };
+      records.push({ type: 'task', title, summary: `Task: ${title}` });
+      continue;
+    }
     const time = resolveTime(p.localTime, ctx);
     if ('reason' in time) return { ok: false, reason: time.reason };
     if (p.kind === 'drink') {

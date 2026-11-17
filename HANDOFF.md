@@ -2,14 +2,14 @@
 
 ## Log box: typed sentences become records (17 Nov 2026)
 
-On `main`. The Log box on Intake and Track turns a sentence into drink, intake and tracker
-records. A local parser reads simple sentences. The server function `quick-log` asks Claude
-for everything else. Atlas code checks every proposal and calculates caffeine from an editable
-drink list. Design and setup: [docs/QUICK_LOG.md](docs/QUICK_LOG.md). The function is deployed
-and limited to Tonio's account, but it has no `ANTHROPIC_API_KEY` yet, so only the local parser
-works. `npm run check` passed. The browser was checked at 390px with an offline store and a
-simulated interpreter. No real interpreter call was made. Task note:
-`.handoff/quick-log-20261117.md`.
+On `main`. The Log box is on Now only, where it replaces the task capture bar. It turns a
+sentence into drink, intake, tracker and task records. A local parser reads simple sentences.
+The server function `quick-log` asks Claude Haiku 5.5 at low effort for everything else.
+Atlas code checks every proposal and calculates caffeine from an editable drink list. Design
+and setup: [docs/QUICK_LOG.md](docs/QUICK_LOG.md). The function is deployed and limited to
+Tonio's account, but it has no `ANTHROPIC_API_KEY` yet, so only the local parser works.
+`npm run check` passed. The browser was checked at 390px with an offline store and a simulated
+interpreter. No real interpreter call was made. Task note: `.handoff/quick-log-20261117.md`.
 
 ## Drink conversion and language input (17 Nov 2026)
 

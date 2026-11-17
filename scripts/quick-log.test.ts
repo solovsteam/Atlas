@@ -132,6 +132,18 @@ test('model proposals are checked: unknown options, future and old times and mis
   assert.equal(validQuickLogOutput(out([base])), true);
 });
 
+test('a proposed task becomes a task record, and a task without a title is refused', () => {
+  const ctx = context('Europe/Berlin');
+  const task = { kind: 'task' as const, optionId: 'task', amount: null, unit: null, localTime: null, stage: 'none' as const, taskTitle: ' buy milk tomorrow ' };
+  const out = (records: QuickLogOutput['records']): QuickLogOutput => ({ records, unmatched: null, question: null });
+  assert.equal(validQuickLogOutput(out([task])), true);
+  assert.equal(validQuickLogOutput(out([{ ...task, taskTitle: 5 as unknown as string }])), false);
+  const result = resolveQuickLog(out([task, { kind: 'drink', optionId: 'coca-cola', amount: 330, unit: 'ml', localTime: null, stage: 'none', taskTitle: null }]), ctx);
+  assert.ok(result.ok && result.records[0].type === 'task' && result.records[0].title === 'buy milk tomorrow' && result.records[1].type === 'intake');
+  assert.equal(resolveQuickLog(out([{ ...task, taskTitle: '  ' }]), ctx).ok, false);
+  assert.equal(parseQuickLogLocally('buy milk tomorrow', ctx), null, 'tasks always go to the model');
+});
+
 test('a drink correction keeps the original conversion values', () => {
   const ctx = context('UTC');
   const result = run('cola 250 ml', ctx);

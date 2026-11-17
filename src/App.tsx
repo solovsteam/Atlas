@@ -180,7 +180,7 @@ function AppShell() {
             </header>
             <PhoneNavigation key={session.user.id} tabs={NAV} metadata={session.user.user_metadata} />
             {/* The calendar opens with the calendar itself; capture stays on every other page. */}
-            {pathname === "/calendar" || pathname.startsWith("/sleep") || pathname === "/intake" ? null : <CaptureBar />}
+            {pathname === "/" || pathname === "/calendar" || pathname.startsWith("/sleep") || pathname === "/intake" ? null : <CaptureBar />}
             {itemsLoading ? <p className="text-sm text-neutral-500">Loading items…</p> : null}
             {itemsError ? <p className="mb-4 text-sm text-red-400">{itemsError}</p> : null}
             {linksError ? <p className="mb-4 text-sm text-red-400">{linksError}</p> : null}

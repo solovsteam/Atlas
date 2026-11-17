@@ -38,13 +38,14 @@ You only choose from the options in the request and copy what the sentence says.
 
 Rules:
 - Each record uses kind "drink", "intake" or "tracker" and an optionId copied exactly from the matching list. Never invent an id.
+- task: use kind "task" for something the person wants to do later, for example "buy milk tomorrow" or "call mom". Set optionId to "task", taskTitle to the task in the person's words and language, with a stated day or time kept in the title, and amount, unit and localTime to null. Use taskTitle null for every other kind. Something that already happened is never a task.
 - Match by meaning across languages, spelling mistakes and brand names. "coke" can mean Coca-Cola. "Kaffee" can mean coffee.
 - drink: copy the amount and the unit from the sentence. The unit is "ml", "cl", "l" or one of that drink's serving names, for example "can". "a can" means amount 1 and unit "can". Do not convert units yourself.
 - intake: set amount and unit only when the sentence states a dose. Otherwise set both to null, and Atlas uses the usual dose.
 - tracker: amount and unit are null. Set stage to "urge" only when the person noticed an urge and did not act on it. Otherwise "none". Stage is "none" for drinks and intakes.
 - localTime: "YYYY-MM-DDTHH:MM" in the person's time zone when the sentence states or implies a time, such as "at 3pm", "an hour ago" or "after lunch yesterday at 1". Use localNow to calculate it. Use null for now or when no time is given. A clock time later than localNow without a day means the previous day.
 - One record for each thing that was consumed or done. "two coffees" with two separate times are two records; "2 cans of cola" is one record with amount 2.
-- unmatched: the words for a thing that fits no option, for example "headache 4 of 10". Otherwise null. Still return the records that do match.
+- unmatched: the words for a thing that fits no option and is not a task, for example "headache 4 of 10". Otherwise null. Still return the records that do match.
 - question: ask one short question, in the language of the sentence, only when the answer changes what is recorded. Examples: a drink without any amount, or an option that could be two different things. When you ask a question, records is empty.
 - Never guess a drink or a substance that is not in the lists. Put it in unmatched instead.`;
 
@@ -64,14 +65,15 @@ export const QUICK_LOG_SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['kind', 'optionId', 'amount', 'unit', 'localTime', 'stage'],
+        required: ['kind', 'optionId', 'amount', 'unit', 'localTime', 'stage', 'taskTitle'],
         properties: {
-          kind: { type: 'string', enum: ['drink', 'intake', 'tracker'] },
+          kind: { type: 'string', enum: ['drink', 'intake', 'tracker', 'task'] },
           optionId: { type: 'string' },
           amount: { type: ['number', 'null'] },
           unit: { type: ['string', 'null'] },
           localTime: { type: ['string', 'null'] },
           stage: { type: 'string', enum: ['urge', 'none'] },
+          taskTitle: { type: ['string', 'null'] },
         },
       },
     },

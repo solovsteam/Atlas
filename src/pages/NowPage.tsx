@@ -12,6 +12,7 @@ import { WorkBlockButtons } from "../components/WorkBlockButtons";
 import { NudgeToggle } from "../components/NudgeToggle";
 import { TrackerButtons } from "../components/tracking/TrackerButtons";
 import { trackersOf } from "@shared/documentationEntries";
+import { QuickLogWithStore } from "../components/QuickLog";
 
 function currentInterval(items: Item[], now: Date): Item | null {
   return (
@@ -116,9 +117,12 @@ export function NowPage() {
     <section>
       <h1 className="text-4xl font-bold tracking-tight">Now</h1>
       <p className="mt-2 max-w-xl text-sm text-neutral-400">
-        One thing. Capture lives on Tasks; this page is for starting.
+        Type what you did or want to do. This page is for starting.
         {remainingLabel ? ` ${remainingLabel} left in ${interval?.title || "this interval"}.` : ""}
       </p>
+      <div className="mt-4 max-w-xl">
+        <QuickLogWithStore />
+      </div>
       <SleepNowCards />
       {trackers.length > 0 ? (
         <div className="mt-4 space-y-3">

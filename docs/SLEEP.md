@@ -386,3 +386,28 @@ Added 17 November 2026. Tonio: "I'd prefer a separate tab where I have a simple 
 ### Labels
 
 - The morning log field "Time to fall asleep" gets the hint "From lights out until you fell asleep."
+
+## 16. Missing data, complete days and the navigation
+
+Added 17 November 2026. Tonio approved all three parts.
+
+### Not logged is not the same as did not happen
+
+- **Explicit answer for expected events.** On a weekday without a methylphenidate intake, the evening log asks "Methylphenidate today?" with two answers: "Taken at …" (records an intake, time wheel prefilled with 08:00 of that day) and "Not taken" (records an explicit "not taken" for that date). Only an explicit "Not taken" counts as a day without methylphenidate. A day with neither counts as unknown. Analyses leave unknown days out. This replaces the rule in section 15 that a missing intake means no methylphenidate. On weekends Atlas does not ask, because the dose is often taken late. A weekend day with no intake and no answer is also unknown, and appears in the Missing list.
+- **Complete days.** The evening log shows today's intakes and today's events of every tracker in the Track tab, for example scrolling and reality checks, grouped by name. One button: "Today's list is complete". It records a confirmation for that date. Every entry and confirmation can be undone and corrected later.
+- Only on a confirmed day does a missing intake or a missing tracker event count as zero. On an unconfirmed day the count is unknown. Analyses leave unknown days out. Views that show counts per day show unconfirmed days as "not confirmed", not as zero.
+- A later entry on a confirmed day does not remove the confirmation. The new entry simply counts.
+- Old days before this feature are unconfirmed, except that an old morning log with methylphenidate "taken: false" counts as an explicit "Not taken".
+
+### The Missing list
+
+- A section "Missing" on the Sleep tab lists the last 7 days, newest first, one line per missing thing. Things that can be missing: the evening log, lights out, the morning log, the reaction test, the methylphenidate answer, and the day confirmation.
+- One tap on a line opens the right form with the date already set.
+- The Now page shows a card "Missing data: N" only when the list is not empty. The card does not count today's things that are not due yet. Examples: the reaction test before the test time, or the day confirmation before the evening log time.
+
+### The navigation
+
+- The bottom bar on a phone shows five tabs and a "More" button. "More" opens a list of the other tabs.
+- Default five: Now, Calendar, Track, Intake, Sleep. In "More": Tasks, Items, Archive.
+- Tonio can choose the five tabs and their order in a setting at the end of the "More" list. The choice is stored per account, not per device.
+- The wide screen layout keeps all tabs.

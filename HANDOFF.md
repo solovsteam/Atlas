@@ -249,3 +249,24 @@ Commit and push the effect-layer contract/tests on main per Atlas rules. Brain i
 ## Decisions for the user
 
 Atlas credential isolation from shell-capable hosts is undecided and was not built. `origin` is public; no personal data or credentials added.
+
+## Intake tab (17 Nov 2026)
+
+Branch `sleep-intake`, based on `20ee21a`, in `/Users/tonio/apps/Atlas-wt/intake`.
+Added `/intake`, editable dose buttons, late entries, corrections and deletion with
+undo. Entries use the Sleep item. Button settings use its documentation schema.
+The morning intake controls and manual evening supplement controls are removed.
+“Taken as assigned” creates individual intakes. One undo reverses the action.
+History and trial adherence read new intakes and old embedded records. The trial
+window starts four hours before target lights out and ends at actual lights out.
+Old records are not rewritten. Missing medicine intake means without medicine.
+Old unknown doses and times stay unknown. Approximate trial timing still needs
+an explicit tolerance, as in the existing adherence helper.
+
+Pure tests cover four time zones. PGlite checks intake create, correction of both
+time and dose, undo, and deletion. The full `npm run check` passed with exit 0.
+The offline browser fixture passed at 375px, including all eight navigation tabs,
+repeat taps, last-taken labels, late entries, time wheel corrections, deletion,
+settings and assignment undo. No real sign-in or live database write was used.
+Final checks and the commit are recorded in `.handoff/sleep-intake-20261117.md`.
+No migration, push, or change to `scripts/brain-atlas-mcp.ts`.

@@ -69,7 +69,7 @@ Tonio decided (16 November) to keep the evening log apart from the last tap befo
 
 | Field | Input | Required | Why the field is needed |
 |---|---|---|---|
-| Supplements tonight | During the trial: tonight's assignment, confirmed with one tap. Otherwise: one button per supplement with the usual dose and the time "now". | Yes, when supplements were taken | The trial in section 14 needs the dose and the time. |
+| Supplements tonight | During the trial: tonight’s assignment and “Taken as assigned”. Each assigned supplement gets an intake entry at the current time. Other intakes are recorded in the Intake tab. | Yes, when supplements were taken | The trial in section 14 needs the dose and the time. |
 | Alarm for tomorrow | Prefilled with the anchor wake time. Choices: a time, or "no alarm". | Yes | Records the choice between Keep and Extend. |
 | Day rating for today | Five buttons. | Yes | One of the four measures. |
 | Hard night | One tap: "tonight will be hard", for example before an important appointment or when distressed. | No | The trial reports hard nights separately. |
@@ -316,7 +316,7 @@ Added 16 November 2026. Some points wait for Tonio's answers. They are marked "o
 ### Methylphenidate in the data
 
 - Slow-release methylphenidate works for about 10 to 12 hours (shown in children; no adult figure was found). A dose taken 2 to 4 hours late can still work at bedtime. This is a hypothesis for him, which Atlas checks.
-- The morning log records whether he took it and when. On a normal weekday morning the field is prefilled, so it costs no tap.
+- The Intake tab records when he takes methylphenidate. A day without an intake counts as a day without the medicine. A missed intake can be added afterwards.
 - The 15:00 reaction test measures him with the medicine on weekdays and mostly without it on weekends. Atlas therefore computes the normal level separately for days with and without the medicine. Every comparison takes this into account.
 - Evidence for the psychiatrist: Atlas compares the time to fall asleep and the sleepiness at lights out on nights after a late dose, after a normal dose, and after no dose. Atlas suggests a talk with the psychiatrist only when nights after a late or normal dose are clearly worse than nights without the medicine. Atlas then shows the numbers and their limits. These data are observations, not a trial: he chooses when he takes the medicine late.
 

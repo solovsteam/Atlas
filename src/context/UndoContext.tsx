@@ -100,6 +100,14 @@ export function UndoProvider({
       return;
     }
 
+    if (op.kind === "batchEntries") {
+      for (const change of [...op.changes].reverse()) {
+        if (change.before) await updateEntry(change.before, change.before.data);
+        else await deleteEntry(change.entry);
+      }
+      return;
+    }
+
     if (op.kind === "createEntry") {
       await deleteEntry(op.entry);
       return;

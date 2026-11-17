@@ -13,5 +13,5 @@ export function useSleepSave() {
     finally { setBusy(false); }
   }
   const feedback = <div aria-live="polite">{message ? <p className="text-sm text-indigo-200" role="status">{message} {canUndo ? <button className="ml-2 min-h-11 underline" type="button" disabled={busy} onClick={() => void run(async () => { await undo(); }, 'Undone.')}>Undo</button> : null}</p> : null}{error ? <p className="break-words text-sm text-red-300" role="alert">{error}</p> : null}</div>;
-  return { busy, message, run, feedback };
+  return { busy, message, error, run, feedback };
 }

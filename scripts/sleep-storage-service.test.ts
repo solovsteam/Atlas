@@ -8,6 +8,7 @@ import { findOrCreateSleepLog, findSleepLog, sleepLogItemId, sleepLogStore } fro
 import { restoreEntry, updateEntryData, deleteEntry } from '../src/services/documentationEntries';
 import { sleepNight, sleepSettings, DEFAULT_SLEEP_SETTINGS } from '../shared/sleepLog';
 import { sleepReactionTest } from '../shared/sleepReactionTest';
+import { intakeNow, DEFAULT_INTAKE_BUTTONS, readIntakes } from '../shared/intake';
 import { createReactionTestResult } from '../shared/reactionTest';
 
 const alice = '11111111-1111-4111-8111-111111111111';
@@ -109,6 +110,25 @@ test('sleep storage: first use, nights, corrections, test entries and all three 
     assert.equal((await store.readEntries(item.id)).some(entry => entry.id === savedTest.entry.id), false, 'undo create removes the test');
     await assert.rejects(store.saveMorning(item.id, { timeZone: 'Europe/Berlin' }, new Date(), 'missing'), /no longer exists/);
     await assert.rejects(store.saveMorning(item.id, { timeZone: 'invalid' }, new Date()), /Invalid time zone/);
+
+    const intake = intakeNow(DEFAULT_INTAKE_BUTTONS[1], new Date('2026-11-16T08:12:00Z'), 'Europe/Berlin');
+    const savedIntake = await store.saveIntake(item.id, intake);
+    assert.equal(savedIntake.entry.occurredAt, intake.takenAt);
+    assert.equal(readIntakes(await store.readEntries(item.id))[0].intake.dose, 1);
+    const correctedIntake = await store.saveIntake(item.id, { ...intake, dose: 2, takenAt: '2026-11-16T09:30:00Z' }, savedIntake.entry.id);
+    assert.equal(correctedIntake.entry.id, savedIntake.entry.id);
+    assert.equal(correctedIntake.entry.occurredAt, '2026-11-16T09:30:00.000Z');
+    assert.equal(readIntakes([correctedIntake.entry])[0].intake.dose, 2);
+    await updateEntryData(client, alice, correctedIntake.before!.id, correctedIntake.before!.data, new Date(correctedIntake.before!.occurredAt));
+    const restoredIntake = (await store.readEntries(item.id)).find(e => e.id === savedIntake.entry.id)!;
+    assert.equal(restoredIntake.occurredAt, savedIntake.entry.occurredAt, 'undo edit restores occurred_at as well as data');
+    const deletedIntake = await store.deleteEntry(item.id, savedIntake.entry.id);
+    await restoreEntry(client, alice, deletedIntake);
+    assert.deepEqual((await store.readEntries(item.id)).find(e => e.id === deletedIntake.id), deletedIntake);
+    const marker = await store.hideLegacyIntake(item.id, `${evening.entry.id}:coffee:0`, new Date(intake.takenAt));
+    assert.equal(marker.entry.data.kind, 'intakeCorrection');
+    await deleteEntry(client, alice, marker.entry.id);
+    await assert.rejects(store.saveIntake(item.id, intake, evening.entry.id), /not an intake/);
 
     await as(bob);
     assert.equal(await findSleepLog(client, bob), null);

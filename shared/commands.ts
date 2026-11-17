@@ -10,6 +10,7 @@ export type UndoOp =
   | { kind: "createLink"; id: string }
   | { kind: "deleteLink"; snapshot: ItemLink }
   | { kind: "batchLinks"; created: ItemLink[]; deleted: ItemLink[] }
+  | { kind: "batchEntries"; changes: { entry: DocumentationEntry; before?: DocumentationEntry }[] }
   | { kind: "createEntry"; entry: DocumentationEntry }
   | { kind: "updateEntry"; before: DocumentationEntry }
   | { kind: "deleteEntry"; snapshot: DocumentationEntry };

@@ -4,10 +4,12 @@ import {
   shift, sleepNightDate, sleepTags, targetLightsOut, timeInBed,
   type FollowUpWindow, type SleepNight, type SleepSettings,
 } from './sleepLog';
+import { legacyNightIntakes, methylphenidateOnDate, type IntakeRecord } from './intake';
 import type { SleepReactionTest } from './sleepReactionTest';
 
 /** Schedule and choice context is optional because history never fetches data. */
 export type SleepHistoryContext = {
+  intakes?: readonly IntakeRecord[];
   requiredWakeByDate?: Readonly<Record<string, string | null>>;
   /** Recorded choices take precedence over inferred opportunities. */
   choiceWakeDates?: readonly string[];
@@ -133,7 +135,7 @@ export function sleepMeasureDays(nights: readonly SleepNight[], tests: readonly 
   const dates = historyDates(throughDate, days);
   const byDate = new Map<string, MeasureDay>();
   const get = (date: string) => {
-    if (!byDate.has(date)) byDate.set(date, { ...emptyMeasures(), date, medicine: 'unknown', ordinary: true, practice: false, tags: [] });
+    if (!byDate.has(date)) byDate.set(date, { ...emptyMeasures(), date, medicine: 'without', ordinary: true, practice: false, tags: [] });
     return byDate.get(date)!;
   };
   for (const night of nights) {
@@ -143,8 +145,6 @@ export function sleepMeasureDays(nights: readonly SleepNight[], tests: readonly 
       const day = get(morningDate);
       day.sleepQuality = night.morning?.sleepQuality ?? day.sleepQuality;
       day.fallAsleepMinutes = night.morning?.fallAsleepMinutes ?? day.fallAsleepMinutes;
-      const taken = night.morning?.methylphenidate?.taken;
-      if (taken !== undefined) day.medicine = taken ? 'with' : 'without';
       day.tags = [...new Set([...day.tags, ...(night.morning?.tags ?? []), ...sleepTags(night).filter(tag => tag === 'travel')])];
     }
     if (eveningDate) {
@@ -162,8 +162,10 @@ export function sleepMeasureDays(nights: readonly SleepNight[], tests: readonly 
     day.sleepiness = test.sleepiness;
     day.practice = test.practice;
   }
+  const intakes = context.intakes ?? nights.flatMap((night, index) => legacyNightIntakes({ id: `legacy-${index}`, itemId: '', ownerId: '', data: {}, occurredAt: night.morning?.wakeAt ?? night.evening?.lightsOut ?? '', createdAt: '' }, night));
   return dates.map(date => {
     const day = get(date);
+    day.medicine = methylphenidateOnDate(intakes, date) ? 'with' : 'without';
     day.ordinary = ordinaryDay(date, day.tags, context.followUpWindows ?? []);
     return day;
   });

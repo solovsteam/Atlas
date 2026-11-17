@@ -7,6 +7,7 @@ import { UndoProvider, useUndo } from "./context/UndoContext";
 import { NudgeProvider } from "./context/NudgeContext";
 import { CaptureBar } from "./components/CaptureBar";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { IntakePage } from "./pages/IntakePage";
 import { SleepPage } from "./pages/SleepPage";
 import { SleepLogPage } from "./pages/SleepLogPages";
 import { SleepTestPage } from "./pages/SleepTestPage";
@@ -85,8 +86,13 @@ const NAV: { to: string; label: string; icon: ComponentType<{ className?: string
   { to: "/calendar", label: "Calendar", icon: CalendarIcon },
   { to: "/track", label: "Track", icon: TrackIcon },
   { to: "/sleep", label: "Sleep", icon: SleepIcon },
+  { to: "/intake", label: "Intake", icon: IntakeIcon },
   { to: "/archive", label: "Archive", icon: ArchiveIcon }
 ];
+
+function IntakeIcon({ className }: { className?: string }) {
+  return <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d="m9 4-5 5a5 5 0 0 0 7 7l5-5a5 5 0 0 0-7-7Z" /><path d="m6.5 6.5 7 7" /></svg>;
+}
 
 function SleepIcon({ className }: { className?: string }) {
   return <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d="M20.8 13.1A9 9 0 0 1 10.9 3.2a9 9 0 1 0 9.9 9.9Z" /></svg>;
@@ -142,14 +148,14 @@ function AppShell() {
     >
       <RelevanceProvider items={items}>
         <NudgeProvider>
-        <main className="min-h-screen bg-black px-4 pb-28 pt-3 text-neutral-100 md:px-8 md:pb-12 md:pt-5" lang="de">
+        <main className="min-h-screen bg-black px-4 pb-28 pt-3 text-neutral-100 md:px-8 lg:pb-12 md:pt-5" lang="de">
           <section className="mx-auto max-w-6xl">
             <header className="mb-3 flex items-center gap-3 md:mb-5">
               <Link className="flex items-center gap-2 text-lg font-semibold tracking-tight" to="/">
                 <span className="h-2.5 w-2.5 rounded-full bg-indigo-400" />
                 Atlas
               </Link>
-              <nav className="ml-4 hidden gap-1 md:flex">
+              <nav className="ml-4 hidden gap-1 lg:flex">
                 {NAV.map(({ to, label: navLabel, icon: NavIcon }) => (
                   <NavLink
                     className={({ isActive }) =>
@@ -171,11 +177,11 @@ function AppShell() {
                 <AccountMenu label={label} picture={picture} onSignOut={signOut} />
               </div>
             </header>
-            <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-7 border-t border-neutral-800 bg-neutral-950/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden">
+            <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-8 border-t border-neutral-800 bg-neutral-950/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md lg:hidden">
               {NAV.map(({ to, label: navLabel, icon: NavIcon }) => (
                 <NavLink
                   className={({ isActive }) =>
-                    `flex flex-col items-center gap-0.5 pb-1.5 pt-2 text-[10px] font-medium ${isActive ? "text-indigo-300" : "text-neutral-500"}`
+                    `flex min-w-0 flex-col items-center gap-0.5 pb-1.5 pt-2 text-[10px] font-medium ${isActive ? "text-indigo-300" : "text-neutral-500"}`
                   }
                   end={to === "/"}
                   key={to}
@@ -187,7 +193,7 @@ function AppShell() {
               ))}
             </nav>
             {/* The calendar opens with the calendar itself; capture stays on every other page. */}
-            {pathname === "/calendar" || pathname.startsWith("/sleep") ? null : <CaptureBar />}
+            {pathname === "/calendar" || pathname.startsWith("/sleep") || pathname === "/intake" ? null : <CaptureBar />}
             {itemsLoading ? <p className="text-sm text-neutral-500">Loading items…</p> : null}
             {itemsError ? <p className="mb-4 text-sm text-red-400">{itemsError}</p> : null}
             {linksError ? <p className="mb-4 text-sm text-red-400">{linksError}</p> : null}
@@ -203,6 +209,7 @@ function AppShell() {
               <Route path="/items" element={<ItemsPage />} />
               <Route path="/calendar" element={<CalendarPage />} />
               <Route path="/archive" element={<ArchivePage />} />
+              <Route path="/intake" element={<IntakePage />} />
               <Route path="/sleep" element={<SleepPage />} />
               <Route path="/sleep/evening" element={<SleepLogPage kind="evening" />} />
               <Route path="/sleep/lights-out" element={<SleepLogPage kind="lights-out" />} />

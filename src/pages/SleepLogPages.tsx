@@ -2,11 +2,11 @@ import { useState, useRef, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { atLocalClock, addDays, dateInput } from '@shared/recurringReferences';
 import { toggleTag } from '@shared/documentationEntries';
-import { sleepNight, sleepNightDate, targetLightsOut, type SleepEvening, type SleepMorning, type SleepRating } from '@shared/sleepLog';
+import { sleepNight, targetLightsOut, type SleepEvening, type SleepMorning, type SleepRating } from '@shared/sleepLog';
 import { KAROLINSKA_SLEEPINESS_SCALE } from '@shared/reactionTest';
 import { localClock, requiredWakeForDate, sleepScreenState, usualOnset } from '@shared/sleepScreens';
 import { useSleepLog } from '../hooks/useSleepLog';
-import { Choices, ClockField, Field, InstantField, SleepFrame, sleepButton, sleepInput } from '../components/sleep/SleepFields';
+import { Choices, ClockField, Field, InstantField, SleepFrame, sleepButton } from '../components/sleep/SleepFields';
 import { useSleepSave } from '../hooks/useSleepSave';
 import { TrialSupplements } from '../components/sleep/TrialSupplements';
 import { SleepChoiceCard } from '../components/sleep/SleepChoiceCard';
@@ -61,7 +61,7 @@ function LogForm({ kind, store, requestedId, requestedWakeDate }: { kind: LogKin
   const [evening, setEvening] = useState<SleepEvening>(() => ({ alarm: store.settings.anchorWake, dayRating: 4, tags: [], lateReasons: [], ...original?.evening, timeZone }));
   const [morning, setMorning] = useState<SleepMorning>(() => ({
     wokeBy: 'alarm', fallAsleepMinutes: usualOnset(store.nights.map(row => row.night)), awakeDuringNight: 'none', sleepQuality: 4,
-    methylphenidate: { taken: ![0, 6].includes(dateInput(original ? sleepNightDate(original) ?? state.today : state.today).weekday), timeZone }, coffee: [], ...original?.morning, timeZone,
+    ...original?.morning, timeZone,
   }));
   const [wakeAt, setWakeAt] = useState(original?.morning?.wakeAt);
   const [lightsAt, setLightsAt] = useState(original?.evening?.lightsOut);
@@ -98,7 +98,6 @@ function LogForm({ kind, store, requestedId, requestedWakeDate }: { kind: LogKin
   const patchEvening = (patch: Partial<SleepEvening>) => setEvening(value => ({ ...value, ...patch }));
   const patchMorning = (patch: Partial<SleepMorning>) => setMorning(value => ({ ...value, ...patch }));
   async function persistEvening(value: SleepEvening) {
-    if (value.supplements?.some(row => !Number.isFinite(row.dose) || row.dose <= 0)) throw new Error('Enter a dose greater than zero.');
     const assignment = value.trial?.assignment ?? trial.assignment;
     const entry = await store.saveEvening(kind === 'evening' && assignment ? { ...value, trial: value.trial ?? { assignment, adherence: 'unknown', targetLightsOutAt: target.lightsOutAt } } : value, entryId, initial ? new Date(initial.occurredAt) : openedAt);
     setSavedId(entry.id);
@@ -112,8 +111,7 @@ function LogForm({ kind, store, requestedId, requestedWakeDate }: { kind: LogKin
     setObligation(!!currentNight.evening?.earlyObligationAt);
     if (currentNight.morning) {
       setMorning({ wokeBy: 'alarm', fallAsleepMinutes: 15, awakeDuringNight: 'none', sleepQuality: 4,
-        methylphenidate: { taken: ![0, 6].includes(dateInput(sleepNightDate(currentNight) ?? state.today).weekday), timeZone },
-        coffee: [], ...currentNight.morning, timeZone });
+        ...currentNight.morning, timeZone });
       setWakeAt(currentNight.morning.wakeAt);
     }
   }, [currentNight, store.settings.anchorWake, timeZone, state.today]);
@@ -122,7 +120,12 @@ function LogForm({ kind, store, requestedId, requestedWakeDate }: { kind: LogKin
   return <SleepFrame title={title}>
     {kind === 'evening' ? <>
       <p className="text-sm text-neutral-400">Tonight’s target lights out: <span className="text-white">{target.lightsOut}</span>. {required ? `Required wake time: ${localClock(required, timeZone)}.` : 'Tomorrow has no required wake time.'}</p>
-      <Field title="Supplements tonight"><TrialSupplements evening={evening} settings={store.settings} wakeDate={wakeDate} targetLightsOutAt={target.lightsOutAt} timeZone={timeZone} onChange={patchEvening} /></Field>
+      <Field title="Supplements tonight"><TrialSupplements evening={evening} settings={store.settings} wakeDate={wakeDate} busy={save.busy} onTaken={() => void save.run(async () => {
+        const assignment = evening.trial?.assignment ?? trial.assignment;
+        if (!assignment) return;
+        const saved = await store.saveAssignedIntakes(evening, assignment, target.lightsOutAt, entryId);
+        setSavedId(saved.id);
+      }, 'The assigned intakes were recorded.')} /></Field>
       {opportunity && !memory ? <SleepChoiceCard opportunity={opportunity} choice={evening.choice} timeZone={timeZone} busy={choosing || save.busy} ownChoiceOnly={ownChoiceOnly} onChoose={outcome => void save.run(() => choose(outcome), 'The alarm was selected. Save the evening log to record the choice.')} /> : null}
       <Field title="Alarm for tomorrow"><Choices label="Alarm" value={evening.alarm === 'none' ? 'none' : 'time'} options={[{ value: 'time', label: 'Set an alarm' }, { value: 'none', label: 'No alarm' }]} onChange={value => patchEvening({ alarm: value === 'none' ? 'none' : store.settings.anchorWake, choice: undefined })} />{evening.alarm !== 'none' ? <ClockField label="Alarm" value={evening.alarm ?? store.settings.anchorWake} onChange={alarm => patchEvening({ alarm, choice: undefined })} /> : null}</Field>
       <Field title="How did today go?"><div className="space-y-2">{DAY_RATINGS.map(row => <button key={row.value} type="button" aria-pressed={evening.dayRating === row.value} className={`${sleepButton} w-full text-left ${evening.dayRating === row.value ? 'border-indigo-400 bg-indigo-500/20' : ''}`} onClick={() => patchEvening({ dayRating: row.value })}><span className="mr-2 text-indigo-300">{row.value}</span>{row.label}</button>)}</div></Field>
@@ -147,12 +150,10 @@ function LogForm({ kind, store, requestedId, requestedWakeDate }: { kind: LogKin
     {kind === 'morning' ? <>
       <Field title="Wake time"><InstantField label="Wake time" value={wakeAt ?? openedAt.toISOString()} timeZone={timeZone} onChange={setWakeAt} /></Field>
       <Field title="What woke me"><Choices label="What woke me" value={morning.wokeBy!} options={[{ value: 'alarm', label: 'The alarm' }, { value: 'self', label: 'I woke by myself' }, { value: 'other', label: 'Something else' }]} onChange={wokeBy => patchMorning({ wokeBy })} /></Field>
-      <Field title="Time to fall asleep"><div className="relative max-w-48"><div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-20 h-10 rounded-lg bg-neutral-800" /><WheelColumn label="Minutes to fall asleep" options={Array.from({ length: 289 }, (_, i) => ({ value: i * 5, label: `${i * 5} min` }))} value={morning.fallAsleepMinutes!} onChange={fallAsleepMinutes => patchMorning({ fallAsleepMinutes })} /></div></Field>
+      <Field title="Time to fall asleep"><p className="text-sm text-neutral-400">From lights out until you fell asleep.</p><div className="relative max-w-48"><div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-20 h-10 rounded-lg bg-neutral-800" /><WheelColumn label="Minutes to fall asleep" options={Array.from({ length: 289 }, (_, i) => ({ value: i * 5, label: `${i * 5} min` }))} value={morning.fallAsleepMinutes!} onChange={fallAsleepMinutes => patchMorning({ fallAsleepMinutes })} /></div></Field>
       <Field title="Awake during the night"><Choices label="Awake during the night" value={morning.awakeDuringNight!} options={[{ value: 'none', label: 'None' }, { value: 'short', label: 'Short' }, { value: 'over30', label: 'Over 30 minutes' }]} onChange={awakeDuringNight => patchMorning({ awakeDuringNight })} /></Field>
       <Field title="Sleep quality"><Choices label="Sleep quality" value={morning.sleepQuality!} options={QUALITY} onChange={sleepQuality => patchMorning({ sleepQuality })} /></Field>
-      <Field title="Methylphenidate"><Choices label="Methylphenidate taken" value={morning.methylphenidate?.taken ? 'yes' : 'no'} options={[{ value: 'yes', label: 'Taken' }, { value: 'no', label: 'Not taken' }]} onChange={value => patchMorning({ methylphenidate: { ...morning.methylphenidate, taken: value === 'yes', timeZone } })} />{morning.methylphenidate?.taken ? <InstantField label="Methylphenidate: taken at" value={morning.methylphenidate.takenAt ?? openedAt.toISOString()} timeZone={timeZone} onChange={takenAt => patchMorning({ methylphenidate: { ...morning.methylphenidate, takenAt } })} /> : null}</Field>
-      <Field title="Coffee"><button aria-pressed={!!morning.coffee?.length} className={`${sleepButton} w-full text-left ${morning.coffee?.length ? 'border-indigo-400 bg-indigo-500/20' : ''}`} type="button" onClick={() => patchMorning({ coffee: morning.coffee?.length ? [] : [{ teaspoons: store.settings.coffeeTeaspoons, takenAt: new Date().toISOString(), timeZone }] })}>{morning.coffee?.length ? '✓ Coffee taken' : `Coffee now · ${store.settings.coffeeTeaspoons} teaspoon${store.settings.coffeeTeaspoons === 1 ? '' : 's'} of instant coffee`}</button>{morning.coffee?.[0] ? <label className="flex items-center justify-between gap-3 text-sm">Instant coffee (teaspoons)<input aria-label="Coffee: amount" className={`${sleepInput} w-24`} type="number" min="0.01" step="any" value={morning.coffee[0].teaspoons} onChange={e => patchMorning({ coffee: [{ ...morning.coffee![0], teaspoons: e.target.valueAsNumber }] })} /></label> : null}{morning.coffee?.[0]?.takenAt ? <InstantField label="Coffee: taken at" value={morning.coffee[0].takenAt} timeZone={timeZone} onChange={takenAt => patchMorning({ coffee: [{ ...morning.coffee![0], takenAt }] })} /> : null}</Field>
-      <button className={`${sleepButton} w-full bg-indigo-500 font-semibold text-white`} disabled={save.busy} type="button" onClick={() => void save.run(async () => { if (morning.coffee?.some(row => !Number.isFinite(row.teaspoons) || row.teaspoons! <= 0)) throw new Error('Enter a coffee amount greater than zero.'); const entry = await store.saveMorning({ ...morning, wakeAt: wakeAt ?? new Date().toISOString(), methylphenidate: { ...morning.methylphenidate, takenAt: morning.methylphenidate?.taken ? morning.methylphenidate.takenAt ?? new Date().toISOString() : undefined, timeZone } }, entryId); setSavedId(entry.id); setWakeAt(sleepNight(entry)?.morning?.wakeAt); }, 'The morning log was saved.')}>{save.busy ? 'Saving…' : 'Save the morning log'}</button>
+      <button className={`${sleepButton} w-full bg-indigo-500 font-semibold text-white`} disabled={save.busy} type="button" onClick={() => void save.run(async () => { const entry = await store.saveMorning({ ...morning, wakeAt: wakeAt ?? new Date().toISOString() }, entryId); setSavedId(entry.id); setWakeAt(sleepNight(entry)?.morning?.wakeAt); }, 'The morning log was saved.')}>{save.busy ? 'Saving…' : 'Save the morning log'}</button>
       {!(entryId ? store.nights.find(row => row.entry.id === entryId)?.night.evening : original?.evening) ? <p className="text-sm text-neutral-400">The evening log is missing. {entryId ? <Link className="text-indigo-300 underline" to={`/sleep/evening?entry=${entryId}`}>Fill the evening from memory</Link> : 'Save the morning first to fill the evening from memory.'}</p> : null}
     </> : null}
     {save.feedback}

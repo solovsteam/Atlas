@@ -34,6 +34,8 @@ export type SleepEvening = SleepLogPart & {
     confirmation?: 'self-report' | 'edited';
     confirmedAt?: string;
     targetLightsOutAt: string;
+    /** Separate intake entries are the source of evidence. */
+    intakeLog?: boolean;
   };
   lightsOut?: string;
   supplements?: import('./sleepScreens').SupplementIntake[];

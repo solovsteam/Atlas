@@ -1,12 +1,12 @@
 # Sleep screens
 
-The screens are connected to the stored history and trial in the local `sleep/integrate` branch. The storage contract remains in [REACTION_TEST.md](REACTION_TEST.md).
+The screens use the stored history and trial. The storage contract remains in [REACTION_TEST.md](REACTION_TEST.md).
 
-The Sleep tab is one entry in `NAV` in `src/App.tsx`. Routes are `/sleep`, `/sleep/evening`, `/sleep/lights-out` and `/sleep/morning`. The overview links to the existing `/sleep/test` route. Sleep pages hide the general capture bar.
+The Sleep tab is one entry in `NAV` in `src/App.tsx`. Routes are `/sleep`, `/sleep/evening`, `/sleep/lights-out` and `/sleep/morning`. The overview links to the existing `/sleep/test` route. Sleep pages and Intake hide the general capture bar.
 
 All three log routes accept `?entry=<documentation-entry-id>` for corrections. The overview also lists saved nights with correction links. The history views can use these addresses. A morning without an evening can be saved first. Its link then opens the evening on the same entry, marked `fromMemory`.
 
-The default day rating is 4. The default quality is good. The default waking cause is the alarm. The onset picker uses the median of the latest 28 available onset values, rounded to five minutes, or 15 minutes without values. Intake buttons record a draft at the time of the tap. Save stores the complete part. An untouched wake time records the moment of Save.
+The default day rating is 4. The default quality is good. The default waking cause is the alarm. The onset picker uses the median of the latest 28 available onset values, rounded to five minutes, or 15 minutes without values. The Intake tab at `/intake` saves each tap immediately. Save on a sleep screen stores the complete part. An untouched wake time records the moment of Save.
 
 Direct bedtime routes and Now cards treat midnight to noon as the preceding evening's night. The overview always shows the coming night and tomorrow's alarm. Its `?for=YYYY-MM-DD` links preserve that selection before noon. Historical corrections retain the recorded time zone for the edited part.
 
@@ -14,16 +14,34 @@ Direct bedtime routes and Now cards treat midnight to noon as the preceding even
 
 `useSleepLog().saveSettings` uses the existing item service and records item undo. Settings live under `documentation_schema.sleepLog.settings`. Unknown fields and sibling markers are preserved.
 
-Additional settings are `usualDoses` with `melatonin`, `glycine` and `magnesium`, `coffeeTeaspoons`, and `weekdayObligation`. Each obligation stores `start`, `end` and `label`. Weekday keys use Sunday 0 through Saturday 6. A null value means no obligation. Monday to Friday default to 09:30 to 19:30 for work, travel and groceries. `weekdayWake` remains an optional explicit wake constraint, with null defaults. Preparation remains `preparationMinutes`. The required wake time is the earliest candidate, including the obligation start minus preparation.
+Intake buttons live in `intakeButtons`. Each button has `id`, `substance`, `label`, `dose`, `unit` and `hidden`. Array order is display order. `substance` keeps its identity when the label changes. Old `usualDoses` and `coffeeTeaspoons` settings supply defaults until button settings are saved. Other settings include `weekdayObligation`. Each obligation stores `start`, `end` and `label`. Weekday keys use Sunday 0 through Saturday 6. A null value means no obligation. Monday to Friday default to 09:30 to 19:30 for work, travel and groceries. `weekdayWake` remains an optional explicit wake constraint, with null defaults. Preparation remains `preparationMinutes`. The required wake time is the earliest candidate, including the obligation start minus preparation.
 
-`SleepEvening.supplements` is an array of `{ supplement, dose, takenAt, timeZone }`. Units come from `SUPPLEMENTS` in `shared/sleepScreens.ts`. `earlyObligationAt` is an appointment's start instant. It is not a wake time.
+Each intake is a separate documentation entry with `kind: 'intake'` and
+`intake: { substance, label, dose, unit, takenAt, timeZone }`. Its `occurred_at`
+is the taken time. Editing updates both the data and the entry time. Undo restores
+both. The same form handles late entries and corrections, using the existing time
+wheel. Dates in the daily list use the viewer’s time zone.
 
-`TrialSupplements` uses the manual `SupplementsTonight` controls for changes.
-Before a trial starts, the controls keep their usual behavior. The normal-level
-phase shows the instruction to take no evening supplements. The trial phase
-uses `sleepTrialTonight`. The stored assignment takes precedence during corrections.
-The confirmation is an explicit self-report, not an inferred dose or intake time.
-A changed intake is marked as a deviation. An unconfirmed assignment stays unknown.
+Old `morning.methylphenidate`, `morning.coffee` and `evening.supplements` are read
+through `readIntakes`. Unknown old times and doses stay labelled as unknown.
+Corrections to an old intake create an intake entry with `replacesLegacy`.
+Deletion creates a `kind: 'intakeCorrection'` marker with the same legacy key.
+The newest correction wins. Undo removes the new entry or restores its snapshot.
+No old night is automatically rewritten.
+
+The morning screen has no medicine or coffee controls. The evening screen has no
+manual supplement controls. `TrialSupplements` still shows the assignment.
+“Taken as assigned” immediately saves one intake per assigned supplement at the
+current time and records the assignment. One undo reverses the complete action.
+A partial write failure leaves the successful entries available for review and
+undo. Atlas never automatically repeats the action.
+
+Trial adherence reads intakes from four hours before target lights out through
+actual lights out, including both boundaries. Daytime glycine falls outside that
+window. Existing dose and timing checks still apply. Approximate timing remains
+unknown when no tolerance is configured. Old self-report confirmations remain
+evidence unless an actual intake contradicts them. A new confirmation uses intake
+entries as evidence. `earlyObligationAt` remains an appointment’s start instant.
 
 The Start action saves `settings.trial = { seed, normalLevelStartDate }` through
 the existing settings service and undo. The seed comes from `crypto.getRandomValues`
@@ -42,7 +60,7 @@ value, the screen labels its fallback to the sleep-duration setting.
 
 The Sleep overview supplies `SleepHistory` with stored nights and reaction tests,
 today's local date, and context from `sleepHistoryContext`. The context contains
-recorded choices, required wake times, and saved follow-up windows. The Now card
+recorded choices, required wake times, saved follow-up windows and normalized intakes. History classifies a day without a methylphenidate intake as without the medicine. The Now card
 for the reaction test appears from the configured test time until local midnight
 while today's completed test is missing. A practice test also completes that day.
 

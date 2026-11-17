@@ -160,12 +160,12 @@ if (!process.env.SLEEP_HISTORY_TZ_CHILD) {
     assert.equal(levels.with.lapses, 2);
     assert.equal(levels.with.sleepiness, 3);
     assert.equal(levels.with.fallAsleepMinutes, 15);
-    assert.equal(levels.without.lapses, 7);
-    assert.equal(levels.without.sleepiness, 8);
-    assert.equal(levels.without.fallAsleepMinutes, 40);
+    assert.equal(levels.without.lapses, 53.5);
+    assert.equal(levels.without.sleepiness, 8.5);
+    assert.equal(levels.without.fallAsleepMinutes, 27.5);
     assert.equal(levels.with.counts.lapses, 2);
-    assert.equal(levels.without.counts.lapses, 1);
-    assert.equal(days.at(-1)!.medicine, 'unknown');
+    assert.equal(levels.without.counts.lapses, 2);
+    assert.equal(days.at(-1)!.medicine, 'without');
   });
 
   test('ordinaryDay excludes sickness, travel and supplied follow-up windows from normal levels', () => {
@@ -190,7 +190,7 @@ if (!process.env.SLEEP_HISTORY_TZ_CHILD) {
 
   test('a test can exist without a night, and non-practice takes priority over a later practice result', () => {
     const days = sleepMeasureDays([], [reaction('2026-11-16', 1, 2, false, '14:00'), reaction('2026-11-16', 99, 9, true, '16:00')], '2026-11-16', 1);
-    assert.equal(days[0].medicine, 'unknown');
+    assert.equal(days[0].medicine, 'without');
     assert.equal(days[0].lapses, 1);
     assert.equal(days[0].practice, false);
     assert.equal(sleepNormalLevels(days, '2026-11-16').with.lapses, null);

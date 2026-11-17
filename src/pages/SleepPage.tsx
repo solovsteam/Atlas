@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { addDays, civilDate, dateInput } from '@shared/recurringReferences';
 import { targetLightsOut } from '@shared/sleepLog';
-import { localClock, requiredWakeForDate, sleepScreenState, SUPPLEMENTS, type SleepScreenSettings } from '@shared/sleepScreens';
+import { localClock, requiredWakeForDate, sleepScreenState, type SleepScreenSettings } from '@shared/sleepScreens';
 import { sleepHistoryContext, sleepTrialDisplay } from '@shared/sleepIntegration';
 import { SleepHistory } from '../components/sleep/history/SleepHistory';
 import { newSleepSeed } from '../lib/sleepRandom';
@@ -53,8 +53,6 @@ function SleepSettings({ settings, saveSettings, reminderAt, timeZone, today }: 
         await saveSettings({ ...settings, trial: { normalLevelStartDate: startDate, seed: newSleepSeed() } });
       }, 'The trial was started.')}>Start</button></>}
     </Field>
-    <Field title="Usual evening doses">{SUPPLEMENTS.map(s => <label className="flex items-center justify-between gap-3 text-sm" key={s.id}>{s.label} ({s.unit})<input className={`${sleepInput} w-24`} aria-label={`${s.label}: usual dose`} type="number" min="0.01" step="any" value={draft.usualDoses[s.id]} onChange={e => patch({ usualDoses: { ...draft.usualDoses, [s.id]: e.target.valueAsNumber } })} /></label>)}</Field>
-    <label className="flex items-center justify-between gap-3 text-sm">Instant coffee (teaspoons)<input className={`${sleepInput} w-24`} aria-label="Usual coffee amount" type="number" min="0.01" step="any" value={draft.coffeeTeaspoons} onChange={e => patch({ coffeeTeaspoons: e.target.valueAsNumber })} /></label>
     <Field title="Weekday obligation"><p className="text-xs text-neutral-400">The obligation includes work, travel and groceries. Weekends have no obligation by default.</p>{['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].map((day, i) => {
       const weekday = i + 1;
       const obligation = draft.weekdayObligation[weekday];
@@ -72,7 +70,6 @@ function SleepSettings({ settings, saveSettings, reminderAt, timeZone, today }: 
     <ClockField label="Anchor wake time" value={draft.anchorWake} onChange={anchorWake => patch({ anchorWake })} />
     <p className="text-sm text-neutral-400">Set the evening automation to {localClock(reminderAt, timeZone)}. Set the reaction test automation to {settings.testTime}.</p>
     <button className={`${sleepButton} w-full bg-indigo-500 font-semibold`} disabled={save.busy} type="button" onClick={() => void save.run(async () => {
-      if ([...Object.values(draft.usualDoses), draft.coffeeTeaspoons].some(n => !Number.isFinite(n) || n <= 0)) throw new Error('Enter an amount greater than zero.');
       if (!Number.isFinite(draft.preparationMinutes) || draft.preparationMinutes < 0 || draft.preparationMinutes > 1440) throw new Error('Enter preparation minutes from 0 to 1440.');
       if (Object.values(draft.weekdayObligation).some(value => value && (!/^([01]\d|2[0-3]):[0-5]\d$/.test(value.start) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(value.end) || !value.label.trim()))) throw new Error('Enter a start time, end time and label for each obligation.');
       await saveSettings(draft);

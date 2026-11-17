@@ -1,3 +1,4 @@
+import { parseIntakeButtons, type IntakeButton } from './intake';
 import { parseStoredSleepTrial, type StoredSleepTrial } from './sleepTrial';
 import type { DocumentationEntry } from './documentationEntries';
 import { addDays, atLocalClock, civilDate, dateInput } from './recurringReferences';
@@ -15,6 +16,7 @@ export type SleepScreenSettings = SleepSettings & {
   choiceSeed?: string;
   usualDoses: Record<SupplementId, number>;
   coffeeTeaspoons: number;
+  intakeButtons: IntakeButton[];
   /** Local latest wake times. These already include preparation. Sunday = 0. */
   weekdayWake: Record<number, string | null>;
   weekdayObligation: Record<number, { start: string; end: string; label: string } | null>;
@@ -37,6 +39,7 @@ export function sleepScreenSettings(schema: unknown): SleepScreenSettings {
     choiceSeed: typeof settings.choiceSeed === 'string' && settings.choiceSeed.length ? settings.choiceSeed : undefined,
     usualDoses: Object.fromEntries(SUPPLEMENTS.map(s => [s.id, positive(doses[s.id], s.dose)])) as Record<SupplementId, number>,
     coffeeTeaspoons: positive(settings.coffeeTeaspoons, 1),
+    intakeButtons: parseIntakeButtons(settings.intakeButtons, Object.fromEntries(SUPPLEMENTS.map(s => [s.id, positive(doses[s.id], s.dose)])), positive(settings.coffeeTeaspoons, 1)),
     weekdayObligation: Object.fromEntries(Array.from({ length: 7 }, (_, day) => {
       const value = obligations[day];
       const obligation = record(value);
@@ -84,6 +87,7 @@ export function sleepScreenState(entries: readonly DocumentationEntry[], now: Da
   const rows = entries.flatMap(entry => { const night = sleepNight(entry); return night ? [{ entry, night }] : []; });
   const morning = rows.find(row => sleepNightDate(row.night) === today);
   const evening = rows.filter(({ entry, night }) => {
+    if (night.evening?.trial?.assignment) return night.evening.trial.assignment.nightDate === wakeDate;
     const time = Date.parse(night.evening?.lightsOut ?? entry.occurredAt);
     return !!night.evening && time >= start && time < end;
   }).sort((a, b) => b.entry.occurredAt.localeCompare(a.entry.occurredAt))[0];

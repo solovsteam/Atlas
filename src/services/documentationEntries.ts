@@ -74,16 +74,18 @@ export async function createEntry(
   return entryFromDbRow(row as DbDocumentationEntryRow);
 }
 
-/** Replaces the entry's data (stage, situations); the time and tracker stay. */
+/** Replaces data and, when supplied, the entry time. The tracker stays the same. */
 export async function updateEntryData(
   client: Client,
   userId: string,
   id: string,
-  data: Record<string, unknown>
+  data: Record<string, unknown>,
+  occurredAt?: Date
 ): Promise<DocumentationEntry> {
+  if (occurredAt && !Number.isFinite(occurredAt.getTime())) throw new Error("Invalid time");
   const { data: row, error } = await client
     .from("documentation_entries")
-    .update({ data })
+    .update({ data, ...(occurredAt ? { occurred_at: occurredAt.toISOString() } : {}) })
     .eq("id", id)
     .eq("owner_id", userId)
     .select("*")

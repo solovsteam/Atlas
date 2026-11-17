@@ -1,8 +1,10 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
+import { readIntakes, assignedIntakes, nightIntakeAdherence, type Intake, type IntakeRecord } from '@shared/intake';
 import type { Item } from '@shared/item';
 import { isSleepLog, sleepNight, type SleepEvening, type SleepMorning } from '@shared/sleepLog';
 import { sleepScreenSettings, sleepSettingsSchema, type SleepScreenSettings } from '@shared/sleepScreens';
 import { sleepReactionTest } from '@shared/sleepReactionTest';
+import type { SleepTrialAssignment } from '@shared/sleepTrial';
 import type { ReactionTestResult } from '@shared/reactionTest';
 import { useAtlasData } from '../context/AtlasDataContext';
 import { trackCreateEntryUndo, trackDeleteEntryUndo, trackUpdateEntryUndo, trackItemPatchUndo, useUndo } from '../context/UndoContext';
@@ -58,18 +60,45 @@ export function useSleepLog() {
     trackDeleteEntryUndo(push, before);
   }), [mutate, push]);
 
+  const saveIntake = useCallback((intake: Intake, entryId?: string, legacyKey?: string) => mutate(async (id, service) =>
+    record(await service.saveIntake(id, intake, entryId, legacyKey))), [mutate, record]);
+  const saveAssignedIntakes = useCallback((evening: SleepEvening, assignment: SleepTrialAssignment, targetLightsOutAt: string, entryId?: string) => mutate(async (id, service) => {
+    const changes: SleepEntryChange[] = [];
+    const now = new Date();
+    try {
+      for (const intake of assignedIntakes(assignment, now, evening.timeZone!)) {
+        changes.push(await service.saveIntake(id, intake));
+      }
+      const change = await service.saveEvening(id, { ...evening, trial: { assignment, adherence: 'unknown', confirmation: 'self-report',
+        confirmedAt: now.toISOString(), targetLightsOutAt, intakeLog: true } }, now, entryId);
+      changes.push(change);
+      return change.entry;
+    } catch (cause) {
+      throw new Error(`The assignment was not fully recorded. Review Intake before trying again. ${cause instanceof Error ? cause.message : ''}`);
+    } finally {
+      if (changes.length) push({ kind: 'batchEntries', changes });
+    }
+  }), [mutate, push]);
+  const deleteIntake = useCallback((row: IntakeRecord) => row.legacyKey
+    ? mutate(async (id, service) => record(await service.hideLegacyIntake(id, row.legacyKey!, new Date(row.intake.takenAt))))
+    : deleteEntry(row.entry.id), [mutate, record, deleteEntry]);
+  const intakes = useMemo(() => readIntakes(entries), [entries]);
   const nights = useMemo(() => entries.flatMap(entry => {
     const night = sleepNight(entry);
+    if (night?.evening?.trial && night.evening.lightsOut) {
+      const trial = night.evening.trial;
+      night.evening = { ...night.evening, trial: { ...trial, adherence: nightIntakeAdherence(night, intakes) } };
+    }
     return night ? [{ entry, night }] : [];
-  }), [entries]);
+  }), [entries, intakes]);
   const tests = useMemo(() => entries.flatMap(entry => {
     const result = sleepReactionTest(entry);
     return result ? [{ entry, result }] : [];
   }), [entries]);
   const settings = useMemo(() => sleepScreenSettings(item?.documentationSchema), [item?.documentationSchema]);
   return {
-    item, settings, entries, nights, tests,
+    item, settings, entries, nights, tests, intakes,
     loading: itemsLoading || (item !== null && loading), error: itemsError ?? error, refresh,
-    saveEvening, saveMorning, saveReactionTest, saveSettings, deleteEntry,
+    saveEvening, saveMorning, saveReactionTest, saveSettings, deleteEntry, saveIntake, deleteIntake, saveAssignedIntakes,
   };
 }

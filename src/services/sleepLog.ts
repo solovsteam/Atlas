@@ -4,6 +4,7 @@ import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils.js';
 import { itemFromDbRow, type Item } from '@shared/item';
 import type { DocumentationEntry } from '@shared/documentationEntries';
 import { DEFAULT_SLEEP_SETTINGS, isSleepLog, matchingSleepNight, sleepNight, type SleepEvening, type SleepMorning } from '@shared/sleepLog';
+import { intakeData, sleepIntake, type Intake } from '@shared/intake';
 import { sleepReactionTest } from '@shared/sleepReactionTest';
 import type { ReactionTestResult } from '@shared/reactionTest';
 import type { Database, DbItemRow } from '../types/database';
@@ -13,7 +14,7 @@ import { createEntry, deleteEntry, fetchEntries, updateEntryData } from './docum
 type Client = SupabaseClient<Database>;
 export type SleepEntryWriter = {
   createEntry: (itemId: string, at: Date, data: Record<string, unknown>) => Promise<DocumentationEntry>;
-  updateEntry: (entry: DocumentationEntry, data: Record<string, unknown>) => Promise<DocumentationEntry>;
+  updateEntry: (entry: DocumentationEntry, data: Record<string, unknown>, at?: Date) => Promise<DocumentationEntry>;
   deleteEntry: (entry: DocumentationEntry) => Promise<void>;
 };
 export type SleepEntryChange = { entry: DocumentationEntry; before?: DocumentationEntry };
@@ -60,7 +61,7 @@ export async function findOrCreateSleepLog(client: Client, userId: string): Prom
 /** The hook supplies the normal writers so mutations also update other views in this tab. */
 export function sleepLogStore(client: Client, userId: string, writer: SleepEntryWriter = {
   createEntry: (itemId, at, data) => createEntry(client, userId, itemId, at, data),
-  updateEntry: (entry, data) => updateEntryData(client, userId, entry.id, data),
+  updateEntry: (entry, data, at) => updateEntryData(client, userId, entry.id, data, at),
   deleteEntry: entry => deleteEntry(client, userId, entry.id),
 }) {
   async function current(itemId: string, id: string) {
@@ -83,6 +84,16 @@ export function sleepLogStore(client: Client, userId: string, writer: SleepEntry
     readEntries: (itemId: string) => fetchEntries(client, userId, itemId),
     saveEvening: (itemId: string, evening: SleepEvening, at: Date, entryId?: string) => savePart(itemId, 'evening', evening, at, entryId),
     saveMorning: (itemId: string, morning: SleepMorning, at: Date, entryId?: string) => savePart(itemId, 'morning', morning, at, entryId),
+    async saveIntake(itemId: string, intake: Intake, entryId?: string, legacyKey?: string): Promise<SleepEntryChange> {
+      const before = entryId ? await current(itemId, entryId) : undefined;
+      if (before && !sleepIntake(before)) throw new Error('This entry is not an intake.');
+      const data = intakeData(intake, legacyKey ?? (typeof before?.data.replacesLegacy === 'string' ? before.data.replacesLegacy : undefined));
+      return before ? { entry: await writer.updateEntry(before, data, new Date(intake.takenAt)), before }
+        : { entry: await writer.createEntry(itemId, new Date(intake.takenAt), data) };
+    },
+    async hideLegacyIntake(itemId: string, legacyKey: string, at: Date): Promise<SleepEntryChange> {
+      return { entry: await writer.createEntry(itemId, at, { kind: 'intakeCorrection', replacesLegacy: legacyKey }) };
+    },
     async saveReactionTest(itemId: string, result: ReactionTestResult, timeZone: string): Promise<SleepEntryChange> {
       const data = { kind: 'reactionTest', reactionTest: { ...result, timeZone } };
       if (!sleepReactionTest({ data })) throw new Error('The reaction test result is invalid.');

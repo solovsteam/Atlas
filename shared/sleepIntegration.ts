@@ -1,3 +1,4 @@
+import { readIntakes } from './intake';
 import type { DocumentationEntry } from './documentationEntries';
 import { addDays, civilDate } from './recurringReferences';
 import { choiceNight, followUpWindow, shortfall, sleepNight, sleepNightDate, targetLightsOut, usualSleep, type SleepEvening, type SleepNight } from './sleepLog';
@@ -17,7 +18,7 @@ export function reactionTestCardDue(now: Date, timeZone: string, testTime: strin
   return localClock(now, timeZone) >= testTime && !tests.some(test => civilDate(new Date(test.startedAt), timeZone) === today);
 }
 export function recordedSleepWakeDate(entry: DocumentationEntry, night: SleepNight): string {
-  return sleepNightDate(night) ?? activeSleepWakeDate(new Date(night.evening?.lightsOut ?? entry.occurredAt), night.evening?.timeZone ?? 'UTC');
+  return sleepNightDate(night) ?? night.evening?.trial?.assignment.nightDate ?? activeSleepWakeDate(new Date(night.evening?.lightsOut ?? entry.occurredAt), night.evening?.timeZone ?? 'UTC');
 }
 export function previousSleepChoices(rows: readonly { entry: DocumentationEntry; night: SleepNight }[], wakeDate: string): [SleepChoice | null, SleepChoice | null] {
   return [1, 2].map(offset => rows.find(row => (row.night.evening?.choice?.wakeDate ?? recordedSleepWakeDate(row.entry, row.night)) === addDays(wakeDate, -offset))?.night.evening?.choice?.outcome ?? null) as [SleepChoice | null, SleepChoice | null];
@@ -47,7 +48,7 @@ export function sleepHistoryContext(entries: readonly DocumentationEntry[], sett
       followUpWindows.push(night.evening.choice.followUpWindow);
     }
   }
-  return { requiredWakeByDate, choiceWakeDates, followUpWindows };
+  return { requiredWakeByDate, choiceWakeDates, followUpWindows, intakes: readIntakes(entries) };
 }
 export function supplementMode(evening: SleepEvening, trial: ReturnType<typeof sleepTrialDisplay>): 'manual' | 'normal-level' | 'assignment' {
   if (evening.trial?.assignment || trial.phase === 'trial') return 'assignment';

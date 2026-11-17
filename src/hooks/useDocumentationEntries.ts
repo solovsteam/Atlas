@@ -39,8 +39,8 @@ export function useEntryMutations(userId: string | undefined) {
   );
 
   const update = useCallback(
-    async (entry: DocumentationEntry, data: Record<string, unknown>) => {
-      const updated = await updateEntryData(supabase, requireUser(), entry.id, data);
+    async (entry: DocumentationEntry, data: Record<string, unknown>, at = new Date(entry.occurredAt)) => {
+      const updated = await updateEntryData(supabase, requireUser(), entry.id, data, at);
       announce({ kind: "upsert", entry: updated });
       return updated;
     },

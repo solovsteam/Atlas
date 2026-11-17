@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { useMemo, useState } from "react";
 import { generatorRule } from "@shared/recurringReferences";
+import { isRoutineBlock, newestFirst } from "@shared/routineBlocks";
 import type { Item, TaskStatus } from "@shared/item";
 import { isArchivedTask, isParkedTask } from "@shared/relevance";
 import { scheduledTaskIds } from "@shared/links";
@@ -22,7 +23,7 @@ export function TasksPage() {
   const scheduled = useMemo(() => scheduledTaskIds(links), [links]);
 
   const desired = useMemo(
-    () => items.filter((item) => item.isTask && item.taskStatus === "active" && !generatorRule(item)),
+    () => newestFirst(items.filter((item) => item.isTask && item.taskStatus === "active" && !generatorRule(item) && !isRoutineBlock(item))),
     [items]
   );
   const taskCatalog = useMemo(() => items.filter((item) => item.isTask), [items]);

@@ -57,7 +57,8 @@ export function useStableInboxOrder(
   const missing = desired.filter((entry) => !shown.has(entry.id));
 
   return {
-    visible: [...ordered, ...missing],
+    // Rows added since the last refresh (for example a task just created) appear first.
+    visible: [...missing, ...ordered],
     pendingResort,
     refreshOrder: commitOrder
   };

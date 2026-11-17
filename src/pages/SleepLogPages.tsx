@@ -1,8 +1,9 @@
-import { useState, useRef, useEffect } from 'react';
+import { DayReview } from '../components/sleep/DayReview';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { atLocalClock, addDays, dateInput } from '@shared/recurringReferences';
+import { atLocalClock, addDays, civilDate, dateInput } from '@shared/recurringReferences';
 import { toggleTag } from '@shared/documentationEntries';
-import { sleepNight, targetLightsOut, type SleepEvening, type SleepMorning, type SleepRating } from '@shared/sleepLog';
+import { sleepNight, sleepNightDate, targetLightsOut, type SleepEvening, type SleepMorning, type SleepRating } from '@shared/sleepLog';
 import { KAROLINSKA_SLEEPINESS_SCALE } from '@shared/reactionTest';
 import { localClock, requiredWakeForDate, sleepScreenState, usualOnset } from '@shared/sleepScreens';
 import { useSleepLog } from '../hooks/useSleepLog';
@@ -46,10 +47,11 @@ export function SleepLogPage({ kind }: { kind: LogKind }) {
   return <LogForm key={`${kind}:${entryId ?? requestedWakeDate ?? 'current'}`} kind={kind} store={store} requestedId={entryId} requestedWakeDate={requestedWakeDate} />;
 }
 function LogForm({ kind, store, requestedId, requestedWakeDate }: { kind: LogKind; store: Store; requestedId?: string; requestedWakeDate?: string }) {
+  const [params] = useSearchParams();
   const [deviceZone] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone);
   const [openedAt] = useState(() => new Date());
   const state = sleepScreenState(store.entries, openedAt, deviceZone, requestedWakeDate);
-  const initial = requestedId ? store.nights.find(row => row.entry.id === requestedId)?.entry : kind === 'morning' ? state.morningEntry : state.evening?.entry;
+  const initial = requestedId ? store.nights.find(row => row.entry.id === requestedId)?.entry : kind === 'morning' ? requestedWakeDate ? store.nights.find(row => sleepNightDate(row.night) === requestedWakeDate)?.entry ?? state.evening?.entry : state.morningEntry : state.evening?.entry;
   const [timeZone] = useState(() => {
     const night = initial ? sleepNight(initial) : null;
     return (kind === 'morning' ? night?.morning?.timeZone : night?.evening?.timeZone) ?? deviceZone;
@@ -66,12 +68,13 @@ function LogForm({ kind, store, requestedId, requestedWakeDate }: { kind: LogKin
     wokeBy: 'alarm', fallAsleepMinutes: usualOnset(store.nights.map(row => row.night)), awakeDuringNight: 'none', sleepQuality: 4,
     ...original?.morning, timeZone,
   }));
-  const [wakeAt, setWakeAt] = useState(original?.morning?.wakeAt);
+  const [wakeAt, setWakeAt] = useState(original?.morning?.wakeAt ?? (requestedWakeDate ? atLocalClock(requestedWakeDate, `${store.settings.anchorWake}:00`, timeZone) : undefined));
   const [lightsAt, setLightsAt] = useState(original?.evening?.lightsOut);
   const [memory, setMemory] = useState(!!original?.morning && !original?.evening || !!original?.evening?.fromMemory);
   const [obligation, setObligation] = useState(!!original?.evening?.earlyObligationAt);
   const save = useSleepSave();
   const wakeDate = original && initial ? recordedSleepWakeDate(initial, original) : state.wakeDate;
+  const dayDate = addDays(wakeDate, -1);
   const target = targetLightsOut(store.nights.map(row => row.night), wakeDate, timeZone, store.settings);
   const recalledLightsOut = lightsAt ?? atLocalClock(addDays(wakeDate, -1), `${target.lightsOut}:00`, timeZone);
   const late = Date.parse(lightsAt ?? openedAt.toISOString()) > Date.parse(target.lightsOutAt);
@@ -103,10 +106,11 @@ function LogForm({ kind, store, requestedId, requestedWakeDate }: { kind: LogKin
   const patchMorning = (patch: Partial<SleepMorning>) => setMorning(value => ({ ...value, ...patch }));
   async function persistEvening(value: SleepEvening) {
     const assignment = value.trial?.assignment ?? trial.assignment;
-    const entry = await store.saveEvening(kind === 'evening' && assignment ? { ...value, trial: value.trial ?? { assignment, adherence: 'unknown', targetLightsOutAt: target.lightsOutAt } } : value, entryId, initial ? new Date(initial.occurredAt) : openedAt);
+    const entry = await store.saveEvening(kind === 'evening' && assignment ? { ...value, trial: value.trial ?? { assignment, adherence: 'unknown', targetLightsOutAt: target.lightsOutAt } } : value, entryId, initial ? new Date(initial.occurredAt) : requestedWakeDate ? new Date(atLocalClock(dayDate, '20:00:00', timeZone)) : openedAt);
     setSavedId(entry.id);
   }
-  const currentNight = entryId ? store.nights.find(row => row.entry.id === entryId)?.night : undefined;
+  const currentEntry = entryId ? store.entries.find(row => row.id === entryId) : undefined;
+  const currentNight = useMemo(() => currentEntry ? sleepNight(currentEntry) : undefined, [currentEntry]);
   useEffect(() => {
     if (!currentNight) return;
     setEvening({ alarm: store.settings.anchorWake, dayRating: 4, tags: [], lateReasons: [], ...currentNight.evening, timeZone });
@@ -118,13 +122,14 @@ function LogForm({ kind, store, requestedId, requestedWakeDate }: { kind: LogKin
         ...currentNight.morning, timeZone });
       setWakeAt(currentNight.morning.wakeAt);
     }
-  }, [currentNight, store.settings.anchorWake, timeZone, state.today]);
+  }, [currentNight, store.settings.anchorWake, timeZone]);
   const lightsRecorded = currentNight ? !!currentNight.evening?.lightsOut : !!entryId && !!lightsAt && save.message !== 'Undone.';
   const title = kind === 'evening' ? 'Evening log' : kind === 'morning' ? 'Morning log' : 'Lights out';
   return <SleepFrame title={title}>
     {kind === 'evening' ? <>
       <p className="text-sm text-neutral-400">Tonight’s target lights out: <span className="text-white">{target.lightsOut}</span>. {required ? `Required wake time: ${localClock(required, timeZone)}.` : 'Tomorrow has no required wake time.'}</p>
-      <Field title="Supplements tonight"><TrialSupplements evening={evening} settings={store.settings} wakeDate={wakeDate} busy={save.busy} onTaken={() => void save.run(async () => {
+      <DayReview key={`${dayDate}:${timeZone}`} store={store} date={dayDate} timeZone={timeZone} forceMedicine={params.get('answer') === 'medicine'} />
+      <Field title="Supplements tonight"><TrialSupplements evening={evening} settings={store.settings} wakeDate={wakeDate} busy={save.busy} historical={dayDate < civilDate(openedAt, timeZone)} onTaken={() => void save.run(async () => {
         const assignment = evening.trial?.assignment ?? trial.assignment;
         if (!assignment) return;
         const saved = await store.saveAssignedIntakes(evening, assignment, target.lightsOutAt, entryId);
@@ -138,18 +143,19 @@ function LogForm({ kind, store, requestedId, requestedWakeDate }: { kind: LogKin
       <Field title="Unusual today"><SituationChips options={['alcohol', 'nap', 'late caffeine', 'sick', 'travel']} selected={evening.tags ?? []} onToggle={tag => patchEvening({ tags: toggleTag(evening.tags ?? [], tag) })} /></Field>
       {late ? <Field title="Reason for a late night"><SituationChips options={['party', 'work', 'stress', 'screen time']} selected={evening.lateReasons ?? []} onToggle={tag => patchEvening({ lateReasons: toggleTag(evening.lateReasons ?? [], tag) })} /></Field> : null}
       {memory ? <Field title="Evening from memory"><p className="text-sm text-neutral-400">This evening will be marked as recorded from memory.</p><LightsOutHint /><InstantField label="Lights out" value={lightsAt ?? atLocalClock(addDays(wakeDate, -1), `${target.lightsOut}:00`, timeZone)} timeZone={timeZone} onChange={setLightsAt} /></Field> : <button className="text-sm text-neutral-400 underline" type="button" onClick={() => setMemory(true)}>Fill the evening from memory</button>}
-      <button className={`${sleepButton} w-full bg-indigo-500 font-semibold text-white`} disabled={save.busy} type="button" onClick={() => void save.run(() => persistEvening({ ...evening, earlyObligationAt: obligation ? evening.earlyObligationAt : undefined, fromMemory: memory, lightsOut: memory ? lightsAt ?? atLocalClock(addDays(wakeDate, -1), `${target.lightsOut}:00`, timeZone) : evening.lightsOut }), 'The evening log was saved.')}>{save.busy ? 'Saving…' : 'Save the evening log'}</button>
+      <button className={`${sleepButton} w-full bg-indigo-500 font-semibold text-white`} disabled={save.busy} type="button" onClick={() => void save.run(() => persistEvening({ ...evening, earlyObligationAt: obligation ? evening.earlyObligationAt : undefined, fromMemory: memory || dayDate < civilDate(openedAt, timeZone), lightsOut: memory ? lightsAt ?? atLocalClock(addDays(wakeDate, -1), `${target.lightsOut}:00`, timeZone) : evening.lightsOut }), 'The evening log was saved.')}>{save.busy ? 'Saving…' : 'Save the evening log'}</button>
     </> : null}
     {kind === 'lights-out' ? <>
       <LightsOutHint />
+      {requestedWakeDate && !lightsRecorded ? <InstantField label="Lights out" value={lightsAt ?? target.lightsOutAt} timeZone={timeZone} onChange={setLightsAt} /> : null}
       {lightsRecorded ? <>
         <h2 className="text-2xl font-medium">Good night</h2>
         <p className="text-sm text-neutral-400">Lights out: {localClock(currentNight?.evening?.lightsOut ?? lightsAt!, timeZone)}. Sleepiness: {currentNight?.evening?.sleepiness ?? evening.sleepiness} of 9.</p>
         <details className="rounded-xl border border-neutral-800 p-3"><summary className="cursor-pointer text-sm">Correct the time</summary><div className="mt-3 space-y-3"><LightsOutHint /><InstantField label="Lights out" value={lightsAt ?? currentNight!.evening!.lightsOut!} timeZone={timeZone} onChange={setLightsAt} /><button className={sleepButton} disabled={save.busy} type="button" onClick={() => void save.run(() => persistEvening({ ...currentNight?.evening, timeZone, lightsOut: lightsAt ?? currentNight?.evening?.lightsOut }), 'The time was corrected.')}>Save the corrected time</button></div></details>
         <details className="rounded-xl border border-neutral-800 p-3"><summary className="cursor-pointer text-sm">Correct sleepiness</summary><div className="mt-3 space-y-2">{KAROLINSKA_SLEEPINESS_SCALE.map(row => <button className={`${sleepButton} w-full text-left`} key={row.value} disabled={save.busy} type="button" onClick={() => void save.run(() => persistEvening({ ...currentNight?.evening, timeZone, lightsOut: currentNight?.evening?.lightsOut ?? lightsAt, sleepiness: row.value }), 'Sleepiness was corrected.')}>{row.value}. {row.label}</button>)}</div></details>
       </> : <>
-        <p className="text-sm text-neutral-400">How sleepy are you? One tap records lights out now.</p>
-        <div className="space-y-2">{KAROLINSKA_SLEEPINESS_SCALE.map(row => <button className={`${sleepButton} flex w-full items-center gap-3 text-left`} key={row.value} disabled={save.busy} type="button" onClick={() => void save.run(async () => { const value = { ...currentNight?.evening, timeZone, sleepiness: row.value, lightsOut: new Date().toISOString() }; await persistEvening(value); setEvening(value); setLightsAt(value.lightsOut); }, 'Lights out was saved.')}><span className="text-lg text-indigo-300">{row.value}</span><span>{row.label}</span></button>)}</div>
+        <p className="text-sm text-neutral-400">{requestedWakeDate ? "How sleepy were you? One tap records the selected lights-out time." : "How sleepy are you? One tap records lights out now."}</p>
+        <div className="space-y-2">{KAROLINSKA_SLEEPINESS_SCALE.map(row => <button className={`${sleepButton} flex w-full items-center gap-3 text-left`} key={row.value} disabled={save.busy} type="button" onClick={() => void save.run(async () => { const value = { ...currentNight?.evening, timeZone, sleepiness: row.value, lightsOut: lightsAt ?? (requestedWakeDate ? atLocalClock(dayDate, `${target.lightsOut}:00`, timeZone) : new Date().toISOString()) }; await persistEvening(value); setEvening(value); setLightsAt(value.lightsOut); }, 'Lights out was saved.')}><span className="text-lg text-indigo-300">{row.value}</span><span>{row.label}</span></button>)}</div>
       </>}
     </> : null}
     {kind === 'morning' ? <>

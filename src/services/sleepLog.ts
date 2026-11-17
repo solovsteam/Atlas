@@ -4,6 +4,7 @@ import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils.js';
 import { itemFromDbRow, type Item } from '@shared/item';
 import type { DocumentationEntry } from '@shared/documentationEntries';
 import { DEFAULT_SLEEP_SETTINGS, isSleepLog, morningWithLightsOut, matchingSleepNight, sleepNight, type SleepEvening, type SleepMorning } from '@shared/sleepLog';
+import { dayEvidence, dayEvidenceData, dayEvidenceTime, type DayEvidence, type MedicineAnswer } from '@shared/dayEvidence';
 import { intakeData, sleepIntake, type Intake } from '@shared/intake';
 import { sleepReactionTest } from '@shared/sleepReactionTest';
 import type { ReactionTestResult } from '@shared/reactionTest';
@@ -81,6 +82,14 @@ export function sleepLogStore(client: Client, userId: string, writer: SleepEntry
       : { entry: await writer.createEntry(itemId, at, data) };
   }
   return {
+    async saveDayEvidence(itemId: string, kind: 'dayConfirmation' | 'medicineAnswer', value: DayEvidence | MedicineAnswer, entryId?: string): Promise<SleepEntryChange> {
+      const before = entryId ? await current(itemId, entryId) : undefined;
+      if (before && !dayEvidence(before, kind)) throw new Error('This entry has a different kind.');
+      const data = dayEvidenceData(kind, value);
+      const at = dayEvidenceTime(value);
+      return before ? { entry: await writer.updateEntry(before, data, at), before }
+        : { entry: await writer.createEntry(itemId, at, data) };
+    },
     readEntries: (itemId: string) => fetchEntries(client, userId, itemId),
     saveEvening: (itemId: string, evening: SleepEvening, at: Date, entryId?: string) => savePart(itemId, 'evening', evening, at, entryId),
     saveMorning: (itemId: string, morning: SleepMorning, at: Date, entryId?: string, lightsOut?: string) => savePart(itemId, 'morning', morning, at, entryId, lightsOut),

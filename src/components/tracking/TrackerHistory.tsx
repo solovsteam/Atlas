@@ -1,3 +1,8 @@
+import { addDays, civilDate } from '@shared/recurringReferences';
+import { dayEvidence } from '@shared/dayEvidence';
+import { useSleepLog } from '../../hooks/useSleepLog';
+import { InstantField, sleepButton } from '../sleep/SleepFields';
+import { useSleepSave } from '../../hooks/useSleepSave';
 import { useMemo, useState } from "react";
 import {
   bucketGoal,
@@ -49,7 +54,7 @@ function StatTile({ label, value, detail }: { label: string; value: string; deta
   return (
     <div className="rounded-xl border border-neutral-800 bg-neutral-950 px-4 py-3">
       <p className="text-xs text-neutral-500">{label}</p>
-      <p className="mt-1 text-2xl font-semibold text-white">{value}</p>
+      <p className="mt-1 break-words text-xl font-semibold text-white">{value}</p>
       {detail ? <p className="mt-0.5 text-xs text-neutral-500">{detail}</p> : null}
     </div>
   );
@@ -69,21 +74,34 @@ export function TrackerHistory({
   config,
   trackerCreatedAt,
   now,
-  onDelete
+  onDelete,
+  onCorrect
 }: {
   entries: DocumentationEntry[];
   config: TrackerConfig;
   trackerCreatedAt: string | null;
   now: Date;
   onDelete: (entry: DocumentationEntry) => void;
+  onCorrect: (entry: DocumentationEntry, at: Date) => Promise<void>;
 }) {
+  const sleep = useSleepLog();
+  const correction = useSleepSave();
+  const [editing, setEditing] = useState<{ entry: DocumentationEntry; at: string } | null>(null);
+  const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const confirmedDates = sleep.entries.flatMap(entry => { const day = dayEvidence(entry, 'dayConfirmation'); return day?.timeZone === zone ? [day.date] : []; });
+  const confirmed = new Set(confirmedDates);
+  const todayDate = civilDate(now, zone);
+  const todayConfirmed = confirmed.has(todayDate);
+  const weekConfirmed = Array.from({ length: 7 }, (_, i) => addDays(todayDate, -i)).some(date => confirmed.has(date));
+  const priorWeekConfirmed = Array.from({ length: 7 }, (_, i) => addDays(todayDate, -i - 7)).some(date => confirmed.has(date));
   const build = config.kind === "build";
   const [range, setRange] = useState<HistoryRange>("30d");
   const [daysShown, setDaysShown] = useState(DAYS_SHOWN_STEP);
-  const history = useMemo(() => buildHistory(entries, { range, now, trackerCreatedAt }), [entries, range, now, trackerCreatedAt]);
+  const history = buildHistory(entries, { range, now, trackerCreatedAt, confirmedDates });
   const days = useMemo(() => groupEntriesByDay(entries, now), [entries, now]);
-  const lastWeek = entriesInDays(entries, 7, now);
-  const weekBefore = entriesInDays(entries, 7, now, 7);
+  const knownEntries = entries.filter(entry => confirmed.has(civilDate(new Date(entry.occurredAt), zone)));
+  const lastWeek = entriesInDays(knownEntries, 7, now);
+  const weekBefore = entriesInDays(knownEntries, 7, now, 7);
   const unit = UNIT_LABEL[history.granularity];
   const trailingLabel = TRAILING_LABEL[history.granularity];
   const latestAverage = [...history.buckets].reverse().find((bucket) => bucket.average !== null)?.average ?? null;
@@ -97,10 +115,13 @@ export function TrackerHistory({
 
   return (
     <div className="space-y-6">
+      {editing ? <section className="space-y-3 rounded-xl border border-neutral-800 p-4"><h2 className="font-medium">Correct an event</h2><InstantField label="Event time" value={editing.at} timeZone={zone} onChange={at => setEditing({ ...editing, at })} /><div className="flex gap-2"><button className={sleepButton} type="button" disabled={correction.busy} onClick={() => void correction.run(async () => { await onCorrect(editing.entry, new Date(editing.at)); setEditing(null); }, 'The event time was corrected.')}>Save the event time</button><button className={sleepButton} type="button" onClick={() => setEditing(null)}>Cancel</button></div></section> : null}
+      {correction.feedback}
+      <p className="text-sm text-neutral-400">Charts and averages include confirmed days only. Unconfirmed days have an unknown count.</p>
       {build ? (
         <div className="grid grid-cols-3 gap-2">
-          <StatTile label="Today" value={goal !== null ? `${today} of ${goal}` : String(today)} />
-          <StatTile label="Last 7 days" value={String(lastWeek.length)} detail={`${weekBefore.length} the week before`} />
+          <StatTile label="Today" value={todayConfirmed ? goal !== null ? `${today} of ${goal}` : String(today) : "Not confirmed"} />
+          <StatTile label="Last 7 days" value={weekConfirmed ? String(lastWeek.length) : "Not confirmed"} detail={priorWeekConfirmed ? `${weekBefore.length} the week before` : "The week before is not confirmed"} />
           <StatTile
             label="Per day"
             value={history.perDay === null ? "–" : oneDecimal(history.perDay)}
@@ -114,8 +135,8 @@ export function TrackerHistory({
             value={percent(urgeShare(lastWeek))}
             detail={`${percent(urgeShare(weekBefore))} the week before`}
           />
-          <StatTile label="Last 7 days" value={String(lastWeek.length)} detail={`${weekBefore.length} the week before`} />
-          <StatTile label="Today" value={String(today)} />
+          <StatTile label="Last 7 days" value={weekConfirmed ? String(lastWeek.length) : "Not confirmed"} detail={priorWeekConfirmed ? `${weekBefore.length} the week before` : "The week before is not confirmed"} />
+          <StatTile label="Today" value={todayConfirmed ? String(today) : "Not confirmed"} />
         </div>
       )}
 
@@ -165,7 +186,7 @@ export function TrackerHistory({
           tooltip={(index) => {
             const bucket = history.buckets[index];
             if (bucket.count === null) {
-              return { value: "Not tracked yet", label: bucketLabel(bucket, history.granularity) };
+              return { value: "Not confirmed", label: bucketLabel(bucket, history.granularity) };
             }
             const parts: string[] = [];
             const aim = bucketGoal(bucket, goal);
@@ -211,7 +232,7 @@ export function TrackerHistory({
           tooltip={(index) => {
             const bucket = history.buckets[index];
             if (bucket.count === null) {
-              return { value: "Not tracked yet", label: bucketLabel(bucket, history.granularity) };
+              return { value: "Not confirmed", label: bucketLabel(bucket, history.granularity) };
             }
             const parts = ENTRY_STAGES.filter((stage) => bucket.stages[stage] > 0).map((stage) => `${STAGE_LEGEND[stage]}: ${bucket.stages[stage]}`);
             if (bucket.average !== null) {
@@ -242,7 +263,7 @@ export function TrackerHistory({
             tooltip={(index) => ({ value: percent(history.buckets[index].urgeShare), label: bucketLabel(history.buckets[index], history.granularity) })}
           />
         ) : (
-          <p className="text-sm text-neutral-500">Appears with the first entry.</p>
+          <p className="text-sm text-neutral-500">Appears after a day with entries is confirmed.</p>
         )}
       </section>
 
@@ -288,7 +309,7 @@ export function TrackerHistory({
           {days.slice(0, daysShown).map((day) => (
             <li className="px-4 py-3" key={day.day.getTime()}>
               <p className="text-sm text-neutral-300">
-                {day.label} <span className="text-neutral-500">· {times(day.entries.length)}</span>
+                {day.label} <span className="text-neutral-500">· {confirmed.has(civilDate(day.day, zone)) ? times(day.entries.length) : `${day.entries.length} recorded. Not confirmed`}</span>
               </p>
               <ul className="mt-2 flex flex-wrap gap-2">
                 {day.entries.map((entry) => {
@@ -299,7 +320,7 @@ export function TrackerHistory({
                     <li key={entry.id}>
                       <span className="inline-flex items-center gap-1.5 rounded-full border border-neutral-800 py-1 pl-3 pr-1 text-sm text-neutral-200">
                         {stage ? <Swatch color={STAGE_COLORS[stage]} /> : null}
-                        <span className="tabular-nums">{clock}</span>
+                        <button className="min-h-8 tabular-nums underline" type="button" aria-label={`Correct ${day.label} ${clock}`} onClick={() => setEditing({ entry, at: entry.occurredAt })}>{clock}</button>
                         {details ? <span className="text-neutral-500">{details}</span> : null}
                         <button
                           aria-label={`Delete ${day.label} ${clock}`}

@@ -1,4 +1,5 @@
 import type { DocumentationEntry } from './documentationEntries';
+import { medicineAnswer, confirmedDay } from './dayEvidence';
 import { civilDate } from './recurringReferences';
 import { sleepNight, type SleepNight } from './sleepLog';
 import { trialAdherence, type AdherenceStatus, type SleepTrialAssignment, type TrialIntake } from './sleepTrial';
@@ -95,6 +96,20 @@ export function lastTakenToday(intakes: readonly IntakeRecord[], substance: stri
 export function methylphenidateOnDate(intakes: readonly IntakeRecord[], date: string, timeZone?: string): boolean {
   return intakes.some(row => row.intake.substance === 'methylphenidate' && civilDate(new Date(row.intake.takenAt), timeZone ?? row.intake.timeZone) === date);
 }
+export type MethylphenidateStatus = 'taken' | 'not-taken' | 'unknown';
+/** An intake wins over an old negative answer. Confirmation alone never answers the medicine question. */
+export function methylphenidateStatus(entries: readonly DocumentationEntry[], date: string, timeZone?: string, intakes: readonly IntakeRecord[] = readIntakes(entries)): MethylphenidateStatus {
+  if (methylphenidateOnDate(intakes, date, timeZone)) return 'taken';
+  const explicit = [...entries].sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id))
+    .map(medicineAnswer).find(answer => answer?.date === date && (!timeZone || answer.timeZone === timeZone));
+  if (explicit) return explicit.answer;
+  return entries.some(entry => {
+    const morning = sleepNight(entry)?.morning;
+    const zone = morning?.methylphenidate?.timeZone ?? morning?.timeZone;
+    const at = morning?.wakeAt;
+    return morning?.methylphenidate?.taken === false && instant(at) && validZone(zone) && civilDate(new Date(at), timeZone ?? zone) === date;
+  }) ? 'not-taken' : 'unknown';
+}
 /** Inclusive elapsed-time window. Daytime supplements do not become evening trial doses. */
 export function nightTrialIntakes(intakes: readonly IntakeRecord[], targetLightsOutAt: string, lightsOutAt: string): TrialIntake[] {
   if (!instant(targetLightsOutAt) || !instant(lightsOutAt)) return [];
@@ -107,19 +122,22 @@ export function nightTrialIntakes(intakes: readonly IntakeRecord[], targetLights
       unit: intake.unit === 'g' || intake.unit === 'mg' ? intake.unit : undefined, takenAt: intake.takenAt }];
   });
 }
-export function intakeTrialAdherence(assignment: SleepTrialAssignment, intakes: readonly IntakeRecord[], targetLightsOutAt: string, lightsOutAt: string) {
+export function intakeTrialAdherence(assignment: SleepTrialAssignment, intakes: readonly IntakeRecord[], targetLightsOutAt: string, lightsOutAt: string, complete = false) {
   // Approximate timing remains unknown without an explicit tolerance.
-  return trialAdherence(assignment, { entries: nightTrialIntakes(intakes, targetLightsOutAt, lightsOutAt), complete: true }, targetLightsOutAt);
+  return trialAdherence(assignment, { entries: nightTrialIntakes(intakes, targetLightsOutAt, lightsOutAt), complete }, targetLightsOutAt);
 }
 
-/** Old confirmations are evidence of adherence, without inventing individual doses or times. */
-export function nightIntakeAdherence(night: SleepNight, intakes: readonly IntakeRecord[]): AdherenceStatus {
+/** Missing intake cannot establish adherence until every date in the night window is confirmed. */
+export function nightIntakeAdherence(night: SleepNight, intakes: readonly IntakeRecord[], confirmations: readonly DocumentationEntry[] = []): AdherenceStatus {
   const trial = night.evening?.trial;
   if (!trial || !instant(trial.targetLightsOutAt) || !instant(night.evening?.lightsOut)) return 'unknown';
   const entries = nightTrialIntakes(intakes, trial.targetLightsOutAt, night.evening.lightsOut);
-  const legacyConfirmation = !trial.intakeLog && trial.confirmation === 'self-report' && !night.evening.supplements?.length;
-  const result = trialAdherence(trial.assignment, { entries, complete: !legacyConfirmation }, trial.targetLightsOutAt);
-  return legacyConfirmation && result.status !== 'deviated' ? trial.adherence : result.status;
+  const zone = night.evening.timeZone;
+  const startDate = zone ? civilDate(new Date(Date.parse(trial.targetLightsOutAt) - 4 * 3600000), zone) : '';
+  const endDate = zone ? civilDate(new Date(night.evening.lightsOut), zone) : '';
+  const complete = !!zone && confirmedDay(confirmations, startDate, zone) && confirmedDay(confirmations, endDate, zone);
+  const result = trialAdherence(trial.assignment, { entries, complete }, trial.targetLightsOutAt);
+  return result.status;
 }
 
 export function assignedIntakes(assignment: SleepTrialAssignment, now: Date, timeZone: string): Intake[] {

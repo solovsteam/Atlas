@@ -1,3 +1,5 @@
+import { useSearchParams } from 'react-router-dom';
+import { confirmedDay } from '@shared/dayEvidence';
 import { useEffect, useState } from 'react';
 import { addDays, civilDate } from '@shared/recurringReferences';
 import { DEFAULT_INTAKE_BUTTONS, intakeNow, intakesOnDate, lastTakenToday, type Intake, type IntakeButton, type IntakeRecord } from '@shared/intake';
@@ -11,10 +13,11 @@ import { Field, InstantField, sleepButton, sleepInput } from '../components/slee
 type Store = ReturnType<typeof useSleepLog>;
 export function IntakePage() {
   const store = useSleepLog();
+  const [params] = useSearchParams();
   const clock = useSleepClock();
   const now = new Date(Math.max(Date.now(), clock.getTime()));
   const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string | null>(() => { const date = params.get('date'); return date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : null; });
   const [editor, setEditor] = useState<{ intake: Intake; row?: IntakeRecord } | null>(null);
   const save = useSleepSave();
   if (store.loading) return <p role="status">Loading intakes…</p>;
@@ -32,7 +35,7 @@ export function IntakePage() {
       return <button key={button.id} type="button" disabled={save.busy} className={`${sleepButton} min-h-24 w-full break-words p-4 text-left`} onClick={() => void save.run(() => store.saveIntake(intakeNow(button, new Date(), zone)), `${button.label} was recorded.`)}>
         <span className="block text-lg font-medium">{button.label}</span>
         <span className="block text-sm text-neutral-300">{button.dose} {button.unit}</span>
-        <span className="mt-2 block text-xs text-neutral-400">{last ? last.timeKnown ? `Taken at ${localClock(last.intake.takenAt, zone)}` : 'Taken today. Time not recorded.' : 'Not taken today'}</span>
+        <span className="mt-2 block text-xs text-neutral-400">{last ? last.timeKnown ? `Taken at ${localClock(last.intake.takenAt, zone)}` : 'Taken today. Time not recorded.' : 'No intake recorded today'}</span>
         {factor ? <span className="mt-1 block text-xs text-indigo-200">{matches ? 'Assigned tonight' : button.substance === 'glycine' && button.dose === 5 && button.unit === 'g' ? 'Daytime dose. Outside tonight’s assignment.' : 'Not assigned tonight at this dose'}</span> : null}
       </button>;
     })}</div>
@@ -53,6 +56,7 @@ export function IntakePage() {
         <label className="text-sm">Date <input aria-label="Intake history date" className={`${sleepInput} max-w-full`} type="date" value={date} onChange={e => { if (e.target.value) setSelectedDate(e.target.value); }} /></label>
         {selectedDate ? <button className={sleepButton} type="button" onClick={() => setSelectedDate(null)}>Today</button> : null}
       </div>
+      <p className="text-sm text-neutral-400">{confirmedDay(store.entries, date, zone) ? `${intakesOnDate(store.intakes, date, zone).length} intakes. The day is confirmed.` : 'Not confirmed. The daily count is unknown.'}</p>
       <ul className="space-y-2">{intakesOnDate(store.intakes, date, zone).map(row => <li key={row.id}><button className={`${sleepButton} flex w-full items-center justify-between gap-3 text-left`} type="button" onClick={() => setEditor({ intake: { ...row.intake, dose: row.doseKnown ? row.intake.dose : buttons.find(b => b.substance === row.intake.substance)?.dose ?? 1 }, row })}>
         <span className="min-w-0 break-words">{row.intake.label}<span className="block text-xs text-neutral-400">{row.doseKnown ? `${row.intake.dose} ${row.intake.unit}` : 'Dose not recorded'}</span></span><span className="shrink-0 text-sm text-neutral-400">{row.timeKnown ? localClock(row.intake.takenAt, zone) : 'Time not recorded'}</span>
       </button></li>)}</ul>

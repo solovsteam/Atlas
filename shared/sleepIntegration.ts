@@ -48,7 +48,7 @@ export function sleepHistoryContext(entries: readonly DocumentationEntry[], sett
       followUpWindows.push(night.evening.choice.followUpWindow);
     }
   }
-  return { requiredWakeByDate, choiceWakeDates, followUpWindows, intakes: readIntakes(entries) };
+  return { entries, requiredWakeByDate, choiceWakeDates, followUpWindows, intakes: readIntakes(entries) };
 }
 export function supplementMode(evening: SleepEvening, trial: ReturnType<typeof sleepTrialDisplay>): 'manual' | 'normal-level' | 'assignment' {
   if (evening.trial?.assignment || trial.phase === 'trial') return 'assignment';

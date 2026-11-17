@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
+import { type DayEvidence, type MedicineAnswer } from '@shared/dayEvidence';
 import { readIntakes, assignedIntakes, nightIntakeAdherence, type Intake, type IntakeRecord } from '@shared/intake';
 import type { Item } from '@shared/item';
 import { isSleepLog, sleepNight, type SleepEvening, type SleepMorning } from '@shared/sleepLog';
@@ -60,6 +61,8 @@ export function useSleepLog() {
     trackDeleteEntryUndo(push, before);
   }), [mutate, push]);
 
+  const saveDayEvidence = useCallback((kind: 'dayConfirmation' | 'medicineAnswer', value: DayEvidence | MedicineAnswer, entryId?: string) => mutate(async (id, service) =>
+    record(await service.saveDayEvidence(id, kind, value, entryId))), [mutate, record]);
   const saveIntake = useCallback((intake: Intake, entryId?: string, legacyKey?: string) => mutate(async (id, service) =>
     record(await service.saveIntake(id, intake, entryId, legacyKey))), [mutate, record]);
   const saveAssignedIntakes = useCallback((evening: SleepEvening, assignment: SleepTrialAssignment, targetLightsOutAt: string, entryId?: string) => mutate(async (id, service) => {
@@ -87,7 +90,7 @@ export function useSleepLog() {
     const night = sleepNight(entry);
     if (night?.evening?.trial && night.evening.lightsOut) {
       const trial = night.evening.trial;
-      night.evening = { ...night.evening, trial: { ...trial, adherence: nightIntakeAdherence(night, intakes) } };
+      night.evening = { ...night.evening, trial: { ...trial, adherence: nightIntakeAdherence(night, intakes, entries) } };
     }
     return night ? [{ entry, night }] : [];
   }), [entries, intakes]);
@@ -99,6 +102,6 @@ export function useSleepLog() {
   return {
     item, settings, entries, nights, tests, intakes,
     loading: itemsLoading || (item !== null && loading), error: itemsError ?? error, refresh,
-    saveEvening, saveMorning, saveReactionTest, saveSettings, deleteEntry, saveIntake, deleteIntake, saveAssignedIntakes,
+    saveEvening, saveMorning, saveReactionTest, saveSettings, deleteEntry, saveDayEvidence, saveIntake, deleteIntake, saveAssignedIntakes,
   };
 }

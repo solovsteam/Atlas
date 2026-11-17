@@ -1,3 +1,4 @@
+import { missingData } from '@shared/missingData';
 import { Link } from 'react-router-dom';
 import { localClock, sleepScreenState } from '@shared/sleepScreens';
 import { reactionTestCardDue } from '@shared/sleepIntegration';
@@ -10,7 +11,9 @@ export function SleepNowCards() {
   if (loading || error) return null;
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const state = sleepScreenState(entries, now, timeZone);
+  const missing = missingData(entries, now, timeZone, settings);
   const cards = [
+    ...(missing.length ? [{ title: `Missing data: ${missing.length}`, to: '/sleep#missing' }] : []),
     ...(reactionTestCardDue(now, timeZone, settings.testTime, tests.map(row => row.result)) ? [{ title: 'Reaction test', to: '/sleep/test' }] : []),
     ...(state.morningMissing ? [{ title: 'Log last night', to: '/sleep/morning' }] : []),
     ...(Number(localClock(now, timeZone).slice(0, 2)) >= 20 && state.eveningMissing ? [{ title: 'Evening log', to: '/sleep/evening' }] : []),

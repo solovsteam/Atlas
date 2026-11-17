@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   bucketGoal,
-  buildHistory,
+  buildHistory as rawBuildHistory,
   cleanTags,
   countInLastDays,
   dataWithTags,
@@ -45,6 +45,14 @@ const entry = (date: Date, data: Record<string, unknown> = {}): DocumentationEnt
   createdAt: date.toISOString()
 });
 const noticed = (date: Date, stage: EntryStage, tags: string[] = []) => entry(date, entryData(stage, tags));
+
+function buildHistory(entries: DocumentationEntry[], options: Parameters<typeof rawBuildHistory>[1]) {
+  const dates: string[] = [];
+  const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const format = (value: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(value);
+  for (let date = new Date(2023, 0, 1); date <= options.now; date.setDate(date.getDate() + 1)) dates.push(format(date));
+  return rawBuildHistory(entries, { ...options, confirmedDates: dates });
+}
 
 test("the wheel opens at now, rounded down to five minutes, and never in the future", () => {
   const now = at(29, 14, 37);

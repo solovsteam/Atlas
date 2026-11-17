@@ -3,13 +3,13 @@
  * otherwise. The 355 ms boundary follows SLEEP.md (strictly greater than).
  * Protocol: https://pmc.ncbi.nlm.nih.gov/articles/PMC3197786/
  * 30 s response timeout: https://pmc.ncbi.nlm.nih.gov/articles/PMC6289239/
- * A dot still unanswered at the 3-minute deadline is a missed stimulus too.
+ * A dot still unanswered at the test deadline is a missed stimulus too.
  * False starts restart the random wait, after one second of feedback.
  * Browser touch latency means these results are for within-device comparisons.
  */
 export const REACTION_PROTOCOL = {
-  version: "atlas-pvt-b-v1",
-  durationMs: 180_000,
+  version: "atlas-pvt-1m-v2",
+  durationMs: 60_000,
   minWaitMs: 1_000,
   maxWaitMs: 4_000,
   lapseThresholdMs: 355,
@@ -120,7 +120,7 @@ export type KarolinskaSleepiness = typeof KAROLINSKA_SLEEPINESS_SCALE[number]["v
 /** JSON-safe payload for a documentation entry's data. No storage dependency. */
 export type ReactionTestResult = {
   kind: "reaction-test";
-  protocolVersion: typeof REACTION_PROTOCOL.version;
+  protocolVersion: typeof REACTION_PROTOCOL.version | "atlas-pvt-b-v1";
   startedAt: string;
   durationMs: number;
   deviceBrowser: string;

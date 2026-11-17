@@ -38,7 +38,7 @@ interface TestRun {
 /** A standalone screen. It has no route, service, or persistence dependency. */
 export function ReactionTest({ previousTestCount, onComplete, onCancel }: ReactionTestProps) {
   const [screen, setScreen] = useState<Screen>("ready");
-  const [remainingSeconds, setRemainingSeconds] = useState(180);
+  const [remainingSeconds, setRemainingSeconds] = useState(REACTION_PROTOCOL.durationMs / 1000);
   const [message, setMessage] = useState("Wait for the dot.");
   const [interruption, setInterruption] = useState<string | null>(null);
   const [result, setResult] = useState<ReactionTestResult | null>(null);
@@ -70,7 +70,7 @@ export function ReactionTest({ previousTestCount, onComplete, onCancel }: Reacti
     finishedRunRef.current = null;
     setResult(null);
     setInterruption(null);
-    setRemainingSeconds(180);
+    setRemainingSeconds(REACTION_PROTOCOL.durationMs / 1000);
     setMessage("Wait for the dot.");
     setScreen("running");
   }
@@ -250,7 +250,7 @@ export function ReactionTest({ previousTestCount, onComplete, onCancel }: Reacti
 
       {screen === "ready" ? (
         <div className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center gap-5 px-6 pb-[max(env(safe-area-inset-bottom),1.5rem)] pt-6">
-          <p className="text-sm text-indigo-300">3 minutes{practice ? " · Practice test" : ""}</p>
+          <p className="text-sm text-indigo-300">1 minute{practice ? " · Practice test" : ""}</p>
           <h2 className="text-3xl font-semibold">Tap when the dot appears.</h2>
           <p className="leading-relaxed text-neutral-300">Wait for the red dot, then tap anywhere in the large area as quickly as you can.</p>
           <p className="text-sm leading-relaxed text-neutral-400">Keep Atlas open for the whole test. Use the same phone and browser each day.</p>

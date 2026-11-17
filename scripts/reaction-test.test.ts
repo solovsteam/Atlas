@@ -41,8 +41,8 @@ test("a missing response times out at 30 seconds and a late pointer cannot turn 
   assert.equal(summary.meanReciprocalReactionTimePerSecond, null);
 });
 
-test("an unanswered final dot counts as a lapse when the three minutes end", () => {
-  const miss = recordReactionMiss(179_000, REACTION_PROTOCOL.durationMs);
+test("an unanswered final dot counts as a lapse when the one minute ends", () => {
+  const miss = recordReactionMiss(59_000, REACTION_PROTOCOL.durationMs);
   assert.equal(miss.type === "miss" && miss.reason, "test-ended");
   assert.equal(summarizeReactionEvents([miss]).lapses, 1);
 });
@@ -110,8 +110,8 @@ test("the result preserves every RT, missing stimulus and metadata without shari
   const result = createReactionTestResult({
     startedAt: "2026-11-16T14:00:00.000Z", deviceBrowser: "iPhone / Safari", previousTestCount: 2, sleepiness: 7, events,
   });
-  assert.equal(result.protocolVersion, "atlas-pvt-b-v1");
-  assert.equal(result.durationMs, 180_000);
+  assert.equal(result.protocolVersion, "atlas-pvt-1m-v2");
+  assert.equal(result.durationMs, 60_000);
   assert.equal(result.startedAt, "2026-11-16T14:00:00.000Z");
   assert.equal(result.deviceBrowser, "iPhone / Safari");
   assert.equal(result.practice, true);

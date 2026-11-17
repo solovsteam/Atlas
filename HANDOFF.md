@@ -343,3 +343,8 @@ successful retry and restoration after reload. There was no horizontal overflow.
 Buttons measured at least 44px high. No live write, real sign-in, migration,
 push or edit to `scripts/brain-atlas-mcp.ts`.
 Task note: `.handoff/nav-five-20261117.md`. No open questions.
+
+## Shorter reaction test (17 Nov 2026)
+New reaction tests last one minute. Older three-minute results retain their original
+duration and protocol. The full npm run check passed after one known recurrence
+timing failure. Note: .handoff/reaction-short-20261117.md.

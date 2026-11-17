@@ -16,7 +16,7 @@ const entry = (id: string, lightsOut: string, morning?: object): DocumentationEn
 const result = () => ({
   ...createReactionTestResult({ startedAt: '2026-11-16T14:00:00Z', deviceBrowser: 'test phone', previousTestCount: 2, sleepiness: 5,
     events: [{ type: 'response', stimulusAtMs: 1000, reactionTimeMs: 400 }, { type: 'false-start', atMs: 2500 },
-      { type: 'miss', stimulusAtMs: 170000, endedAtMs: 180000, reason: 'test-ended' }] }),
+      { type: 'miss', stimulusAtMs: 50000, endedAtMs: 60000, reason: 'test-ended' }] }),
   timeZone: 'Europe/Berlin',
 });
 const testEntry = () => ({ data: { kind: 'reactionTest', reactionTest: result() } });
@@ -93,4 +93,9 @@ test('Sleep stays out of trackers, routines, the inbox, library and search', () 
   const recorded = { ...evening, lightsOut: '2026-11-16T22:00:00Z' };
   assert.deepEqual(morningWithLightsOut({ evening: recorded }, morning, lightsOut), { evening: recorded, morning });
   assert.deepEqual(morningWithLightsOut({}, morning), { morning });
+});
+
+ test('older three-minute results remain readable', () => {
+  const legacy = { ...result(), protocolVersion: 'atlas-pvt-b-v1', durationMs: 180000 };
+  assert.deepEqual(sleepReactionTest({ data: { kind: 'reactionTest', reactionTest: legacy } }), legacy);
 });

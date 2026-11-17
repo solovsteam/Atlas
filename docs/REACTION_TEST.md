@@ -94,3 +94,5 @@ a separate test entry. `deleteEntry(entryId)` removes either kind.
 The service module also exports `findSleepLog`, `findOrCreateSleepLog`, and
 `sleepLogStore` for consumers outside React. The hook supplies writers that
 announce local changes. The default service writers do not register UI undo.
+
+New tests last one minute under protocol atlas-pvt-1m-v2. Older three-minute results remain readable with their original protocol and duration.

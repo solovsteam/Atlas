@@ -355,3 +355,34 @@ Decided by Tonio on 16 November 2026, after the questions above.
 Tonio (16 November): "I don't care about the product label, but instead whatever the scientific consensus is on what is safe; the product label is just for what's actually in the product." Atlas therefore never suggests a dose above the scientific consensus on a safe dose. Each suggested dose shows the source of its safe limit.
 
 Sources: Burgess and others 2010, J Clin Endocrinol Metab 95(7) 3325-3331. Gardiner and others 2023, Sleep Medicine Reviews 69. Sateia and others 2017, J Clin Sleep Med 13(2) 307-349. Mah and Pitre 2021, BMC Complementary Medicine and Therapies. Yamadera and others 2007, Sleep and Biological Rhythms 5. Cheah and others 2021, PLoS One. MSD Manual, ashwagandha. Only abstracts and summaries were read.
+
+## 15. The Intake tab
+
+Added 17 November 2026. Tonio: "I'd prefer a separate tab where I have a simple button for every type of supplement/medication and at the dose I usually take. pressing it once means: 'i now took this supplement'." Logging an intake afterwards may take more taps.
+
+### The buttons
+
+- A new tab "Intake" at `/intake`, in the main navigation.
+- One large button for each substance, at his usual dose. One tap records "taken now". An "Undo" message appears after each tap.
+- Each button shows when he last took the substance today, for example "Taken at 08:12". A second tap records a second intake. This is correct for coffee, and the undo message covers a tap by mistake.
+- Default buttons: methylphenidate 36 mg, coffee 1 teaspoon, melatonin 0.5 mg, glycine 3 g, glycine 5 g, magnesium 200 mg, and one button "Vitamins and minerals" for the lunch vitamins. Ashwagandha has no button.
+- In the settings of the Intake tab, he can add, rename, hide and reorder buttons, and change the usual dose and its unit.
+- During the trial, each button for a trial supplement shows whether tonight's assignment includes it. A tap on a supplement that is not assigned tonight still records it. The trial then counts that night as a deviation.
+
+### Logging afterwards
+
+- Below the buttons: a link "Taken earlier". It opens a form with the substance, the dose (prefilled with the usual dose) and the date and time (time wheel, prefilled with now). The default number of taps is three: the substance, the time, and Save.
+- Below that: a list of today's intakes, newest first, with a way to see earlier days. A tap on an intake opens the same form to change its time or dose, or to delete it. Delete has undo.
+
+### One place for intake
+
+- Each intake is its own entry of the sleep log item, like a reaction test. The time of the intake is the time of the entry.
+- The Intake tab replaces the methylphenidate and coffee fields of the morning log and the supplement fields of the evening log. Those fields are removed from the screens.
+- During the trial, the evening log still shows tonight's assignment. "Taken as assigned" records one intake for each assigned supplement, at the current time.
+- Old nights that stored methylphenidate, coffee or supplements inside the night record still count. Atlas reads them as intakes.
+- A day without a methylphenidate intake counts as a day without methylphenidate. If he forgets to tap, the data is wrong for that day. He can add the intake afterwards.
+- For the trial, a supplement counts for a night when an intake lies between 4 hours before the target lights out and the lights out of that night. The 5 g glycine at breakfast or lunch is therefore not counted as the evening glycine.
+
+### Labels
+
+- The morning log field "Time to fall asleep" gets the hint "From lights out until you fell asleep."

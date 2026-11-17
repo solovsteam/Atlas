@@ -35,7 +35,7 @@ Each term has one meaning in this document and in the app.
 | Anchor wake time | The wake time that the rhythm is built on: 07:30 on every day. A setting. |
 | Window | The time in bed that leaves room for nine hours of sleep before the anchor wake time: nine hours plus his usual time to fall asleep. A setting. |
 | Target lights out | The anchor wake time minus the window. With the default of 15 minutes to fall asleep: 22:15. Atlas recalculates it each Monday from the median time to fall asleep over the last 28 nights, rounded to 5 minutes. |
-| Lights out | The moment when he starts trying to sleep. |
+| Lights out | The moment you put the phone away and close your eyes to sleep. |
 | Required wake time | The latest wake time that still lets him reach the first obligation of the day. |
 | Choice night | A night when lights out is so late that the full window does not fit before the anchor wake time, and the required wake time allows Extend by at least 30 minutes. On weekdays Extend can therefore last only until the required wake time, usually 08:00. |
 | Shortfall | Minutes of sleep below his usual amount on one night. |

@@ -333,3 +333,10 @@ export function ordinaryDay(date: string, tags: readonly string[], windows: read
   const excluded = tags.some(tag => ['sick', 'travel'].includes(tag.trim().toLowerCase()));
   return !excluded && !windows.some(window => date >= window.startDate && (window.endDate === null || date <= window.endDate));
 }
+
+/** Add a recalled time without replacing an evening that was already recorded. */
+export function morningWithLightsOut(night: SleepNight, morning: SleepMorning, lightsOut?: string): SleepNight {
+  return { ...night, morning, ...(lightsOut && !night.evening?.lightsOut
+    ? { evening: { ...night.evening, lightsOut, timeZone: night.evening?.timeZone ?? morning.timeZone, fromMemory: true } }
+    : {}) };
+}

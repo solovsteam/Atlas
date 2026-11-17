@@ -162,3 +162,26 @@ test('concurrent first use creates one container without replaying a write', asy
     assert.equal((await db.query('select * from items')).rows.length, 1);
   } finally { await db.close(); }
 });
+
+test('one morning change stores recalled lights out and one undo restores both parts', async () => {
+  const { db, client, as } = await database();
+  try {
+    await as(alice);
+    const item = await findOrCreateSleepLog(client, alice);
+    const store = sleepLogStore(client, alice);
+    const before = await store.saveEvening(item.id, { timeZone: 'UTC', dayRating: 3 }, new Date('2026-11-16T21:00:00Z'));
+    const saved = await store.saveMorning(item.id, { timeZone: 'UTC', wakeAt: '2026-11-17T07:30:00Z' }, new Date('2026-11-17T07:30:00Z'), before.entry.id, '2026-11-16T22:15:00Z');
+    assert.equal(saved.entry.id, before.entry.id);
+    assert.equal(sleepNight(saved.entry)?.evening?.lightsOut, '2026-11-16T22:15:00Z');
+    assert.equal(sleepNight(saved.entry)?.evening?.fromMemory, true);
+    assert.equal(sleepNight(saved.entry)?.evening?.dayRating, 3);
+    assert.ok(sleepNight(saved.entry)?.morning);
+    await updateEntryData(client, alice, saved.before!.id, saved.before!.data);
+    assert.deepEqual((await store.readEntries(item.id))[0].data, before.entry.data);
+    const created = await store.saveMorning(item.id, { timeZone: 'UTC', wakeAt: '2026-11-19T07:30:00Z' }, new Date('2026-11-19T07:30:00Z'), undefined, '2026-11-18T22:15:00Z');
+    assert.equal(created.before, undefined);
+    assert.ok(sleepNight(created.entry)?.evening?.fromMemory);
+    await deleteEntry(client, alice, created.entry.id);
+    assert.equal((await store.readEntries(item.id)).length, 1);
+  } finally { await db.close(); }
+});

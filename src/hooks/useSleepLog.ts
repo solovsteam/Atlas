@@ -51,8 +51,8 @@ export function useSleepLog() {
   }), [mutate, updateItem, push]);
   const saveEvening = useCallback((evening: SleepEvening, entryId?: string, at = new Date()) => mutate(async (id, service) =>
     record(await service.saveEvening(id, evening, new Date(evening.lightsOut ?? at), entryId))), [mutate, record]);
-  const saveMorning = useCallback((morning: SleepMorning, entryId?: string, at = new Date()) => mutate(async (id, service) =>
-    record(await service.saveMorning(id, morning, new Date(morning.wakeAt ?? at), entryId))), [mutate, record]);
+  const saveMorning = useCallback((morning: SleepMorning, entryId?: string, at = new Date(), lightsOut?: string) => mutate(async (id, service) =>
+    record(await service.saveMorning(id, morning, new Date(morning.wakeAt ?? at), entryId, lightsOut))), [mutate, record]);
   const saveReactionTest = useCallback((result: ReactionTestResult, timeZone: string) => mutate(async (id, service) =>
     record(await service.saveReactionTest(id, result, timeZone))), [mutate, record]);
   const deleteEntry = useCallback((entryId: string) => mutate(async (id, service) => {

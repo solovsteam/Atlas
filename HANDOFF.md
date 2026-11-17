@@ -270,3 +270,20 @@ repeat taps, last-taken labels, late entries, time wheel corrections, deletion,
 settings and assignment undo. No real sign-in or live database write was used.
 Final checks and the commit are recorded in `.handoff/sleep-intake-20261117.md`.
 No migration, push, or change to `scripts/brain-atlas-mcp.ts`.
+
+## Morning lights out (17 Nov 2026)
+
+Branch `sleep-lightsout`, based on `4f184ed`, in `/Users/tonio/apps/Atlas-wt/lightsout`.
+The morning log asks for lights out when that time is missing. The default is the
+previous evening's target. One save stores both parts in the same entry. One undo
+reverses both parts. Existing evening values stay intact. The link to fill the
+other evening fields remains available. All four requested places explain lights
+out, and section 3 of `docs/SLEEP.md` defines the term.
+
+`npm run check` passed with exit 0, including pure merge tests and a PGlite test
+for saving and undoing both parts. The known preview test passed without a retry.
+The offline browser fixture passed at 375px: the default date and time, the time
+wheel, no horizontal overflow, one combined entry, the hidden field after saving,
+the retained evening link, and one undo restoring the field and removing the entry.
+No migration, live write, real sign-in, push, or edit to `scripts/brain-atlas-mcp.ts`.
+The task note is `.handoff/sleep-lightsout-20261117.md`. No open questions remain.

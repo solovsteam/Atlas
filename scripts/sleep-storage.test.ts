@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { DocumentationEntry } from '../shared/documentationEntries';
 import { trackersOf } from '../shared/documentationEntries';
-import { matchingSleepNight, sleepNight } from '../shared/sleepLog';
+import { morningWithLightsOut, matchingSleepNight, sleepNight } from '../shared/sleepLog';
 import { sleepReactionTest } from '../shared/sleepReactionTest';
 import { createReactionTestResult } from '../shared/reactionTest';
 import { buildInboxEntries, isLibraryItem, searchItems } from '../shared/relevance';
@@ -82,4 +82,15 @@ test('Sleep stays out of trackers, routines, the inbox, library and search', () 
   assert.equal(isLibraryItem(sleep), false);
   assert.deepEqual(buildInboxEntries([sleep, note], { now: new Date(), activeTags: [], activeStatusBoosts: [] }), [note]);
   assert.deepEqual(searchItems([sleep, note], 'sleep'), [note]);
+});
+
+ test('morning saves recalled lights out while preserving the evening fields', () => {
+  const morning = { timeZone: 'Europe/Berlin', wakeAt: '2026-11-17T07:00:00Z' };
+  const lightsOut = '2026-11-16T21:15:00Z';
+  assert.deepEqual(morningWithLightsOut({}, morning, lightsOut), { morning, evening: { lightsOut, timeZone: morning.timeZone, fromMemory: true } });
+  const evening = { alarm: '07:30', dayRating: 4 as const, timeZone: 'UTC' };
+  assert.deepEqual(morningWithLightsOut({ evening }, morning, lightsOut).evening, { ...evening, lightsOut, fromMemory: true });
+  const recorded = { ...evening, lightsOut: '2026-11-16T22:00:00Z' };
+  assert.deepEqual(morningWithLightsOut({ evening: recorded }, morning, lightsOut), { evening: recorded, morning });
+  assert.deepEqual(morningWithLightsOut({}, morning), { morning });
 });

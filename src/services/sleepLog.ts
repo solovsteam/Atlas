@@ -3,7 +3,7 @@ import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils.js';
 import { itemFromDbRow, type Item } from '@shared/item';
 import type { DocumentationEntry } from '@shared/documentationEntries';
-import { DEFAULT_SLEEP_SETTINGS, isSleepLog, matchingSleepNight, sleepNight, type SleepEvening, type SleepMorning } from '@shared/sleepLog';
+import { DEFAULT_SLEEP_SETTINGS, isSleepLog, morningWithLightsOut, matchingSleepNight, sleepNight, type SleepEvening, type SleepMorning } from '@shared/sleepLog';
 import { intakeData, sleepIntake, type Intake } from '@shared/intake';
 import { sleepReactionTest } from '@shared/sleepReactionTest';
 import type { ReactionTestResult } from '@shared/reactionTest';
@@ -69,21 +69,21 @@ export function sleepLogStore(client: Client, userId: string, writer: SleepEntry
     if (!entry) throw new Error('The sleep entry no longer exists.');
     return entry;
   }
-  async function savePart(itemId: string, part: 'evening' | 'morning', value: SleepEvening | SleepMorning, at: Date, entryId?: string): Promise<SleepEntryChange> {
+  async function savePart(itemId: string, part: 'evening' | 'morning', value: SleepEvening | SleepMorning, at: Date, entryId?: string, lightsOut?: string): Promise<SleepEntryChange> {
     if (!value.timeZone) throw new Error('A time zone is required.');
     new Intl.DateTimeFormat('en', { timeZone: value.timeZone });
     const before = entryId ? await current(itemId, entryId) : part === 'morning'
       ? matchingSleepNight(await fetchEntries(client, userId, itemId), at.toISOString()) : null;
     const night = before ? sleepNight(before) : {};
     if (!night) throw new Error('This entry is not a night.');
-    const data = { ...before?.data, kind: 'night', sleepLog: { ...night, [part]: value } };
+    const data = { ...before?.data, kind: 'night', sleepLog: part === 'morning' ? morningWithLightsOut(night, value as SleepMorning, lightsOut) : { ...night, [part]: value } };
     return before ? { entry: await writer.updateEntry(before, data), before }
       : { entry: await writer.createEntry(itemId, at, data) };
   }
   return {
     readEntries: (itemId: string) => fetchEntries(client, userId, itemId),
     saveEvening: (itemId: string, evening: SleepEvening, at: Date, entryId?: string) => savePart(itemId, 'evening', evening, at, entryId),
-    saveMorning: (itemId: string, morning: SleepMorning, at: Date, entryId?: string) => savePart(itemId, 'morning', morning, at, entryId),
+    saveMorning: (itemId: string, morning: SleepMorning, at: Date, entryId?: string, lightsOut?: string) => savePart(itemId, 'morning', morning, at, entryId, lightsOut),
     async saveIntake(itemId: string, intake: Intake, entryId?: string, legacyKey?: string): Promise<SleepEntryChange> {
       const before = entryId ? await current(itemId, entryId) : undefined;
       if (before && !sleepIntake(before)) throw new Error('This entry is not an intake.');

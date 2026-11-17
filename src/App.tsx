@@ -1,3 +1,4 @@
+import { PhoneNavigation } from "./components/PhoneNavigation";
 import { BrowserRouter, Link, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import type { ComponentType } from "react";
 import { authDisplayName, authPicture, useAuthSession } from "./hooks/useAuthSession";
@@ -177,21 +178,7 @@ function AppShell() {
                 <AccountMenu label={label} picture={picture} onSignOut={signOut} />
               </div>
             </header>
-            <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-8 border-t border-neutral-800 bg-neutral-950/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md lg:hidden">
-              {NAV.map(({ to, label: navLabel, icon: NavIcon }) => (
-                <NavLink
-                  className={({ isActive }) =>
-                    `flex min-w-0 flex-col items-center gap-0.5 pb-1.5 pt-2 text-[10px] font-medium ${isActive ? "text-indigo-300" : "text-neutral-500"}`
-                  }
-                  end={to === "/"}
-                  key={to}
-                  to={to}
-                >
-                  <NavIcon className="h-6 w-6" />
-                  {navLabel}
-                </NavLink>
-              ))}
-            </nav>
+            <PhoneNavigation key={session.user.id} tabs={NAV} metadata={session.user.user_metadata} />
             {/* The calendar opens with the calendar itself; capture stays on every other page. */}
             {pathname === "/calendar" || pathname.startsWith("/sleep") || pathname === "/intake" ? null : <CaptureBar />}
             {itemsLoading ? <p className="text-sm text-neutral-500">Loading items…</p> : null}

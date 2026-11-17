@@ -287,3 +287,21 @@ wheel, no horizontal overflow, one combined entry, the hidden field after saving
 the retained evening link, and one undo restoring the field and removing the entry.
 No migration, live write, real sign-in, push, or edit to `scripts/brain-atlas-mcp.ts`.
 The task note is `.handoff/sleep-lightsout-20261117.md`. No open questions remain.
+
+## Phone navigation (17 Nov 2026)
+
+Branch `nav-five`, based on `2406803`, in `/Users/tonio/apps/Atlas-wt/nav`.
+The phone bar defaults to Now, Calendar, Track, Intake and Sleep. More contains
+the other tabs and an editor with checkboxes and Up/Down controls. Any tab can
+be removed. Save stores ordered route ids in Supabase auth user metadata under
+`atlas_phone_navigation`. Failed saves retain the current local choice and show
+an error with a retry. The wide navigation remains unchanged.
+
+`npm run check` passed with exit 0. No flaky-test retry was needed. Five pure
+tests cover normalization, defaults, limits, new tabs and nested active routes.
+The offline browser fixture at 375px verified the default bar, More list,
+navigation and closing, active More, removal of Now, reordering, refused save,
+successful retry and restoration after reload. There was no horizontal overflow.
+Buttons measured at least 44px high. No live write, real sign-in, migration,
+push or edit to `scripts/brain-atlas-mcp.ts`.
+Task note: `.handoff/nav-five-20261117.md`. No open questions.

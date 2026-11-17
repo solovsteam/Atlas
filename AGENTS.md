@@ -35,6 +35,8 @@ Atlas/                     # repo root
 
 **Default:** after meaningful changes, **commit and push** yourself (`git add` → `git commit` → `git push`). User expects GitHub/Vercel to stay current without being asked each time.
 
+**Standing permission (Tonio, 16 November 2026):** agents may push to `main` without asking, because a push can be rolled back. The one condition: the database must never be dropped. Push only when `npm run check` exits 0.
+
 **Branches:** only when user explicitly asks for a backup branch — otherwise work on `main`.
 
 **Never commit:** `.env.local`, secrets, or when user says don't commit.

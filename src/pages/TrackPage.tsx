@@ -2,7 +2,7 @@ import { Link, useParams } from "react-router-dom";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { trackerConfig, trackersOf, type TrackerKind } from "@shared/documentationEntries";
 import { useAtlasData } from "../context/AtlasDataContext";
-import { trackCreateUndo, trackDeleteEntryUndo, useUndo } from "../context/UndoContext";
+import { trackCreateUndo, trackDeleteEntryUndo, trackUpdateEntryUndo, useUndo } from "../context/UndoContext";
 import { useDocumentationEntries, useEntryMutations } from "../hooks/useDocumentationEntries";
 import { PlanEditor } from "../components/tracking/PlanEditor";
 import { TrackerButtons } from "../components/tracking/TrackerButtons";
@@ -87,7 +87,7 @@ export function TrackerPage() {
   const { push } = useUndo();
   const tracker = useMemo(() => items.find((item) => item.id === id && item.isDocumentation) ?? null, [items, id]);
   const { entries, loading, error } = useDocumentationEntries(userId, tracker?.id);
-  const { deleteEntry } = useEntryMutations(userId);
+  const { deleteEntry, updateEntry } = useEntryMutations(userId);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   // Re-render every minute so "today" stays current on a page left open.
   const [, setMinute] = useState(0);
@@ -145,6 +145,7 @@ export function TrackerPage() {
           now={now}
           trackerCreatedAt={tracker.createdAt}
           onDelete={(entry) => void remove(entry)}
+          onCorrect={async (entry, at) => { await updateEntry(entry, entry.data, at); trackUpdateEntryUndo(push, entry); }}
         />
       )}
     </section>

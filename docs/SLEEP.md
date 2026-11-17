@@ -316,7 +316,7 @@ Added 16 November 2026. Some points wait for Tonio's answers. They are marked "o
 ### Methylphenidate in the data
 
 - Slow-release methylphenidate works for about 10 to 12 hours (shown in children; no adult figure was found). A dose taken 2 to 4 hours late can still work at bedtime. This is a hypothesis for him, which Atlas checks.
-- The Intake tab records when he takes methylphenidate. A day without an intake counts as a day without the medicine. A missed intake can be added afterwards.
+- The Intake tab records when he takes methylphenidate. The medicine status is taken, explicitly not taken, or unknown, as defined in section 16. A missed intake can be added afterwards.
 - The 15:00 reaction test measures him with the medicine on weekdays and mostly without it on weekends. Atlas therefore computes the normal level separately for days with and without the medicine. Every comparison takes this into account.
 - Evidence for the psychiatrist: Atlas compares the time to fall asleep and the sleepiness at lights out on nights after a late dose, after a normal dose, and after no dose. Atlas suggests a talk with the psychiatrist only when nights after a late or normal dose are clearly worse than nights without the medicine. Atlas then shows the numbers and their limits. These data are observations, not a trial: he chooses when he takes the medicine late.
 
@@ -380,7 +380,7 @@ Added 17 November 2026. Tonio: "I'd prefer a separate tab where I have a simple 
 - The Intake tab replaces the methylphenidate and coffee fields of the morning log and the supplement fields of the evening log. Those fields are removed from the screens.
 - During the trial, the evening log still shows tonight's assignment. "Taken as assigned" records one intake for each assigned supplement, at the current time.
 - Old nights that stored methylphenidate, coffee or supplements inside the night record still count. Atlas reads them as intakes.
-- A day without a methylphenidate intake counts as a day without methylphenidate. If he forgets to tap, the data is wrong for that day. He can add the intake afterwards.
+- A missing methylphenidate intake leaves the day unknown. Section 16 defines the explicit answer. He can add the intake afterwards.
 - For the trial, a supplement counts for a night when an intake lies between 4 hours before the target lights out and the lights out of that night. The 5 g glycine at breakfast or lunch is therefore not counted as the evening glycine.
 
 ### Labels

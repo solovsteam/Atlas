@@ -9,7 +9,7 @@ A tracker records each time Tonio notices a habit he wants to break, such as scr
   - **Habit to build** (for example Reality check). No urge button. Entries can be tagged with what triggered them, and an optional daily aim shows as progress ("1 of 3 today") and as a level in the chart. The aim is a guide, not a pass mark: Tonio's real rule is "whenever event X happens, do it", so a day without the event is not a failure.
 - **Plan or rule.** One per tracker, stored as the item's body: what to do when noticing a habit to break, or when to do a habit to build. It is shown right after each saved entry.
 - **Tags.** Optional situations (habit to break) or triggers (habit to build), offered from earlier entries, most frequent first. They can be added in the sheet or after saving.
-- **History.** A habit to break shows counts by stage and the share caught at the urge; a habit to build shows counts against the aim. Both show tags, time of day and every entry.
+- **History.** Daily counts stay unknown until the day is confirmed in the evening sleep log. Charts and averages include confirmed days only. Tap a saved time to correct it. Correction and deletion have undo. A habit to break shows counts by stage and the share caught at the urge; a habit to build shows counts against the aim. Both show tags, time of day and every entry.
 - **Storage.** Entries are rows in `documentation_entries` (migration 015). Stage and tags live in the entry's `data` as `stage` and `tags`.
 
 ## Evidence (read from abstracts and summaries, October 2026)

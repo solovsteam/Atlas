@@ -1,8 +1,10 @@
+import { confirmedDay } from '@shared/dayEvidence';
+import { intakesOnDate } from '@shared/intake';
 import { civilDate } from '@shared/recurringReferences';
 import { useMemo, useState } from 'react';
 import type { SleepNight, SleepSettings } from '@shared/sleepLog';
 import type { SleepReactionTest } from '@shared/sleepReactionTest';
-import { nightHistoryRows, sleepMeasureDays, sleepNormalLevels, sleepRegularity, sleepWindowTest, type SleepHistoryContext } from '@shared/sleepHistory';
+import { historyDates, nightHistoryRows, sleepMeasureDays, sleepNormalLevels, sleepRegularity, sleepWindowTest, type SleepHistoryContext } from '@shared/sleepHistory';
 import { NightsChart } from './NightsChart';
 import { RegularityPanel } from './RegularityPanel';
 import { WindowTestPanel } from './WindowTestPanel';
@@ -46,6 +48,12 @@ export function SleepHistory({ nights, tests, settings, throughDate, theme = 'da
         {[7, 28].map(period => <button key={period} type="button" aria-pressed={days === period} onClick={() => setDays(period)} className="rounded-lg border border-[var(--sleep-grid)] px-4 py-2 text-sm aria-pressed:border-indigo-400 aria-pressed:bg-indigo-500/15">{period} days</button>)}
       </div>
     </div>
+    {context?.entries ? <details className="rounded-xl border border-neutral-800 p-4 text-sm"><summary>Daily intake counts</summary><ul className="mt-3 space-y-2">{historyDates(end, days).toReversed().map(date => {
+      const confirmation = context.entries!.find(entry => entry.data.kind === 'dayConfirmation' && (entry.data.dayConfirmation as { date?: string })?.date === date);
+      const zone = (confirmation?.data.dayConfirmation as { timeZone?: string })?.timeZone;
+      const complete = !!zone && confirmedDay(context.entries!, date, zone);
+      return <li key={date}>{date}: {complete ? `${intakesOnDate(context.intakes ?? [], date, zone!).length} intakes` : 'Not confirmed'}</li>;
+    })}</ul></details> : null}
     <NightsChart rows={rows} throughDate={end} days={days} anchorWake={settings.anchorWake} theme={theme} />
     {!context?.choiceWakeDates ? <p className={`px-1 text-xs ${theme === 'light' ? 'text-neutral-600' : 'text-neutral-400'}`}>Choice marks show the opportunity to extend the night. A wake obligation can limit that opportunity.</p> : null}
     <RegularityPanel periods={[sleepRegularity(rows, end, 7), sleepRegularity(rows, end, 28)]} theme={theme} />

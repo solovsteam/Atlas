@@ -1,5 +1,6 @@
 import type { Item } from "./item";
 import { formatEuropeanDate, pad2 } from "./locale";
+import { civilDate } from './recurringReferences';
 import { isSleepLog } from "./sleepLog";
 
 /**
@@ -297,7 +298,7 @@ export type HistoryBucket = {
   start: Date;
   /** Exclusive. */
   end: Date;
-  /** null before tracking started: no observation was possible, so it is not a zero. */
+  /** Null before tracking started or when no day in the bucket is confirmed. */
   count: number | null;
   /** Mean count of this bucket and the earlier ones in the trailing window, from tracking start on. */
   average: number | null;
@@ -388,9 +389,11 @@ export function historyWindow(range: HistoryRange, now: Date, start: Date | null
 
 export function buildHistory(
   entries: DocumentationEntry[],
-  options: { range: HistoryRange; now: Date; trackerCreatedAt: string | null }
+  options: { range: HistoryRange; now: Date; trackerCreatedAt: string | null; confirmedDates?: readonly string[] }
 ): History {
   const { now } = options;
+  const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const confirmed = new Set(options.confirmedDates ?? []);
   const start = trackingStart(entries, options.trackerCreatedAt);
   const { from, granularity } = historyWindow(options.range, now, start);
   const trailing = TRAILING_BUCKETS[granularity];
@@ -400,7 +403,11 @@ export function buildHistory(
   for (let cursor = from; cursor.getTime() <= now.getTime(); cursor = nextBucket(cursor, granularity)) {
     const end = nextBucket(cursor, granularity);
     const tracked = trackedFrom !== null && end.getTime() > trackedFrom.getTime();
-    buckets.push({ start: cursor, end, count: tracked ? 0 : null, average: null, stages: { urge: 0, during: 0, after: 0 }, urgeShare: null });
+    let confirmedInBucket = false;
+    for (let day = new Date(cursor); day < end && day <= now; day.setDate(day.getDate() + 1)) {
+      if (confirmed.has(civilDate(day, zone))) confirmedInBucket = true;
+    }
+    buckets.push({ start: cursor, end, count: tracked && confirmedInBucket ? 0 : null, average: null, stages: { urge: 0, during: 0, after: 0 }, urgeShare: null });
   }
 
   const byHour = new Array<number>(24).fill(0);
@@ -408,7 +415,7 @@ export function buildHistory(
   let total = 0;
   for (const entry of entries) {
     const at = new Date(entry.occurredAt);
-    if (at.getTime() < from.getTime() || at.getTime() > now.getTime()) {
+    if (at.getTime() < from.getTime() || at.getTime() > now.getTime() || !confirmed.has(civilDate(at, zone))) {
       continue;
     }
     const index = findBucket(buckets, at);
@@ -436,7 +443,7 @@ export function buildHistory(
   const byTag = [...tagCounts.values()].sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
 
   const firstTrackedDay = trackedFrom && trackedFrom.getTime() > from.getTime() ? trackedFrom : from;
-  const trackedDays = trackedFrom ? daysBetween(firstTrackedDay, now) + 1 : 0;
+  const trackedDays = trackedFrom ? [...confirmed].filter(date => date >= civilDate(firstTrackedDay, zone) && date <= civilDate(now, zone)).length : 0;
 
   return { granularity, trailing, buckets, byHour, total, perDay: trackedDays > 0 ? total / trackedDays : null, byTag };
 }

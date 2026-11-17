@@ -48,7 +48,7 @@ for (const zone of ['UTC', 'Europe/Berlin', 'America/New_York', 'Pacific/Aucklan
     assert.deepEqual(nightTrialIntakes(intakes, target, lights).map(i => i.takenAt).sort(), [instants[2], instants[3], lights].map(t => new Date(t).toISOString()).sort());
     const off: SleepTrialAssignment = { version: 1, nightDate: '2026-11-18', factors: [{ factorId: 'glycine', on: false, level: null, schedule: 'nightly', periodIndex: null }] };
     assert.equal(intakeTrialAdherence(off, intakes, target, lights).status, 'deviated');
-    assert.equal(intakeTrialAdherence(off, intakes.filter(r => r.intake.takenAt === new Date(instants[0]).toISOString()), target, lights).status, 'as assigned');
+    assert.equal(intakeTrialAdherence(off, intakes.filter(r => r.intake.takenAt === new Date(instants[0]).toISOString()), target, lights, true).status, 'as assigned');
   });
   test(`${zone}: old embedded fields remain intakes without rewriting the original`, () => {
     const night: SleepNight = { morning: { wakeAt: at('2026-11-17', '07:30'), timeZone: zone, methylphenidate: { taken: true }, coffee: [{ teaspoons: 2, takenAt: at('2026-11-17', '08:00') }] },
@@ -75,7 +75,7 @@ for (const zone of ['UTC', 'Europe/Berlin', 'America/New_York', 'Pacific/Aucklan
     assert.equal(readIntakes([old, correction])[0].intake.dose, 2, 'undo delete removes the correction marker');
     assert.equal(readIntakes([old])[0].intake.dose, 1, 'undo edit removes the replacement');
   });
-  test(`${zone}: medicine classification and history normal levels use new and old intakes, absence means without`, () => {
+  test(`${zone}: medicine classification and history normal levels use new and old intakes, absence stays unknown`, () => {
     const dates = ['2026-11-15', '2026-11-16', '2026-11-17'];
     const nights: SleepNight[] = dates.map(date => ({ morning: { wakeAt: at(date, '07:30'), timeZone: zone, sleepQuality: date.endsWith('16') ? 2 : 4 } }));
     nights[0].morning!.methylphenidate = { taken: true };
@@ -83,12 +83,12 @@ for (const zone of ['UTC', 'Europe/Berlin', 'America/New_York', 'Pacific/Aucklan
     const taken = intakeNow(button('methylphenidate'), new Date(at('2026-11-17', '08:00')), zone);
     rows.push(entry(taken.takenAt, intakeData(taken)));
     const days = sleepMeasureDays(nights, [], dates[2], 3, sleepHistoryContext(rows, sleepScreenSettings(null)));
-    assert.deepEqual(days.map(d => d.medicine), ['with', 'without', 'with']);
+    assert.deepEqual(days.map(d => d.medicine), ['with', 'unknown', 'with']);
     assert.equal(sleepNormalLevels(days, dates[2]).with.sleepQuality, 4);
-    assert.equal(sleepNormalLevels(days, dates[2]).without.sleepQuality, 2);
+    assert.equal(sleepNormalLevels(days, dates[2]).without.sleepQuality, null);
     const reactionOnly = sleepMeasureDays([], [], dates[2], 1, { intakes: readIntakes(rows) });
     assert.equal(reactionOnly[0].medicine, 'with', 'a morning log is not required');
-    assert.equal(sleepMeasureDays([], [], addDays(dates[2], 1), 1)[0].medicine, 'without');
+    assert.equal(sleepMeasureDays([], [], addDays(dates[2], 1), 1)[0].medicine, 'unknown');
   });
 }
 test('settings preserve button identity, order, hidden state, custom units and sibling settings', () => {
@@ -106,16 +106,16 @@ test('settings preserve button identity, order, hidden state, custom units and s
   assert.throws(() => intakeNow(button('coffee'), new Date(), 'Invalid/zone'));
   assert.equal(sleepIntake(entry(new Date().toISOString(), { kind: 'reactionTest' })), null);
 });
-test('legacy self-reports still count, but new off-night intake contradicts them', () => {
+test('legacy self-reports do not imply complete days, and recorded off-night intake contradicts them', () => {
   const assignment: SleepTrialAssignment = { version: 1, nightDate: '2026-11-17', factors: [{ factorId: 'glycine', on: false, level: null, schedule: 'nightly', periodIndex: null }] };
   const night: SleepNight = { evening: { lightsOut: '2026-11-16T23:00:00Z', trial: { assignment, adherence: 'as assigned', confirmation: 'self-report', targetLightsOutAt: '2026-11-16T23:00:00Z' } } };
-  assert.equal(nightIntakeAdherence(night, []), 'as assigned');
+  assert.equal(nightIntakeAdherence(night, []), 'unknown');
   const intake = intakeNow(button('glycine-3'), new Date('2026-11-16T22:00:00Z'), 'UTC');
   assert.equal(nightIntakeAdherence(night, readIntakes([entry(intake.takenAt, intakeData(intake))])), 'deviated');
   night.evening!.trial!.assignment = { ...assignment, factors: [{ ...assignment.factors[0], on: true, level: { id: '3g', dose: 3, unit: 'g' } }] };
-  assert.equal(nightIntakeAdherence(night, []), 'as assigned', 'old on confirmations remain valid');
+  assert.equal(nightIntakeAdherence(night, []), 'unknown', 'old trial confirmations do not confirm the whole day');
   night.evening!.trial!.intakeLog = true;
-  assert.equal(nightIntakeAdherence(night, []), 'deviated', 'new entries are required for new confirmations');
+  assert.equal(nightIntakeAdherence(night, []), 'unknown', 'new entries and day completeness are required');
 });
 
 test('an assignment recorded before noon keeps its selected night', () => {

@@ -8,7 +8,7 @@ import { findOrCreateSleepLog, findSleepLog, sleepLogItemId, sleepLogStore } fro
 import { restoreEntry, updateEntryData, deleteEntry } from '../src/services/documentationEntries';
 import { sleepNight, sleepSettings, DEFAULT_SLEEP_SETTINGS } from '../shared/sleepLog';
 import { sleepReactionTest } from '../shared/sleepReactionTest';
-import { intakeNow, DEFAULT_INTAKE_BUTTONS, readIntakes } from '../shared/intake';
+import { sleepIntake, intakeNow, DEFAULT_INTAKE_BUTTONS, readIntakes } from '../shared/intake';
 import { createReactionTestResult } from '../shared/reactionTest';
 
 const alice = '11111111-1111-4111-8111-111111111111';
@@ -183,5 +183,31 @@ test('one morning change stores recalled lights out and one undo restores both p
     assert.ok(sleepNight(created.entry)?.evening?.fromMemory);
     await deleteEntry(client, alice, created.entry.id);
     assert.equal((await store.readEntries(item.id)).length, 1);
+  } finally { await db.close(); }
+});
+
+test('day evidence uses separate entries with correction, deletion and undo under RLS', async () => {
+  const { db, client, as } = await database();
+  try {
+    await as(alice);
+    const item = await findOrCreateSleepLog(client, alice);
+    const store = sleepLogStore(client, alice);
+    const created = await store.saveDayEvidence(item.id, 'dayConfirmation', { date: '2026-11-17', timeZone: 'Europe/Berlin' });
+    const answer = await store.saveDayEvidence(item.id, 'medicineAnswer', { date: '2026-11-17', timeZone: 'Europe/Berlin', answer: 'not-taken' });
+    assert.equal((await store.readEntries(item.id)).length, 2);
+    assert.equal(sleepNight(created.entry), null);
+    assert.equal(sleepIntake(answer.entry), null);
+    const edited = await store.saveDayEvidence(item.id, 'dayConfirmation', { date: '2026-11-16', timeZone: 'America/New_York' }, created.entry.id);
+    assert.equal(edited.entry.occurredAt, '2026-11-16T17:00:00.000Z');
+    assert.ok(edited.before);
+    await updateEntryData(client, alice, edited.before.id, edited.before.data, new Date(edited.before.occurredAt));
+    assert.deepEqual((await store.readEntries(item.id)).find(row => row.id === created.entry.id)?.data, created.entry.data);
+    const removed = await store.deleteEntry(item.id, answer.entry.id);
+    assert.equal((await store.readEntries(item.id)).length, 1);
+    await restoreEntry(client, alice, removed);
+    assert.equal((await store.readEntries(item.id)).length, 2);
+    await assert.rejects(store.saveDayEvidence(item.id, 'medicineAnswer', { date: '2026-11-17', timeZone: 'UTC', answer: 'not-taken' }, created.entry.id), /different kind/);
+    await as(bob);
+    await assert.rejects(sleepLogStore(client, bob).saveDayEvidence(item.id, 'dayConfirmation', { date: '2026-11-17', timeZone: 'UTC' }), /row-level security/);
   } finally { await db.close(); }
 });

@@ -13,22 +13,22 @@ function MeasurePlot({ days, normalLevels, measure, title, maximum }: {
   days: readonly MeasureDay[]; normalLevels: SleepNormalLevels; measure: SleepMeasureKey; title: string; maximum?: number;
 }) {
   const reference = days.map(day => day.medicine === 'unknown' ? null : normalLevels[day.medicine][measure]);
-  const observed = days.filter(day => day[measure] !== null).length;
+  const observed = days.filter(day => day.medicine !== 'unknown' && day[measure] !== null).length;
   return <div className="min-w-0">
     <h5 className="mb-2 text-sm font-medium">{title}</h5>
     {observed ? <div className="sleep-measure-plot">
       <ColumnChart count={days.length}
-        stacks={(['with', 'without', 'unknown'] as const).map(medicine => ({ color: COLORS[medicine], values: days.map(day => day.medicine === medicine ? day[measure] ?? 0 : 0) }))}
-        line={days.map(day => day[measure])} lineColor={CHART_ACCENT} reference={reference}
+        stacks={(['with', 'without'] as const).map(medicine => ({ color: COLORS[medicine], values: days.map(day => day.medicine === medicine ? day[measure] ?? 0 : 0) }))}
+        line={days.map(day => day.medicine === 'unknown' ? null : day[measure])} lineColor={CHART_ACCENT} reference={reference}
         scale={maximum ? { top: maximum, ticks: maximum === 9 ? [0, 3, 6, 9] : [0, 1, 2, 3, 4, 5], format: String } : undefined}
         tick={index => index === 0 || index === days.length - 1 || index === Math.floor(days.length / 2) ? shortDate(days[index].date) : null}
         tooltip={index => {
           const day = days[index];
           const practice = day.practice && (measure === 'lapses' || measure === 'sleepiness');
-          return { value: valueText(day[measure], measure), label: shortDate(day.date),
+          return { value: day.medicine === 'unknown' ? 'Excluded. Medicine answer missing.' : valueText(day[measure], measure), label: shortDate(day.date),
             detail: `${MEDICINE[day.medicine]}${practice ? '. Practice test' : ''}\nNormal: ${valueText(reference[index], measure)}` };
         }} label={`${title}. Columns distinguish days with and without methylphenidate. The gold marks show the normal level. Open daily values below for all numbers.`} />
-    </div> : <p className={`rounded-lg bg-[var(--sleep-soft)] p-3 text-xs ${muted}`}>No values recorded in this period.</p>}
+    </div> : <p className={`rounded-lg bg-[var(--sleep-soft)] p-3 text-xs ${muted}`}>No values with a medicine answer in this period.</p>}
     <p className={`mt-2 text-xs leading-relaxed ${muted}`}>
       Normal with medicine: {valueText(normalLevels.with[measure], measure)} ({normalLevels.with.counts[measure]} days).<br />
       Normal without medicine: {valueText(normalLevels.without[measure], measure)} ({normalLevels.without.counts[measure]} days).
@@ -52,7 +52,7 @@ export function MeasuresChart({ days, normalLevels, theme }: { days: readonly Me
       {(['with', 'without', 'unknown'] as const).map(status => <span key={status}><span className="mr-1 inline-block h-2 w-3 rounded-sm" style={{ background: COLORS[status] }} />{MEDICINE[status]}</span>)}
       <span><span className="mr-1 inline-block w-4 border-t-2" style={{ borderColor: CHART_AIM }} />Normal for that day’s medicine status</span>
     </div>
-    <p className={`mb-5 text-xs ${muted}`}>Gaps mean no value was recorded. Zero lapses sit on the bottom line. Tap a day or open its daily values.</p>
+    <p className={`mb-5 text-xs ${muted}`}>Gaps mean no value or no medicine answer was recorded. Days without a medicine answer are excluded from this chart. Zero lapses sit on the bottom line. Tap a day or open its daily values.</p>
     <div className="space-y-6">
       <div><h4 className="mb-3 text-sm font-semibold">1. Alertness</h4><MeasurePlot days={days} normalLevels={normalLevels} measure="lapses" title="Lapses in the reaction test" /></div>
       <div><h4 className="mb-3 text-sm font-semibold">2. Sleepiness at the test</h4><MeasurePlot days={days} normalLevels={normalLevels} measure="sleepiness" title="Karolinska rating, 1 to 9" maximum={9} /></div>

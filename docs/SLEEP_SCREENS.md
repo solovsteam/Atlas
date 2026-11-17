@@ -39,9 +39,9 @@ undo. Atlas never automatically repeats the action.
 Trial adherence reads intakes from four hours before target lights out through
 actual lights out, including both boundaries. Daytime glycine falls outside that
 window. Existing dose and timing checks still apply. Approximate timing remains
-unknown when no tolerance is configured. Old self-report confirmations remain
-evidence unless an actual intake contradicts them. A new confirmation uses intake
-entries as evidence. `earlyObligationAt` remains an appointment’s start instant.
+unknown when no tolerance is configured. Missing intake stays unknown until the
+dates in the intake window are confirmed. Old trial self-reports do not confirm
+a complete day. Recorded intakes still establish known deviations. `earlyObligationAt` remains an appointment’s start instant.
 
 The Start action saves `settings.trial = { seed, normalLevelStartDate }` through
 the existing settings service and undo. The seed comes from `crypto.getRandomValues`
@@ -60,9 +60,41 @@ value, the screen labels its fallback to the sleep-duration setting.
 
 The Sleep overview supplies `SleepHistory` with stored nights and reaction tests,
 today's local date, and context from `sleepHistoryContext`. The context contains
-recorded choices, required wake times, saved follow-up windows and normalized intakes. History classifies a day without a methylphenidate intake as without the medicine. The Now card
+recorded choices, required wake times, saved follow-up windows, entries and normalized intakes. History classifies medicine as taken, explicitly not taken, or unknown. Unknown days do not enter either normal level or the measures chart. The Now card
 for the reaction test appears from the configured test time until local midnight
 while today's completed test is missing. A practice test also completes that day.
+
+## Day evidence and Missing
+
+`saveDayEvidence` writes separate entries of the Sleep item. A confirmation has
+`kind: 'dayConfirmation'` and `dayConfirmation: { date, timeZone }`.
+A medicine answer has `kind: 'medicineAnswer'` and
+`medicineAnswer: { date, timeZone, answer: 'not-taken' | 'unknown' }`.
+The entry time is local noon on the selected date. `created_at` records the save time.
+The unknown answer removes earlier negative evidence without rewriting an old night.
+A recorded intake takes precedence. An old morning `taken: false` supplies explicit
+negative evidence. A day confirmation never answers the medicine question.
+
+The evening review shows recorded intakes and every tracker. The confirmation
+button waits for those tracker reads. Confirmation creation, correction and removal
+use the existing entry undo. New events preserve the day confirmation. Intake and
+tracker counts remain unknown on unconfirmed dates. Tracker charts include only
+confirmed dates. Saved tracker times can be corrected in their history with undo.
+
+`missingData` returns the last seven local dates, newest first, with one row per
+missing part. Evening and lights-out dates name the evening. Morning dates name
+the wake day. Log routes accept `?for=<wake-date>` with optional `entry`.
+Medicine recovery uses `answer=medicine` to open the question on weekends too.
+Intake history accepts `?date=<date>`. Reaction recovery accepts the same parameter.
+Past reaction tests stay missing and open an explanation, because a test today
+cannot replace a missed test. Historical trial intake must use the actual time
+in Intake instead of recording an assignment as taken now.
+
+Today's evening log, medicine answer and confirmation become due at the evening
+reminder time. Lights out becomes due at the target time. The reaction test becomes
+due at the configured test time. A missing morning uses the anchor wake time when
+no actual wake is known. Now uses the same list for its count and links to
+`/sleep#missing`. Empty lists have no Now card.
 
 ## Required wake time
 

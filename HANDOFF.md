@@ -1,5 +1,19 @@
 # Handoff
 
+## Missing data and complete days (17 Nov 2026)
+
+Branch `sleep-missing`, based on `2406803`, in `/Users/tonio/apps/Atlas-wt/missing`.
+Medicine status is taken, explicitly not taken, or unknown. Old morning negative
+answers still count. Unknown medicine days are excluded from normal levels and
+measure plots. The evening review lists intakes and every tracker. Separate day
+confirmations enable zero counts. Unconfirmed dates remain unknown in Intake,
+Track and sleep history. All new writes, corrections and removals have undo.
+The seven-day Missing list and Now count share pure due rules. Links open dated
+forms. Past reaction tests remain missing, as required by section 5.
+`App.tsx` and `scripts/brain-atlas-mcp.ts` are untouched. No migration, live write,
+real sign-in or push. Storage and route details are in `docs/SLEEP_SCREENS.md`.
+Verification and the local commit are recorded in `.handoff/sleep-missing-20261117.md`.
+
 ## Sleep weekday obligation (16 Nov 2026)
 
 Branch `sleep/obligation`, based on `29b2f85`, in `/Users/tonio/apps/Atlas-wt/obligation`.

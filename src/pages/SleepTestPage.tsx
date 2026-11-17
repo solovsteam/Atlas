@@ -1,11 +1,14 @@
 import { useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { civilDate } from '@shared/recurringReferences';
 import type { ReactionTestResult } from '@shared/reactionTest';
 import { ReactionTest } from '../components/sleep/ReactionTest';
 import { useSleepLog } from '../hooks/useSleepLog';
 
 export function SleepTestPage() {
   const { tests, loading, error, saveReactionTest } = useSleepLog();
+  const [params] = useSearchParams();
+  const requestedDate = params.get('date');
   const navigate = useNavigate();
   const completed = useRef(false);
   const [status, setStatus] = useState<'ready' | 'saving' | 'saved' | 'failed'>('ready');
@@ -29,6 +32,7 @@ export function SleepTestPage() {
   }
   if (loading && !result) return <p role="status">Loading the sleep log…</p>;
   if (error && !result) return <section className="space-y-3"><p role="alert">{error}</p><Link className="underline" to="/">Back to Now</Link></section>;
+  if (requestedDate && requestedDate !== civilDate(new Date(), timeZone)) return <section className="space-y-4"><h1 className="text-3xl font-semibold">Reaction test: {requestedDate}</h1><p>This test was missed. A test today cannot replace the missed test.</p><Link className="text-indigo-300 underline" to="/sleep#missing">Back to Missing</Link></section>;
   return <section className="max-w-2xl space-y-4">
     {result ? <>
       <h1 className="text-3xl font-semibold">{result.practice ? 'Practice test complete' : 'Test complete'}</h1>

@@ -1,3 +1,6 @@
+import { civilDate } from '@shared/recurringReferences';
+import { confirmedDay } from '@shared/dayEvidence';
+import { useSleepLog } from '../../hooks/useSleepLog';
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import type { Item } from "@shared/item";
@@ -35,6 +38,10 @@ const CARD_SECONDS = 20;
  */
 export function TrackerButtons({ tracker, size = "normal" }: { tracker: Item; size?: "normal" | "large" }) {
   const { userId } = useAtlasData();
+  const sleep = useSleepLog();
+  const now = new Date();
+  const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const confirmed = confirmedDay(sleep.entries, civilDate(now, zone), zone);
   const { entries } = useDocumentationEntries(userId, tracker.id, RECENT_ENTRIES);
   const { createEntry, updateEntry } = useEntryMutations(userId);
   const { push } = useUndo();
@@ -115,7 +122,7 @@ export function TrackerButtons({ tracker, size = "normal" }: { tracker: Item; si
           </button>
         ) : (
           <span className="text-sm text-neutral-400">
-            {config.dailyGoal !== null ? `${today} of ${config.dailyGoal} today` : `${today} today`}
+            {confirmed ? config.dailyGoal !== null ? `${today} of ${config.dailyGoal} today` : `${today} today` : `${today} recorded. Not confirmed`}
           </span>
         )}
       </div>
@@ -127,6 +134,7 @@ export function TrackerButtons({ tracker, size = "normal" }: { tracker: Item; si
           entry={saved}
           plan={tracker.body}
           today={today}
+          confirmed={confirmed}
           trackerId={tracker.id}
           onClose={() => setSavedId(null)}
           onToggle={toggleTagOf}
@@ -144,6 +152,7 @@ function SavedCard({
   config,
   plan,
   today,
+  confirmed,
   chips,
   trackerId,
   onToggle,
@@ -153,6 +162,7 @@ function SavedCard({
   config: TrackerConfig;
   plan: string;
   today: number;
+  confirmed: boolean;
   chips: string[];
   trackerId: string;
   onToggle: (entry: DocumentationEntry, tag: string) => void;
@@ -161,7 +171,7 @@ function SavedCard({
   const detail =
     config.kind === "break"
       ? STAGE_TEXT[entryStage(entry)].label
-      : config.dailyGoal !== null
+      : !confirmed ? `${today} recorded. Not confirmed` : config.dailyGoal !== null
         ? `${today} of ${config.dailyGoal} today`
         : `${today} today`;
   return (

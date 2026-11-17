@@ -130,6 +130,8 @@ test('model proposals are checked: unknown options, future and old times and mis
   assert.equal(validQuickLogOutput({ records: [{ ...base, kind: 'note' }], unmatched: null, question: null }), false);
   assert.equal(validQuickLogOutput({ records: [{ ...base, localTime: '15:00' }], unmatched: null, question: null }), false);
   assert.equal(validQuickLogOutput(out([base])), true);
+  const listed = resolveQuickLog(out([{ ...base, amount: 1, unit: 'can (330 ml)' }]), ctx);
+  assert.ok(listed.ok && listed.records[0].type === 'intake' && listed.records[0].intake.dose === 33, 'a serving copied with its size still converts');
 });
 
 test('a proposed task becomes a task record, and a task without a title is refused', () => {

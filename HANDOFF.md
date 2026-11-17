@@ -7,9 +7,8 @@ sentence into drink, intake, tracker and task records. A local parser reads simp
 The server function `quick-log` asks Claude Haiku 5.5 at low effort for everything else.
 Atlas code checks every proposal and calculates caffeine from an editable drink list. Design
 and setup: [docs/QUICK_LOG.md](docs/QUICK_LOG.md). The function is deployed and limited to
-Tonio's account, but it has no `ANTHROPIC_API_KEY` yet, so only the local parser works.
-`npm run check` passed. The browser was checked at 390px with an offline store and a simulated
-interpreter. No real interpreter call was made. Task note: `.handoff/quick-log-20261117.md`.
+Tonio's account and has the API key. The evaluation passed 32 of 32 sentences in three runs,
+with about 2.3 s for each model call. `npm run check` passed. Task note: `.handoff/quick-log-20261117.md`.
 
 ## Drink conversion and language input (17 Nov 2026)
 

@@ -44,4 +44,6 @@ Deploy with `supabase functions deploy quick-log --use-api`. The function requir
 
 `npx tsx --tsconfig tsconfig.brain-mcp.json scripts/quick-log-eval.ts` sends 30 realistic sentences through the deployed function with the Brain tools sign-in. `--all` also sends sentences that the local parser could read. Results go to `.handoff/quick-log-eval-*.json`. Each model call costs money.
 
+Result on 17 November 2026 with Haiku 5.5 at low effort: the first run passed 26 of 32. Fixes: a serving copied with its size, such as “can (330 ml)”, now converts; servings of the same size never cause a question; “caught myself scrolling” is not an urge; a sentence about the past is never a task. After the fixes, two runs with every sentence sent to the model, and one run as in the app, each passed 32 of 32. Model calls took about 2.3 s in the middle of the range and at most 5 s, including the network.
+
 Planned judgement after about two weeks of use: the share of sentences saved without correction, the waiting time compared with buttons, the share of sentences with no record type, and whether the box is still used.

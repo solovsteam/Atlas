@@ -129,7 +129,8 @@ export function resolveQuickLog(output: QuickLogOutput, ctx: QuickLogContext): Q
       const drink = ctx.drinks.find(d => d.id === p.optionId && !d.hidden);
       if (!drink) return { ok: false, reason: 'The interpretation chose a drink that is not in the drink list.' };
       if (p.amount === null || !p.unit) return { ok: false, reason: howMuch(drink) };
-      const conversion = drinkConversion(drink, p.amount, p.unit);
+      // The model sometimes copies the serving as listed, for example "can (330 ml)".
+      const conversion = drinkConversion(drink, p.amount, p.unit.replace(/\s*\([^)]*\)\s*$/, ''));
       if (!conversion) return { ok: false, reason: `Atlas cannot convert “${p.amount} ${p.unit}” of ${drink.name}. Use ml, l${drink.servings.length ? ` or ${drink.servings.map(s => s.name).join(', ')}` : ''}.` };
       if (conversion.caffeineMgPer100Ml <= 0) return { ok: false, reason: `${drink.name} has no caffeine in the drink list.` };
       const intake = drinkIntake(conversion, time.at, ctx.timeZone);

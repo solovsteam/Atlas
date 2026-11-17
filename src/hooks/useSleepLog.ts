@@ -65,6 +65,16 @@ export function useSleepLog() {
     record(await service.saveDayEvidence(id, kind, value, entryId))), [mutate, record]);
   const saveIntake = useCallback((intake: Intake, entryId?: string, legacyKey?: string) => mutate(async (id, service) =>
     record(await service.saveIntake(id, intake, entryId, legacyKey))), [mutate, record]);
+  /** Saves several intakes without undo. The caller registers one undo for the whole batch. */
+  const recordIntakes = useCallback((list: readonly { intake: Intake; meta?: Record<string, unknown> }[]) => mutate(async (id, service) => {
+    const changes: SleepEntryChange[] = [];
+    try {
+      for (const { intake, meta } of list) changes.push(await service.saveIntake(id, intake, undefined, undefined, meta));
+    } catch (cause) {
+      return { changes, error: cause instanceof Error ? cause : new Error(String(cause)) };
+    }
+    return { changes, error: null };
+  }), [mutate]);
   const saveAssignedIntakes = useCallback((evening: SleepEvening, assignment: SleepTrialAssignment, targetLightsOutAt: string, entryId?: string) => mutate(async (id, service) => {
     const changes: SleepEntryChange[] = [];
     const now = new Date();
@@ -102,6 +112,6 @@ export function useSleepLog() {
   return {
     item, settings, entries, nights, tests, intakes,
     loading: itemsLoading || (item !== null && loading), error: itemsError ?? error, refresh,
-    saveEvening, saveMorning, saveReactionTest, saveSettings, deleteEntry, saveDayEvidence, saveIntake, deleteIntake, saveAssignedIntakes,
+    saveEvening, saveMorning, saveReactionTest, saveSettings, deleteEntry, saveDayEvidence, saveIntake, deleteIntake, saveAssignedIntakes, recordIntakes,
   };
 }

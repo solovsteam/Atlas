@@ -3,9 +3,12 @@ import { medicineAnswer, confirmedDay } from './dayEvidence';
 import { civilDate } from './recurringReferences';
 import { sleepNight, type SleepNight } from './sleepLog';
 import { trialAdherence, type AdherenceStatus, type SleepTrialAssignment, type TrialIntake } from './sleepTrial';
+import { caffeineMg, validConversion, type DrinkConversion } from './drinks';
 
 export type IntakeButton = { id: string; substance: string; label: string; dose: number; unit: string; hidden: boolean };
-export type Intake = { substance: string; label: string; dose: number; unit: string; takenAt: string; timeZone: string };
+/** A drink intake has substance caffeine, its dose in mg, and the conversion that produced the dose. */
+export type Intake = { substance: string; label: string; dose: number; unit: string; takenAt: string; timeZone: string; drink?: DrinkConversion };
+export const CAFFEINE = 'caffeine';
 export type IntakeRecord = { id: string; entry: DocumentationEntry; intake: Intake; legacyKey?: string; timeKnown: boolean; doseKnown: boolean };
 export const DEFAULT_INTAKE_BUTTONS: readonly IntakeButton[] = [
   { id: 'methylphenidate', substance: 'methylphenidate', label: 'Methylphenidate', dose: 36, unit: 'mg', hidden: false },
@@ -38,7 +41,22 @@ export function parseIntakeButtons(value: unknown, legacyDoses: Record<string, n
 }
 export function intakeData(intake: Intake, legacyKey?: string): Record<string, unknown> {
   if (!validButton({ ...intake, id: 'entry', hidden: false }) || !instant(intake.takenAt) || !validZone(intake.timeZone)) throw new Error('Enter a substance, a positive dose, a unit and a valid time and time zone.');
-  return { kind: 'intake', intake: { ...intake }, ...(legacyKey ? { replacesLegacy: legacyKey } : {}) };
+  if (intake.drink !== undefined && (!validConversion(intake.drink) || intake.substance !== CAFFEINE || intake.unit !== 'mg' || intake.dose !== caffeineMg(intake.drink))) {
+    throw new Error('The drink conversion does not match the caffeine dose.');
+  }
+  const { drink, ...rest } = intake;
+  return { kind: 'intake', intake: drink ? { ...rest, drink: { ...drink } } : rest, ...(legacyKey ? { replacesLegacy: legacyKey } : {}) };
+}
+/** Caffeine of zero mg is not an intake, so a caffeine-free drink is refused. */
+export function drinkIntake(drink: DrinkConversion, takenAt: string, timeZone: string): Intake {
+  const intake: Intake = { substance: CAFFEINE, label: drink.name, dose: caffeineMg(drink), unit: 'mg', takenAt, timeZone, drink };
+  intakeData(intake);
+  return intake;
+}
+/** One line for lists: "250 ml · 25 mg caffeine (estimate)". */
+export function intakeAmountText(intake: Intake): string {
+  if (!intake.drink) return `${intake.dose} ${intake.unit}`;
+  return `${intake.drink.amountText} · ${intake.dose} mg caffeine${intake.drink.estimate ? ' (estimate)' : ''}`;
 }
 export function intakeNow(button: IntakeButton, now: Date, timeZone: string): Intake {
   const intake = { substance: button.substance, label: button.label, dose: button.dose, unit: button.unit, takenAt: now.toISOString(), timeZone };

@@ -4,6 +4,7 @@ import { trackerConfig, trackersOf, type TrackerKind } from "@shared/documentati
 import { useAtlasData } from "../context/AtlasDataContext";
 import { trackCreateUndo, trackDeleteEntryUndo, trackUpdateEntryUndo, useUndo } from "../context/UndoContext";
 import { useDocumentationEntries, useEntryMutations } from "../hooks/useDocumentationEntries";
+import { QuickLogWithStore } from "../components/QuickLog";
 import { PlanEditor } from "../components/tracking/PlanEditor";
 import { TrackerButtons } from "../components/tracking/TrackerButtons";
 import { TrackerHistory } from "../components/tracking/TrackerHistory";
@@ -40,6 +41,9 @@ export function TrackPage() {
         Record each time you notice a habit to break, or do a habit to build. For a habit to break, "Urge now" records an
         urge in one tap, and a time moved into the past counts as noticed in hindsight. The buttons also appear on Now.
       </p>
+      <div className="mt-4 max-w-xl">
+        <QuickLogWithStore />
+      </div>
       {trackers.length > 0 ? (
         <ul className="mt-6 space-y-3">
           {trackers.map((tracker) => (

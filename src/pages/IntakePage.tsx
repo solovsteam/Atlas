@@ -2,7 +2,10 @@ import { useSearchParams } from 'react-router-dom';
 import { confirmedDay } from '@shared/dayEvidence';
 import { useEffect, useState } from 'react';
 import { addDays, civilDate } from '@shared/recurringReferences';
-import { DEFAULT_INTAKE_BUTTONS, intakeNow, intakesOnDate, lastTakenToday, type Intake, type IntakeButton, type IntakeRecord } from '@shared/intake';
+import { DEFAULT_INTAKE_BUTTONS, intakeAmountText, intakeNow, intakesOnDate, lastTakenToday, type Intake, type IntakeButton, type IntakeRecord } from '@shared/intake';
+import { caffeineMg, withAmountMl } from '@shared/drinks';
+import { QuickLog } from '../components/QuickLog';
+import { DrinkSettings } from '../components/DrinkSettings';
 import { localClock } from '@shared/sleepScreens';
 import { sleepTrialDisplay } from '@shared/sleepIntegration';
 import { useSleepLog } from '../hooks/useSleepLog';
@@ -13,13 +16,24 @@ import { Field, InstantField, sleepButton, sleepInput } from '../components/slee
 type Store = ReturnType<typeof useSleepLog>;
 export function IntakePage() {
   const store = useSleepLog();
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
   const clock = useSleepClock();
   const now = new Date(Math.max(Date.now(), clock.getTime()));
   const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const [selectedDate, setSelectedDate] = useState<string | null>(() => { const date = params.get('date'); return date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : null; });
   const [editor, setEditor] = useState<{ intake: Intake; row?: IntakeRecord } | null>(null);
   const save = useSleepSave();
+  const editId = params.get('edit');
+  // A link from the Log box opens that intake in the editor once it has loaded.
+  useEffect(() => {
+    if (!editId || store.loading) return;
+    const row = store.intakes.find(r => r.id === editId);
+    if (row) {
+      setEditor({ intake: row.intake, row });
+      setSelectedDate(civilDate(new Date(row.intake.takenAt), Intl.DateTimeFormat().resolvedOptions().timeZone));
+    }
+    setParams(current => { const next = new URLSearchParams(current); next.delete('edit'); return next; }, { replace: true });
+  }, [editId, store.loading, store.intakes, setParams]);
   if (store.loading) return <p role="status">Loading intakes…</p>;
   if (store.error) return <p role="alert">{store.error}</p>;
   const date = selectedDate ?? civilDate(now, zone);
@@ -27,7 +41,8 @@ export function IntakePage() {
   const buttons = store.settings.intakeButtons;
   return <section className="mx-auto max-w-xl space-y-6 pb-4">
     <h1 className="text-3xl font-semibold tracking-tight">Intake</h1>
-    <p className="text-sm text-neutral-400">Tap once to record what you took now.</p>
+    <QuickLog store={store} />
+    <p className="text-sm text-neutral-400">Or tap once to record what you took now.</p>
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">{buttons.filter(b => !b.hidden).map(button => {
       const last = lastTakenToday(store.intakes, button.substance, now, zone);
       const factor = assignment?.factors.find(f => f.factorId === button.substance);
@@ -58,11 +73,12 @@ export function IntakePage() {
       </div>
       <p className="text-sm text-neutral-400">{confirmedDay(store.entries, date, zone) ? `${intakesOnDate(store.intakes, date, zone).length} intakes. The day is confirmed.` : 'Not confirmed. The daily count is unknown.'}</p>
       <ul className="space-y-2">{intakesOnDate(store.intakes, date, zone).map(row => <li key={row.id}><button className={`${sleepButton} flex w-full items-center justify-between gap-3 text-left`} type="button" onClick={() => setEditor({ intake: { ...row.intake, dose: row.doseKnown ? row.intake.dose : buttons.find(b => b.substance === row.intake.substance)?.dose ?? 1 }, row })}>
-        <span className="min-w-0 break-words">{row.intake.label}<span className="block text-xs text-neutral-400">{row.doseKnown ? `${row.intake.dose} ${row.intake.unit}` : 'Dose not recorded'}</span></span><span className="shrink-0 text-sm text-neutral-400">{row.timeKnown ? localClock(row.intake.takenAt, zone) : 'Time not recorded'}</span>
+        <span className="min-w-0 break-words">{row.intake.label}<span className="block text-xs text-neutral-400">{row.doseKnown ? intakeAmountText(row.intake) : 'Dose not recorded'}</span></span><span className="shrink-0 text-sm text-neutral-400">{row.timeKnown ? localClock(row.intake.takenAt, zone) : 'Time not recorded'}</span>
       </button></li>)}</ul>
       {!intakesOnDate(store.intakes, date, zone).length ? <p className="text-sm text-neutral-400">No intakes recorded for this day.</p> : null}
     </Field>
     <IntakeSettings store={store} />
+    <DrinkSettings store={store} />
   </section>;
 }
 function IntakeEditor({ value, row, buttons, busy, onCancel, onSave, onDelete }: { value: Intake; row?: IntakeRecord; buttons: IntakeButton[]; busy: boolean; onCancel: () => void; onSave: (value: Intake) => void; onDelete?: () => void }) {
@@ -72,10 +88,14 @@ function IntakeEditor({ value, row, buttons, busy, onCancel, onSave, onDelete }:
   return <form className="space-y-4 rounded-xl border border-indigo-500/40 p-4" onSubmit={e => { e.preventDefault(); onSave(draft); }}>
     <h2 className="text-lg font-medium">{row ? 'Edit intake' : 'Taken earlier'}</h2>
     {row && (!row.timeKnown || !row.doseKnown) ? <p className="text-sm text-neutral-400">The old record is incomplete. Enter the actual time and dose before saving.</p> : null}
-    <label className="block space-y-2 text-sm"><span>Substance</span><select aria-label="Intake substance" className={`${sleepInput} w-full`} value={selection} onChange={e => { const b = buttons.find(b => b.id === e.target.value); if (b) patch({ substance: b.substance, label: b.label, dose: b.dose, unit: b.unit }); }}>
+    {draft.drink ? null : <label className="block space-y-2 text-sm"><span>Substance</span><select aria-label="Intake substance" className={`${sleepInput} w-full`} value={selection} onChange={e => { const b = buttons.find(b => b.id === e.target.value); if (b) patch({ substance: b.substance, label: b.label, dose: b.dose, unit: b.unit }); }}>
       {!selection ? <option value="">{draft.label}</option> : null}{buttons.map(b => <option key={b.id} value={b.id}>{b.label} · {b.dose} {b.unit}</option>)}
-    </select></label>
-    <div className="grid grid-cols-2 gap-3"><label className="space-y-2 text-sm"><span className="block">Dose</span><input aria-label="Intake dose" className={`${sleepInput} w-full`} type="number" required min="0.001" step="any" value={Number.isFinite(draft.dose) ? draft.dose : ''} onChange={e => patch({ dose: e.target.valueAsNumber })} /></label><label className="space-y-2 text-sm"><span className="block">Unit</span><input aria-label="Intake unit" className={`${sleepInput} w-full`} required value={draft.unit} onChange={e => patch({ unit: e.target.value })} /></label></div>
+    </select></label>}
+    {draft.drink ? <label className="block space-y-2 text-sm"><span className="block">Amount of {draft.drink.name} in ml</span><input aria-label="Drink amount in ml" className={`${sleepInput} w-full`} type="number" required min="1" max="5000" step="any" value={draft.drink.amountMl} onChange={e => {
+      const drink = withAmountMl(draft.drink!, e.target.valueAsNumber);
+      if (drink) patch({ drink, dose: caffeineMg(drink) });
+    }} /><span className="block text-xs text-neutral-400">{draft.dose} mg caffeine at {draft.drink.caffeineMgPer100Ml} mg per 100 ml{draft.drink.estimate ? ' (estimate)' : ''}. {draft.drink.source}</span></label> : null}
+    {draft.drink ? null : <div className="grid grid-cols-2 gap-3"><label className="space-y-2 text-sm"><span className="block">Dose</span><input aria-label="Intake dose" className={`${sleepInput} w-full`} type="number" required min="0.001" step="any" value={Number.isFinite(draft.dose) ? draft.dose : ''} onChange={e => patch({ dose: e.target.valueAsNumber })} /></label><label className="space-y-2 text-sm"><span className="block">Unit</span><input aria-label="Intake unit" className={`${sleepInput} w-full`} required value={draft.unit} onChange={e => patch({ unit: e.target.value })} /></label></div>}
     <InstantField label="Taken at" value={draft.takenAt} timeZone={draft.timeZone} onChange={takenAt => patch({ takenAt })} />
     <p className="text-xs text-neutral-400">Time zone: {draft.timeZone}</p>
     <div className="flex flex-wrap gap-2"><button className={`${sleepButton} bg-indigo-500`} disabled={busy} type="submit">Save</button><button className={sleepButton} disabled={busy} type="button" onClick={onCancel}>Cancel</button>{onDelete ? <button className={`${sleepButton} text-red-300`} disabled={busy} type="button" onClick={onDelete}>Delete</button> : null}</div>

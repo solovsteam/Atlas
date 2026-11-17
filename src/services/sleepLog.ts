@@ -93,10 +93,12 @@ export function sleepLogStore(client: Client, userId: string, writer: SleepEntry
     readEntries: (itemId: string) => fetchEntries(client, userId, itemId),
     saveEvening: (itemId: string, evening: SleepEvening, at: Date, entryId?: string) => savePart(itemId, 'evening', evening, at, entryId),
     saveMorning: (itemId: string, morning: SleepMorning, at: Date, entryId?: string, lightsOut?: string) => savePart(itemId, 'morning', morning, at, entryId, lightsOut),
-    async saveIntake(itemId: string, intake: Intake, entryId?: string, legacyKey?: string): Promise<SleepEntryChange> {
+    /** meta holds extra entry fields, such as the Log box sentence. An edit keeps the earlier ones. */
+    async saveIntake(itemId: string, intake: Intake, entryId?: string, legacyKey?: string, meta: Record<string, unknown> = {}): Promise<SleepEntryChange> {
       const before = entryId ? await current(itemId, entryId) : undefined;
       if (before && !sleepIntake(before)) throw new Error('This entry is not an intake.');
-      const data = intakeData(intake, legacyKey ?? (typeof before?.data.replacesLegacy === 'string' ? before.data.replacesLegacy : undefined));
+      const kept = before?.data.quickLog !== undefined ? { quickLog: before.data.quickLog } : {};
+      const data = { ...kept, ...meta, ...intakeData(intake, legacyKey ?? (typeof before?.data.replacesLegacy === 'string' ? before.data.replacesLegacy : undefined)) };
       return before ? { entry: await writer.updateEntry(before, data, new Date(intake.takenAt)), before }
         : { entry: await writer.createEntry(itemId, new Date(intake.takenAt), data) };
     },

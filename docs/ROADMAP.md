@@ -80,6 +80,7 @@ Supabase is currently used in ~5 files; `shared/` domain logic is portable. **Do
 - [x] Realtime item list (Supabase Realtime)
 - [x] Task expected duration (minutes, for future calendar / auto-scheduling)
 - [x] Task subtasks (parent task link + subtask list on item detail)
+- [x] Log box: typed sentences become drink, intake and tracker records, with a caffeine drink list (see [QUICK_LOG.md](QUICK_LOG.md))
 
 ### Calendar, scheduler, and schema handoff
 

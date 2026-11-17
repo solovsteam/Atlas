@@ -1,4 +1,5 @@
 import { parseIntakeButtons, type IntakeButton } from './intake';
+import { parseDrinks, type Drink } from './drinks';
 import { parseStoredSleepTrial, type StoredSleepTrial } from './sleepTrial';
 import type { DocumentationEntry } from './documentationEntries';
 import { addDays, atLocalClock, civilDate, dateInput } from './recurringReferences';
@@ -17,6 +18,8 @@ export type SleepScreenSettings = SleepSettings & {
   usualDoses: Record<SupplementId, number>;
   coffeeTeaspoons: number;
   intakeButtons: IntakeButton[];
+  /** Caffeine conversions for the Log box and drink intakes. */
+  drinks: Drink[];
   /** Local latest wake times. These already include preparation. Sunday = 0. */
   weekdayWake: Record<number, string | null>;
   weekdayObligation: Record<number, { start: string; end: string; label: string } | null>;
@@ -40,6 +43,7 @@ export function sleepScreenSettings(schema: unknown): SleepScreenSettings {
     usualDoses: Object.fromEntries(SUPPLEMENTS.map(s => [s.id, positive(doses[s.id], s.dose)])) as Record<SupplementId, number>,
     coffeeTeaspoons: positive(settings.coffeeTeaspoons, 1),
     intakeButtons: parseIntakeButtons(settings.intakeButtons, Object.fromEntries(SUPPLEMENTS.map(s => [s.id, positive(doses[s.id], s.dose)])), positive(settings.coffeeTeaspoons, 1)),
+    drinks: parseDrinks(settings.drinks),
     weekdayObligation: Object.fromEntries(Array.from({ length: 7 }, (_, day) => {
       const value = obligations[day];
       const obligation = record(value);

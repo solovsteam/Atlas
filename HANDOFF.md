@@ -1,5 +1,30 @@
 # Handoff
 
+## Log box: typed sentences become records (17 Nov 2026)
+
+On `main`. The Log box on Intake and Track turns a sentence into drink, intake and tracker
+records. A local parser reads simple sentences. The server function `quick-log` asks Claude
+for everything else. Atlas code checks every proposal and calculates caffeine from an editable
+drink list. Design and setup: [docs/QUICK_LOG.md](docs/QUICK_LOG.md). The function is deployed
+and limited to Tonio's account, but it has no `ANTHROPIC_API_KEY` yet, so only the local parser
+works. `npm run check` passed. The browser was checked at 390px with an offline store and a
+simulated interpreter. No real interpreter call was made. Task note:
+`.handoff/quick-log-20261117.md`.
+
+## Drink conversion and language input (17 Nov 2026)
+
+Tonio clarified that custom intake buttons already cover manually entered amounts.
+He wants to plan converting a drink and quantity into caffeine, with possible
+support for typed or spoken sentences that become Atlas actions. The recommended
+first step is editable conversions for specific drinks, followed by language input.
+No conversion values were established. The planning note is
+`.handoff/drink-intake-planning-20261117.md` in `/Users/tonio/apps/Atlas` on `main`.
+The temporary manual caffeine form was removed. Both app files have no diff.
+`npm run check` passed on that temporary implementation. No feature was published,
+no live data changed, and the offline server was stopped. The unrelated existing
+edit in `scripts/brain-atlas-mcp.ts` remains untouched. Next: open a new thread in
+the same working folder and plan the experience from the note.
+
 ## Missing data and complete days (17 Nov 2026)
 
 Branch `sleep-missing`, based on `2406803`, in `/Users/tonio/apps/Atlas-wt/missing`.

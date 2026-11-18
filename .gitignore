@@ -30,3 +30,6 @@ supabase/.temp
 .handoff/
 __pycache__/
 *.sw?
+
+# Factory run records (local only)
+.factory/

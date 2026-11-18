@@ -1,0 +1,9 @@
+{
+  "check": "npm run check",
+  "branch": "main",
+  "push": true,
+  "protect": ["scripts/brain-atlas-mcp.ts"],
+  "live": { "url": "https://atlas-lovat-nine.vercel.app/", "timeoutSeconds": 300 },
+  "testAccount": "Atlas test account; setup in .handoff/atlas-test-account-investigation-20261029.md. Never sign in to Tonio's own account.",
+  "phoneWidth": 375
+}

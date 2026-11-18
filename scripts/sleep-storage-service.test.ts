@@ -6,7 +6,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '../src/types/database';
 import { findOrCreateSleepLog, findSleepLog, sleepLogItemId, sleepLogStore } from '../src/services/sleepLog';
 import { restoreEntry, updateEntryData, deleteEntry } from '../src/services/documentationEntries';
-import { sleepNight, sleepSettings, DEFAULT_SLEEP_SETTINGS } from '../shared/sleepLog';
+import { fullnessLabel, sleepNight, sleepSettings, DEFAULT_SLEEP_SETTINGS, type SleepRating } from '../shared/sleepLog';
+import { eveningMeal, readMeals } from '../shared/meals';
 import { sleepReactionTest } from '../shared/sleepReactionTest';
 import { sleepIntake, intakeNow, DEFAULT_INTAKE_BUTTONS, readIntakes } from '../shared/intake';
 import { createReactionTestResult } from '../shared/reactionTest';
@@ -209,5 +210,55 @@ test('day evidence uses separate entries with correction, deletion and undo unde
     await assert.rejects(store.saveDayEvidence(item.id, 'medicineAnswer', { date: '2026-11-17', timeZone: 'UTC', answer: 'not-taken' }, created.entry.id), /different kind/);
     await as(bob);
     await assert.rejects(sleepLogStore(client, bob).saveDayEvidence(item.id, 'dayConfirmation', { date: '2026-11-17', timeZone: 'UTC' }), /row-level security/);
+  } finally { await db.close(); }
+});
+
+test('meal finish times and optional bedtime fullness survive corrections and undo under RLS', async () => {
+  const { db, client, as } = await database();
+  try {
+    await as(alice);
+    const item = await findOrCreateSleepLog(client, alice);
+    const store = sleepLogStore(client, alice);
+    const meal = { finishedAt: '2026-11-17T20:15:00+01:00', timeZone: 'Europe/Berlin' };
+    const created = await store.saveMeal(item.id, meal);
+    assert.equal(created.before, undefined);
+    assert.equal(created.entry.occurredAt, '2026-11-17T19:15:00.000Z');
+    assert.deepEqual(eveningMeal(created.entry), { ...meal, finishedAt: created.entry.occurredAt });
+    assert.deepEqual(readIntakes([created.entry]), []);
+    const corrected = await store.saveMeal(item.id, { ...meal, finishedAt: '2026-11-16T19:30:00Z' }, created.entry.id);
+    assert.equal(corrected.entry.id, created.entry.id);
+    assert.equal(corrected.entry.occurredAt, '2026-11-16T19:30:00.000Z');
+    await updateEntryData(client, alice, corrected.before!.id, corrected.before!.data, new Date(corrected.before!.occurredAt));
+    assert.deepEqual(readMeals(await store.readEntries(item.id))[0].meal, eveningMeal(created.entry));
+    const removed = await store.deleteEntry(item.id, created.entry.id);
+    assert.deepEqual(readMeals(await store.readEntries(item.id)), []);
+    await restoreEntry(client, alice, removed);
+    assert.equal(readMeals(await store.readEntries(item.id)).length, 1);
+    await assert.rejects(store.saveMeal(item.id, { ...meal, finishedAt: 'invalid' }), /valid date and time/);
+    await assert.rejects(store.saveMeal(item.id, { ...meal, timeZone: 'Invalid/zone' }), /Invalid time zone/);
+
+    const night = await store.saveEvening(item.id, { timeZone: 'Europe/Berlin', lightsOut: '2026-11-17T22:00:00Z', dayRating: 4, sleepiness: 6 }, new Date('2026-11-17T22:00:00Z'));
+    assert.equal(sleepNight(night.entry)?.evening?.fullness, undefined, 'an old or skipped answer stays unrecorded');
+    assert.equal(fullnessLabel(undefined), null);
+    await store.saveMorning(item.id, { timeZone: 'Europe/Berlin', wakeAt: '2026-11-18T07:30:00Z' }, new Date('2026-11-18T07:30:00Z'), night.entry.id);
+    const full = await store.saveEvening(item.id, { ...sleepNight(night.entry)!.evening!, fullness: 4 }, new Date(night.entry.occurredAt), night.entry.id);
+    assert.equal(fullnessLabel(sleepNight(full.entry)?.evening?.fullness), 'Very full');
+    assert.equal(sleepNight(full.entry)?.evening?.dayRating, 4);
+    assert.equal(sleepNight(full.entry)?.morning?.wakeAt, '2026-11-18T07:30:00Z');
+    const cleared = await store.saveEvening(item.id, { ...sleepNight(full.entry)!.evening!, fullness: undefined }, new Date(night.entry.occurredAt), night.entry.id);
+    assert.equal(sleepNight(cleared.entry)?.evening?.fullness, undefined);
+    await updateEntryData(client, alice, cleared.before!.id, cleared.before!.data);
+    assert.equal(sleepNight((await store.readEntries(item.id)).find(row => row.id === night.entry.id)!)?.evening?.fullness, 4);
+    await updateEntryData(client, alice, full.before!.id, full.before!.data);
+    assert.equal(sleepNight((await store.readEntries(item.id)).find(row => row.id === night.entry.id)!)?.evening?.fullness, undefined);
+    await assert.rejects(store.saveEvening(item.id, { timeZone: 'UTC', fullness: 6 as SleepRating }, new Date()), /fullness level/);
+    await assert.rejects(store.saveMeal(item.id, meal, night.entry.id), /not an evening meal/);
+    await assert.rejects(store.saveEvening(item.id, { timeZone: 'UTC' }, new Date(), created.entry.id), /not a night/);
+    await deleteEntry(client, alice, created.entry.id);
+    assert.deepEqual(readMeals(await store.readEntries(item.id)), [], 'undo create removes the meal');
+
+    await as(bob);
+    assert.deepEqual(await sleepLogStore(client, bob).readEntries(item.id), []);
+    await assert.rejects(sleepLogStore(client, bob).saveMeal(item.id, meal), /row-level security/);
   } finally { await db.close(); }
 });

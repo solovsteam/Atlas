@@ -12,6 +12,28 @@ Direct bedtime routes and Now cards treat midnight to noon as the preceding even
 
 ## Settings and intake
 
+The Intake tab records the finish time of an evening meal. “Finished eating now”
+saves the current time immediately. “Finished earlier” opens the existing time
+wheel and date picker. The date starts on the day shown in Intake history.
+Meals appear beside intakes in that history, with correction and deletion.
+Creation, correction and deletion each support Undo. The evening review also
+shows recorded meal times.
+
+Meals are separate entries with `kind: 'eveningMeal'` and
+`meal: { finishedAt, timeZone }`. The canonical `occurred_at` is the finish time.
+The service updates both timestamps on correction. Meals do not have a dose,
+do not count as medicine or supplement evidence, and do not infer meal size.
+This uses the existing entries table and does not need a migration.
+
+Lights out has an optional fullness rating from 1 to 5: Empty, Slightly full,
+Comfortably full, Very full, and Uncomfortably full. There is no selected default.
+The sleepiness tap saves the chosen fullness with the lights-out time in
+`sleepLog.evening.fullness`. A skipped answer and an older night remain
+unrecorded. The saved lights-out screen shows the answer and supports correction,
+removal and Undo. Time corrections preserve fullness. Fullness corrections
+preserve the lights-out time and the other fields of the night.
+The Log box on Now does not interpret meals or fullness in this change.
+
 `useSleepLog().saveSettings` uses the existing item service and records item undo. Settings live under `documentation_schema.sleepLog.settings`. Unknown fields and sibling markers are preserved.
 
 Intake buttons live in `intakeButtons`. Each button has `id`, `substance`, `label`, `dose`, `unit` and `hidden`. Array order is display order. `substance` keeps its identity when the label changes. Old `usualDoses` and `coffeeTeaspoons` settings supply defaults until button settings are saved. Other settings include `weekdayObligation`. Each obligation stores `start`, `end` and `label`. Weekday keys use Sunday 0 through Saturday 6. A null value means no obligation. Monday to Friday default to 09:30 to 19:30 for work, travel and groceries. `weekdayWake` remains an optional explicit wake constraint, with null defaults. Preparation remains `preparationMinutes`. The required wake time is the earliest candidate, including the obligation start minus preparation.

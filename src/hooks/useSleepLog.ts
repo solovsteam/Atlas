@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { type DayEvidence, type MedicineAnswer } from '@shared/dayEvidence';
 import { readIntakes, assignedIntakes, nightIntakeAdherence, type Intake, type IntakeRecord } from '@shared/intake';
+import { readMeals, type EveningMeal } from '@shared/meals';
 import type { Item } from '@shared/item';
 import { isSleepLog, sleepNight, type SleepEvening, type SleepMorning } from '@shared/sleepLog';
 import { sleepScreenSettings, sleepSettingsSchema, type SleepScreenSettings } from '@shared/sleepScreens';
@@ -65,6 +66,8 @@ export function useSleepLog() {
     record(await service.saveDayEvidence(id, kind, value, entryId))), [mutate, record]);
   const saveIntake = useCallback((intake: Intake, entryId?: string, legacyKey?: string) => mutate(async (id, service) =>
     record(await service.saveIntake(id, intake, entryId, legacyKey))), [mutate, record]);
+  const saveMeal = useCallback((meal: EveningMeal, entryId?: string) => mutate(async (id, service) =>
+    record(await service.saveMeal(id, meal, entryId))), [mutate, record]);
   /** Saves several intakes without undo. The caller registers one undo for the whole batch. */
   const recordIntakes = useCallback((list: readonly { intake: Intake; meta?: Record<string, unknown> }[]) => mutate(async (id, service) => {
     const changes: SleepEntryChange[] = [];
@@ -96,6 +99,7 @@ export function useSleepLog() {
     ? mutate(async (id, service) => record(await service.hideLegacyIntake(id, row.legacyKey!, new Date(row.intake.takenAt))))
     : deleteEntry(row.entry.id), [mutate, record, deleteEntry]);
   const intakes = useMemo(() => readIntakes(entries), [entries]);
+  const meals = useMemo(() => readMeals(entries), [entries]);
   const nights = useMemo(() => entries.flatMap(entry => {
     const night = sleepNight(entry);
     if (night?.evening?.trial && night.evening.lightsOut) {
@@ -110,8 +114,8 @@ export function useSleepLog() {
   }), [entries]);
   const settings = useMemo(() => sleepScreenSettings(item?.documentationSchema), [item?.documentationSchema]);
   return {
-    item, settings, entries, nights, tests, intakes,
+    item, settings, entries, nights, tests, intakes, meals,
     loading: itemsLoading || (item !== null && loading), error: itemsError ?? error, refresh,
-    saveEvening, saveMorning, saveReactionTest, saveSettings, deleteEntry, saveDayEvidence, saveIntake, deleteIntake, saveAssignedIntakes, recordIntakes,
+    saveEvening, saveMorning, saveReactionTest, saveSettings, deleteEntry, saveDayEvidence, saveIntake, saveMeal, deleteIntake, saveAssignedIntakes, recordIntakes,
   };
 }

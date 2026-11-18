@@ -1,5 +1,23 @@
 # Handoff
 
+## Evening meal timing and fullness at lights out (18 Nov 2026)
+
+Tonio chose to record when he finishes his evening meal. Intake now has
+“Finished eating now” and an editor for earlier times. Meals appear in daily
+history and the evening review. Creation, correction and deletion have Undo.
+Lights out has an optional fullness rating with five labelled levels and no
+default. The answer is saved with sleepiness and lights out. The saved screen
+supports correction, removal and Undo. Older or unanswered values stay missing.
+Meals use separate entries in the existing table. No migration is required.
+The current sentence interpreter is unchanged. The contract is in
+`docs/SLEEP_SCREENS.md`. `npm run check` passed after an isolated retry of the
+known recurrence timeout. The actual app at 390px passed meal creation, past
+times, correction, deletion, undo, failed saves, the evening review, and fullness
+creation, correction, removal, skip and undo. The browser used an inert store.
+No physical phone or live record was used. The fixture server is stopped.
+Verification and publication status are recorded in
+`.handoff/evening-meal-fullness-20261118.md`.
+
 ## Log box: typed sentences become records (17 Nov 2026)
 
 On `main`. The Log box is on Now only, where it replaces the task capture bar. It turns a

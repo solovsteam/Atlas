@@ -8,6 +8,7 @@ import { sleepHistoryContext } from '../shared/sleepIntegration';
 import { sleepScreenSettings, sleepSettingsSchema, sleepScreenState } from '../shared/sleepScreens';
 import type { SleepTrialAssignment } from '../shared/sleepTrial';
 import { sleepNight, type SleepNight } from '../shared/sleepLog';
+import { eveningMeal, mealData, mealsOnDate, readMeals } from '../shared/meals';
 
 let next = 0;
 function entry(occurredAt: string, data: Record<string, unknown>): DocumentationEntry {
@@ -16,6 +17,25 @@ function entry(occurredAt: string, data: Record<string, unknown>): Documentation
 const button = (id: string) => DEFAULT_INTAKE_BUTTONS.find(b => b.id === id)!;
 for (const zone of ['UTC', 'Europe/Berlin', 'America/New_York', 'Pacific/Auckland']) {
   const at = (date: string, time: string) => atLocalClock(date, `${time}:00`, zone);
+  test(`${zone}: meal finish times follow the viewed date without becoming doses or medicine evidence`, () => {
+    const rows = ['2026-11-17', '2026-11-18'].map(date => {
+      const meal = { finishedAt: at(date, '00:15'), timeZone: zone };
+      return entry(meal.finishedAt, mealData(meal));
+    });
+    const intake = intakeNow(button('coffee'), new Date(at('2026-11-17', '08:00')), zone);
+    const intakeEntry = entry(intake.takenAt, intakeData(intake));
+    const meals = readMeals([rows[0], intakeEntry, rows[1]]);
+    assert.equal(meals.length, 2);
+    assert.deepEqual(mealsOnDate(meals, '2026-11-17', zone).map(row => row.id), [rows[0].id]);
+    assert.deepEqual(readIntakes(rows), []);
+    assert.equal(methylphenidateOnDate(readIntakes(rows), '2026-11-17', zone), false);
+    assert.equal(sleepNight(rows[0]), null);
+    const corrected = { ...rows[0], occurredAt: at('2026-11-16', '23:45') };
+    assert.equal(eveningMeal(corrected)?.finishedAt, corrected.occurredAt, 'the canonical entry time controls the history date');
+    assert.equal(mealsOnDate(readMeals([corrected]), '2026-11-17', zone).length, 0);
+    assert.equal(eveningMeal({ ...rows[0], data: { kind: 'eveningMeal', meal: { timeZone: 'Invalid/zone' } } }), null);
+    assert.throws(() => mealData({ finishedAt: '2026-11-17T20:00:00', timeZone: zone }), /valid date and time/);
+  });
   test(`${zone}: a tap creates an independent intake at now, including dose and zone`, () => {
     const now = new Date(at('2026-11-17', '08:12'));
     const intake = intakeNow(button('methylphenidate'), now, zone);

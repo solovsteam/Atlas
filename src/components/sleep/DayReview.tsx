@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { atLocalClock, civilDate, dateInput } from '@shared/recurringReferences';
 import { confirmedDay, dayEvidence, medicineAnswer } from '@shared/dayEvidence';
 import { DEFAULT_INTAKE_BUTTONS, intakeNow, intakesOnDate, methylphenidateStatus } from '@shared/intake';
+import { mealsOnDate } from '@shared/meals';
+import { localClock } from '@shared/sleepScreens';
 import { trackersOf } from '@shared/documentationEntries';
 import type { Item } from '@shared/item';
 import { useAtlasData } from '../../context/AtlasDataContext';
@@ -46,6 +48,10 @@ export function DayReview({ store, date, timeZone, forceMedicine = false }: { st
       <ul className="space-y-2 text-sm">{[...grouped].map(([name, count]) => <li key={name}>{name}: {count} recorded</li>)}</ul>
       {!grouped.size ? <p className="text-sm text-neutral-400">{confirmed ? '0 intakes' : 'No intakes recorded. Not confirmed.'}</p> : null}
       <Link className="inline-block text-sm text-indigo-300 underline" to={`/intake?date=${date}`}>Add or correct an intake</Link>
+      <h3 className="text-sm font-medium">Evening meal</h3>
+      {mealsOnDate(store.meals, date, timeZone).map(row => <p key={row.id} className="text-sm">Finished eating at {localClock(row.meal.finishedAt, timeZone)}.</p>)}
+      {!mealsOnDate(store.meals, date, timeZone).length ? <p className="text-sm text-neutral-400">No evening meal recorded.</p> : null}
+      <Link className="inline-block text-sm text-indigo-300 underline" to={`/intake?date=${date}`}>Add or correct the meal time</Link>
       <h3 className="text-sm font-medium">Trackers</h3>
       {trackers.map(tracker => <TrackerDay key={`${tracker.id}:${date}:${timeZone}`} tracker={tracker} date={date} timeZone={timeZone} confirmed={confirmed} onReady={loaded} />)}
       {!trackers.length ? <p className="text-sm text-neutral-400">There are no trackers.</p> : null}

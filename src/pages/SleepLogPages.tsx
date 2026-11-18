@@ -3,7 +3,7 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { atLocalClock, addDays, civilDate, dateInput } from '@shared/recurringReferences';
 import { toggleTag } from '@shared/documentationEntries';
-import { sleepNight, sleepNightDate, targetLightsOut, type SleepEvening, type SleepMorning, type SleepRating } from '@shared/sleepLog';
+import { fullnessLabel, sleepNight, sleepNightDate, targetLightsOut, type SleepEvening, type SleepMorning, type SleepRating } from '@shared/sleepLog';
 import { KAROLINSKA_SLEEPINESS_SCALE } from '@shared/reactionTest';
 import { localClock, requiredWakeForDate, sleepScreenState, usualOnset } from '@shared/sleepScreens';
 import { useSleepLog } from '../hooks/useSleepLog';
@@ -16,6 +16,7 @@ import { randomSleepChoice, type SleepChoice } from '@shared/sleepTrial';
 import { newSleepSeed } from '../lib/sleepRandom';
 import { SituationChips } from '../components/tracking/SituationChips';
 import { WheelColumn } from '../components/tracking/TimeWheel';
+import { FullnessChoices } from '../components/sleep/FullnessChoices';
 
 type Store = ReturnType<typeof useSleepLog>;
 type LogKind = 'evening' | 'lights-out' | 'morning';
@@ -151,11 +152,14 @@ function LogForm({ kind, store, requestedId, requestedWakeDate }: { kind: LogKin
       {lightsRecorded ? <>
         <h2 className="text-2xl font-medium">Good night</h2>
         <p className="text-sm text-neutral-400">Lights out: {localClock(currentNight?.evening?.lightsOut ?? lightsAt!, timeZone)}. Sleepiness: {currentNight?.evening?.sleepiness ?? evening.sleepiness} of 9.</p>
+        <p className="text-sm text-neutral-400">Fullness at lights out: {fullnessLabel(currentNight?.evening?.fullness ?? evening.fullness) ?? 'Not recorded'}.</p>
+        <details className="rounded-xl border border-neutral-800 p-3"><summary className="cursor-pointer text-sm">Record or correct fullness</summary><div className="mt-3 space-y-3"><p className="text-sm text-neutral-400">How full did you feel when you tried to sleep?</p><FullnessChoices value={currentNight?.evening?.fullness} disabled={save.busy} onChange={fullness => void save.run(() => persistEvening({ ...currentNight?.evening, timeZone, lightsOut: currentNight?.evening?.lightsOut ?? lightsAt, fullness }), fullness === undefined ? 'Fullness was removed.' : 'Fullness was recorded.')} /></div></details>
         <details className="rounded-xl border border-neutral-800 p-3"><summary className="cursor-pointer text-sm">Correct the time</summary><div className="mt-3 space-y-3"><LightsOutHint /><InstantField label="Lights out" value={lightsAt ?? currentNight!.evening!.lightsOut!} timeZone={timeZone} onChange={setLightsAt} /><button className={sleepButton} disabled={save.busy} type="button" onClick={() => void save.run(() => persistEvening({ ...currentNight?.evening, timeZone, lightsOut: lightsAt ?? currentNight?.evening?.lightsOut }), 'The time was corrected.')}>Save the corrected time</button></div></details>
         <details className="rounded-xl border border-neutral-800 p-3"><summary className="cursor-pointer text-sm">Correct sleepiness</summary><div className="mt-3 space-y-2">{KAROLINSKA_SLEEPINESS_SCALE.map(row => <button className={`${sleepButton} w-full text-left`} key={row.value} disabled={save.busy} type="button" onClick={() => void save.run(() => persistEvening({ ...currentNight?.evening, timeZone, lightsOut: currentNight?.evening?.lightsOut ?? lightsAt, sleepiness: row.value }), 'Sleepiness was corrected.')}>{row.value}. {row.label}</button>)}</div></details>
       </> : <>
+        <Field title={dayDate < civilDate(openedAt, timeZone) ? 'How full did you feel?' : 'How full do you feel?'}><p className="text-sm text-neutral-400">Optional. Rate your fullness just before trying to sleep. Your answer is saved with lights out.</p><FullnessChoices value={evening.fullness} disabled={save.busy} onChange={fullness => patchEvening({ fullness })} /></Field>
         <p className="text-sm text-neutral-400">{requestedWakeDate ? "How sleepy were you? One tap records the selected lights-out time." : "How sleepy are you? One tap records lights out now."}</p>
-        <div className="space-y-2">{KAROLINSKA_SLEEPINESS_SCALE.map(row => <button className={`${sleepButton} flex w-full items-center gap-3 text-left`} key={row.value} disabled={save.busy} type="button" onClick={() => void save.run(async () => { const value = { ...currentNight?.evening, timeZone, sleepiness: row.value, lightsOut: lightsAt ?? (requestedWakeDate ? atLocalClock(dayDate, `${target.lightsOut}:00`, timeZone) : new Date().toISOString()) }; await persistEvening(value); setEvening(value); setLightsAt(value.lightsOut); }, 'Lights out was saved.')}><span className="text-lg text-indigo-300">{row.value}</span><span>{row.label}</span></button>)}</div>
+        <div className="space-y-2">{KAROLINSKA_SLEEPINESS_SCALE.map(row => <button className={`${sleepButton} flex w-full items-center gap-3 text-left`} key={row.value} disabled={save.busy} type="button" onClick={() => void save.run(async () => { const value = { ...currentNight?.evening, timeZone, sleepiness: row.value, fullness: evening.fullness, lightsOut: lightsAt ?? (requestedWakeDate ? atLocalClock(dayDate, `${target.lightsOut}:00`, timeZone) : new Date().toISOString()) }; await persistEvening(value); setEvening(value); setLightsAt(value.lightsOut); }, 'Lights out was saved.')}><span className="text-lg text-indigo-300">{row.value}</span><span>{row.label}</span></button>)}</div>
       </>}
     </> : null}
     {kind === 'morning' ? <>

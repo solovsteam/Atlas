@@ -3,9 +3,10 @@ import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils.js';
 import { itemFromDbRow, type Item } from '@shared/item';
 import type { DocumentationEntry } from '@shared/documentationEntries';
-import { DEFAULT_SLEEP_SETTINGS, isSleepLog, morningWithLightsOut, matchingSleepNight, sleepNight, type SleepEvening, type SleepMorning } from '@shared/sleepLog';
+import { DEFAULT_SLEEP_SETTINGS, fullnessLabel, isSleepLog, morningWithLightsOut, matchingSleepNight, sleepNight, type SleepEvening, type SleepMorning } from '@shared/sleepLog';
 import { dayEvidence, dayEvidenceData, dayEvidenceTime, type DayEvidence, type MedicineAnswer } from '@shared/dayEvidence';
 import { intakeData, sleepIntake, type Intake } from '@shared/intake';
+import { eveningMeal, mealData, type EveningMeal } from '@shared/meals';
 import { sleepReactionTest } from '@shared/sleepReactionTest';
 import type { ReactionTestResult } from '@shared/reactionTest';
 import type { Database, DbItemRow } from '../types/database';
@@ -71,6 +72,9 @@ export function sleepLogStore(client: Client, userId: string, writer: SleepEntry
     return entry;
   }
   async function savePart(itemId: string, part: 'evening' | 'morning', value: SleepEvening | SleepMorning, at: Date, entryId?: string, lightsOut?: string): Promise<SleepEntryChange> {
+    if (part === 'evening' && (value as SleepEvening).fullness !== undefined && !fullnessLabel((value as SleepEvening).fullness)) {
+      throw new Error('Choose a fullness level from 1 to 5, or leave it unrecorded.');
+    }
     if (!value.timeZone) throw new Error('A time zone is required.');
     new Intl.DateTimeFormat('en', { timeZone: value.timeZone });
     const before = entryId ? await current(itemId, entryId) : part === 'morning'
@@ -93,6 +97,13 @@ export function sleepLogStore(client: Client, userId: string, writer: SleepEntry
     readEntries: (itemId: string) => fetchEntries(client, userId, itemId),
     saveEvening: (itemId: string, evening: SleepEvening, at: Date, entryId?: string) => savePart(itemId, 'evening', evening, at, entryId),
     saveMorning: (itemId: string, morning: SleepMorning, at: Date, entryId?: string, lightsOut?: string) => savePart(itemId, 'morning', morning, at, entryId, lightsOut),
+    async saveMeal(itemId: string, meal: EveningMeal, entryId?: string): Promise<SleepEntryChange> {
+      const data = mealData(meal);
+      const before = entryId ? await current(itemId, entryId) : undefined;
+      if (before && !eveningMeal(before)) throw new Error('This entry is not an evening meal.');
+      return before ? { entry: await writer.updateEntry(before, { ...before.data, ...data }, new Date(meal.finishedAt)), before }
+        : { entry: await writer.createEntry(itemId, new Date(meal.finishedAt), data) };
+    },
     /** meta holds extra entry fields, such as the Log box sentence. An edit keeps the earlier ones. */
     async saveIntake(itemId: string, intake: Intake, entryId?: string, legacyKey?: string, meta: Record<string, unknown> = {}): Promise<SleepEntryChange> {
       const before = entryId ? await current(itemId, entryId) : undefined;

@@ -7,6 +7,18 @@ export type KarolinskaRating = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 export type NightAwake = 'none' | 'short' | 'over30';
 export type WokeBy = 'alarm' | 'self' | 'other';
 
+/** A personal fullness rating, not an inference from food or meal timing. */
+export const BEDTIME_FULLNESS = [
+  { value: 1, label: 'Empty' },
+  { value: 2, label: 'Slightly full' },
+  { value: 3, label: 'Comfortably full' },
+  { value: 4, label: 'Very full' },
+  { value: 5, label: 'Uncomfortably full' },
+] as const;
+export function fullnessLabel(value: unknown): string | null {
+  return BEDTIME_FULLNESS.find(option => option.value === value)?.label ?? null;
+}
+
 /** Times are ISO instants with an offset. Zones are IANA names, never device defaults. */
 export type SleepLogPart = {
   timeZone?: string;
@@ -47,6 +59,8 @@ export type SleepEvening = SleepLogPart & {
   tags?: string[];
   lateReasons?: string[];
   sleepiness?: KarolinskaRating;
+  /** Optional self-report at lights out. Absence means unrecorded. */
+  fullness?: SleepRating;
   /** Recorded before the night, for example before an important appointment. */
   hardNight?: boolean;
 };

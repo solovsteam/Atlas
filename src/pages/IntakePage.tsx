@@ -1,9 +1,10 @@
 import { useSearchParams } from 'react-router-dom';
 import { confirmedDay } from '@shared/dayEvidence';
-import { useEffect, useState } from 'react';
-import { addDays, civilDate } from '@shared/recurringReferences';
+import { useEffect, useRef, useState } from 'react';
+import { addDays, atLocalClock, civilDate } from '@shared/recurringReferences';
 import { DEFAULT_INTAKE_BUTTONS, intakeAmountText, intakeNow, intakesOnDate, lastTakenToday, type Intake, type IntakeButton, type IntakeRecord } from '@shared/intake';
 import { caffeineMg, withAmountMl } from '@shared/drinks';
+import { mealsOnDate, type EveningMeal, type MealRecord } from '@shared/meals';
 import { DrinkSettings } from '../components/DrinkSettings';
 import { localClock } from '@shared/sleepScreens';
 import { sleepTrialDisplay } from '@shared/sleepIntegration';
@@ -20,7 +21,7 @@ export function IntakePage() {
   const now = new Date(Math.max(Date.now(), clock.getTime()));
   const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const [selectedDate, setSelectedDate] = useState<string | null>(() => { const date = params.get('date'); return date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : null; });
-  const [editor, setEditor] = useState<{ intake: Intake; row?: IntakeRecord } | null>(null);
+  const [editor, setEditor] = useState<{ intake: Intake; row?: IntakeRecord } | { meal: EveningMeal; row?: MealRecord } | null>(null);
   const save = useSleepSave();
   const editId = params.get('edit');
   // A link from the Log box opens that intake in the editor once it has loaded.
@@ -38,8 +39,29 @@ export function IntakePage() {
   const date = selectedDate ?? civilDate(now, zone);
   const assignment = sleepTrialDisplay(store.settings.trial, addDays(civilDate(now, zone), 1)).assignment;
   const buttons = store.settings.intakeButtons;
+  const dayIntakes = intakesOnDate(store.intakes, date, zone);
+  const dayMeals = mealsOnDate(store.meals, date, zone);
+  const lastMeal = mealsOnDate(store.meals, civilDate(now, zone), zone).find(row => Date.parse(row.meal.finishedAt) <= now.getTime());
+  const history = [
+    ...dayIntakes.map(row => ({ at: row.intake.takenAt, row, kind: 'intake' as const })),
+    ...dayMeals.map(row => ({ at: row.meal.finishedAt, row, kind: 'meal' as const })),
+  ].sort((a, b) => Date.parse(b.at) - Date.parse(a.at) || a.row.id.localeCompare(b.row.id));
   return <section className="mx-auto max-w-xl space-y-6 pb-4">
     <h1 className="text-3xl font-semibold tracking-tight">Intake</h1>
+    <section aria-label="Evening meal" className="space-y-3 rounded-xl border border-neutral-800 p-4">
+      <h2 className="text-lg font-medium">Evening meal</h2>
+      <p className="text-sm text-neutral-400">Record when you finished eating.</p>
+      <div className="flex flex-wrap gap-2"><button className={`${sleepButton} bg-indigo-500`} type="button" disabled={save.busy} onClick={() => void save.run(async () => {
+        await store.saveMeal({ finishedAt: new Date().toISOString(), timeZone: zone });
+        setSelectedDate(null);
+      }, 'The evening meal was recorded.')}>Finished eating now</button><button className={sleepButton} type="button" disabled={save.busy} onClick={() => setEditor({ meal: { finishedAt: atLocalClock(date, `${localClock(now.toISOString(), zone)}:00`, zone), timeZone: zone } })}>Finished earlier</button></div>
+      <p className="text-xs text-neutral-400">{lastMeal ? `Last finished today at ${localClock(lastMeal.meal.finishedAt, zone)}.` : 'No evening meal recorded today.'}</p>
+      {editor && 'meal' in editor ? <MealEditor key={editor.row?.id ?? 'new-meal'} value={editor.meal} busy={save.busy} onCancel={() => setEditor(null)} onSave={meal => void save.run(async () => {
+        await store.saveMeal(meal, editor.row?.id);
+        setSelectedDate(civilDate(new Date(meal.finishedAt), zone));
+        setEditor(null);
+      }, 'The evening meal was saved.')} onDelete={editor.row ? () => void save.run(async () => { await store.deleteEntry(editor.row!.id); setEditor(null); }, 'The evening meal was deleted.') : undefined} /> : null}
+    </section>
     <p className="text-sm text-neutral-400">Tap once to record what you took now. To type a sentence instead, use the Log box on Now.</p>
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">{buttons.filter(b => !b.hidden).map(button => {
       const last = lastTakenToday(store.intakes, button.substance, now, zone);
@@ -57,7 +79,7 @@ export function IntakePage() {
       const button = buttons.find(b => !b.hidden) ?? buttons[0];
       if (button) setEditor({ intake: intakeNow(button, new Date(), zone) });
     }} disabled={!buttons.length}>Taken earlier</button>
-    {editor ? <IntakeEditor key={editor.row?.id ?? 'new'} value={editor.intake} row={editor.row} buttons={buttons} busy={save.busy} onCancel={() => setEditor(null)} onSave={intake => void save.run(async () => {
+    {editor && 'intake' in editor ? <IntakeEditor key={editor.row?.id ?? 'new'} value={editor.intake} row={editor.row} buttons={buttons} busy={save.busy} onCancel={() => setEditor(null)} onSave={intake => void save.run(async () => {
       const row = editor.row;
       const separate = row?.entry.data.kind === 'intake';
       await store.saveIntake(intake, separate ? row.entry.id : undefined, row?.legacyKey);
@@ -69,15 +91,28 @@ export function IntakePage() {
         <label className="text-sm">Date <input aria-label="Intake history date" className={`${sleepInput} max-w-full`} type="date" value={date} onChange={e => { if (e.target.value) setSelectedDate(e.target.value); }} /></label>
         {selectedDate ? <button className={sleepButton} type="button" onClick={() => setSelectedDate(null)}>Today</button> : null}
       </div>
-      <p className="text-sm text-neutral-400">{confirmedDay(store.entries, date, zone) ? `${intakesOnDate(store.intakes, date, zone).length} intakes. The day is confirmed.` : 'Not confirmed. The daily count is unknown.'}</p>
-      <ul className="space-y-2">{intakesOnDate(store.intakes, date, zone).map(row => <li key={row.id}><button className={`${sleepButton} flex w-full items-center justify-between gap-3 text-left`} type="button" onClick={() => setEditor({ intake: { ...row.intake, dose: row.doseKnown ? row.intake.dose : buttons.find(b => b.substance === row.intake.substance)?.dose ?? 1 }, row })}>
-        <span className="min-w-0 break-words">{row.intake.label}<span className="block text-xs text-neutral-400">{row.doseKnown ? intakeAmountText(row.intake) : 'Dose not recorded'}</span></span><span className="shrink-0 text-sm text-neutral-400">{row.timeKnown ? localClock(row.intake.takenAt, zone) : 'Time not recorded'}</span>
+      <p className="text-sm text-neutral-400">{confirmedDay(store.entries, date, zone) ? `${dayIntakes.length} intakes. ${dayMeals.length} evening meals. The day is confirmed.` : 'Not confirmed. The daily count is unknown.'}</p>
+      <ul className="space-y-2">{history.map(record => record.kind === 'meal' ? <li key={record.row.id}><button className={`${sleepButton} flex w-full items-center justify-between gap-3 text-left`} type="button" onClick={() => setEditor({ meal: record.row.meal, row: record.row })}>
+        <span>Evening meal<span className="block text-xs text-neutral-400">Finished eating</span></span><span className="shrink-0 text-sm text-neutral-400">{localClock(record.at, zone)}</span>
+      </button></li> : <li key={record.row.id}><button className={`${sleepButton} flex w-full items-center justify-between gap-3 text-left`} type="button" onClick={() => { const row = record.row; setEditor({ intake: { ...row.intake, dose: row.doseKnown ? row.intake.dose : buttons.find(b => b.substance === row.intake.substance)?.dose ?? 1 }, row }); }}>
+        <span className="min-w-0 break-words">{record.row.intake.label}<span className="block text-xs text-neutral-400">{record.row.doseKnown ? intakeAmountText(record.row.intake) : 'Dose not recorded'}</span></span><span className="shrink-0 text-sm text-neutral-400">{record.row.timeKnown ? localClock(record.at, zone) : 'Time not recorded'}</span>
       </button></li>)}</ul>
-      {!intakesOnDate(store.intakes, date, zone).length ? <p className="text-sm text-neutral-400">No intakes recorded for this day.</p> : null}
+      {!history.length ? <p className="text-sm text-neutral-400">No intakes or evening meals recorded for this day.</p> : null}
     </Field>
     <IntakeSettings store={store} />
     <DrinkSettings store={store} />
   </section>;
+}
+function MealEditor({ value, busy, onCancel, onSave, onDelete }: { value: EveningMeal; busy: boolean; onCancel: () => void; onSave: (meal: EveningMeal) => void; onDelete?: () => void }) {
+  const [draft, setDraft] = useState(value);
+  const form = useRef<HTMLFormElement>(null);
+  useEffect(() => { form.current?.scrollIntoView({ block: 'nearest' }); }, []);
+  return <form ref={form} aria-label="Evening meal time" className="space-y-4 rounded-xl border border-indigo-500/40 p-4" onSubmit={e => { e.preventDefault(); onSave(draft); }}>
+    <h2 className="text-lg font-medium">{onDelete ? 'Edit evening meal' : 'Record evening meal'}</h2>
+    <InstantField label="Finished eating" value={draft.finishedAt} timeZone={draft.timeZone} onChange={finishedAt => setDraft(current => ({ ...current, finishedAt }))} />
+    <p className="text-xs text-neutral-400">Time zone: {draft.timeZone}</p>
+    <div className="flex flex-wrap gap-2"><button className={`${sleepButton} bg-indigo-500`} disabled={busy} type="submit">Save the meal time</button><button className={sleepButton} disabled={busy} type="button" onClick={onCancel}>Cancel</button>{onDelete ? <button className={`${sleepButton} text-red-300`} disabled={busy} type="button" onClick={onDelete}>Delete</button> : null}</div>
+  </form>;
 }
 function IntakeEditor({ value, row, buttons, busy, onCancel, onSave, onDelete }: { value: Intake; row?: IntakeRecord; buttons: IntakeButton[]; busy: boolean; onCancel: () => void; onSave: (value: Intake) => void; onDelete?: () => void }) {
   const [draft, setDraft] = useState(value);

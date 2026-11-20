@@ -3,7 +3,8 @@ import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from
 export const WHEEL_ROW_HEIGHT = 40;
 const VISIBLE_ROWS = 5;
 
-export type WheelOption = { value: number; label: string; disabled?: boolean };
+/** detail is a small word shown before the label, such as the day of an hour. */
+export type WheelOption = { value: number; label: string; detail?: string; disabled?: boolean };
 
 /**
  * One column of an iPhone-style picker: rows snap to the centre band while
@@ -119,6 +120,7 @@ export function WheelColumn({
             style={{ height: WHEEL_ROW_HEIGHT, scrollSnapAlign: "center" }}
             onClick={() => moveTo(index)}
           >
+            {option.detail ? <span className={`mr-2 text-xs font-normal ${index === centred ? "text-indigo-200" : "text-neutral-500"}`}>{option.detail}</span> : null}
             {option.label}
           </div>
         ))}

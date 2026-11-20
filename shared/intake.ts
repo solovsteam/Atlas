@@ -108,8 +108,10 @@ export function readIntakes(entries: readonly DocumentationEntry[]): IntakeRecor
 export function intakesOnDate(intakes: readonly IntakeRecord[], date: string, timeZone: string): IntakeRecord[] {
   return intakes.filter(row => civilDate(new Date(row.intake.takenAt), timeZone) === date).toSorted((a, b) => Date.parse(b.intake.takenAt) - Date.parse(a.intake.takenAt));
 }
-export function lastTakenToday(intakes: readonly IntakeRecord[], substance: string, now: Date, timeZone: string): IntakeRecord | null {
-  return intakesOnDate(intakes, civilDate(now, timeZone), timeZone).find(row => row.intake.substance === substance && Date.parse(row.intake.takenAt) <= now.getTime()) ?? null;
+/** With an amount, only intakes of that dose and unit count. Use it when two buttons share a substance. */
+export function lastTakenToday(intakes: readonly IntakeRecord[], substance: string, now: Date, timeZone: string, amount?: { dose: number; unit: string }): IntakeRecord | null {
+  return intakesOnDate(intakes, civilDate(now, timeZone), timeZone).find(row => row.intake.substance === substance && Date.parse(row.intake.takenAt) <= now.getTime()
+    && (!amount || row.doseKnown && row.intake.dose === amount.dose && row.intake.unit === amount.unit)) ?? null;
 }
 export function methylphenidateOnDate(intakes: readonly IntakeRecord[], date: string, timeZone?: string): boolean {
   return intakes.some(row => row.intake.substance === 'methylphenidate' && civilDate(new Date(row.intake.takenAt), timeZone ?? row.intake.timeZone) === date);

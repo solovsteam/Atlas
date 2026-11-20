@@ -17,6 +17,7 @@ import { newSleepSeed } from '../lib/sleepRandom';
 import { SituationChips } from '../components/tracking/SituationChips';
 import { WheelColumn } from '../components/tracking/TimeWheel';
 import { FullnessChoices } from '../components/sleep/FullnessChoices';
+import { shortDate, sleepLogName } from '@shared/dayLabels';
 
 type Store = ReturnType<typeof useSleepLog>;
 type LogKind = 'evening' | 'lights-out' | 'morning';
@@ -125,8 +126,12 @@ function LogForm({ kind, store, requestedId, requestedWakeDate }: { kind: LogKin
     }
   }, [currentNight, store.settings.anchorWake, timeZone]);
   const lightsRecorded = currentNight ? !!currentNight.evening?.lightsOut : !!entryId && !!lightsAt && save.message !== 'Undone.';
-  const title = kind === 'evening' ? 'Evening log' : kind === 'morning' ? 'Morning log' : 'Lights out';
-  return <SleepFrame title={title}>
+  const openedDate = civilDate(openedAt, timeZone);
+  const title = sleepLogName(kind, kind === 'morning' ? wakeDate : dayDate, openedDate);
+  const subtitle = kind === 'evening' ? `The evening of ${shortDate(dayDate)}, before the night to ${shortDate(wakeDate)}.`
+    : kind === 'morning' ? `The morning of ${shortDate(wakeDate)}, after the night from ${shortDate(dayDate)}.`
+    : `The night from ${shortDate(dayDate)} to ${shortDate(wakeDate)}.`;
+  return <SleepFrame title={title} subtitle={subtitle}>
     {kind === 'evening' ? <>
       <p className="text-sm text-neutral-400">Tonight’s target lights out: <span className="text-white">{target.lightsOut}</span>. {required ? `Required wake time: ${localClock(required, timeZone)}.` : 'Tomorrow has no required wake time.'}</p>
       <DayReview key={`${dayDate}:${timeZone}`} store={store} date={dayDate} timeZone={timeZone} forceMedicine={params.get('answer') === 'medicine'} />

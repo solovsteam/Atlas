@@ -1,5 +1,9 @@
 # Handoff
 
+## Continuous time wheel, dated sleep logs, intake tiles (20 Nov 2026)
+
+Every date-and-time field now uses one wheel for the day and hour together, plus a minute wheel. Scrolling past 23 reaches 00 of the next day. Sleep logs are named by their day, for example "Yesterday's evening log", with the dates under the title. The Intake page has app-icon tiles: the top half records now, and "Earlier" opens a sheet with the same wheel. The evening meal is one of the tiles. The history is a compact list with day arrows. Shared code: `shared/dayLabels.ts`, `src/components/tracking/DateTimeWheel.tsx`. `npm run check` passed. Checked in the browser at 390px with the offline store. No migration. Note: `.handoff/time-wheel-intake-20261120.md`.
+
 ## Evening meal timing and fullness at lights out (18 Nov 2026)
 
 Tonio chose to record when he finishes his evening meal. Intake now has

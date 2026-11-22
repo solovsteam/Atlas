@@ -12,7 +12,7 @@ final class AtlasViewController: CAPBridgeViewController {
 final class AtlasAuthentication: CAPPlugin, CAPBridgedPlugin, ASWebAuthenticationPresentationContextProviding {
     let identifier = "AtlasAuthentication"
     let jsName = "AtlasAuthentication"
-    let pluginMethods = [CAPPluginMethod(name: "authorize", returnType: CAPPluginReturnPromise)]
+    let pluginMethods: [CAPPluginMethod] = [CAPPluginMethod(name: "authorize", returnType: CAPPluginReturnPromise)]
 
     private var session: ASWebAuthenticationSession?
     private var anchor: ASPresentationAnchor?

@@ -1,6 +1,6 @@
 import { PhoneNavigation } from "./components/PhoneNavigation";
 import { BrowserRouter, Link, NavLink, Route, Routes, useLocation } from "react-router-dom";
-import type { ComponentType } from "react";
+import { useRef, useState, type ComponentType } from "react";
 import { authDisplayName, authPicture, useAuthSession } from "./hooks/useAuthSession";
 import { AtlasDataProvider, useAtlasData } from "./context/AtlasDataContext";
 import { RelevanceProvider } from "./context/RelevanceContext";
@@ -99,7 +99,26 @@ function SleepIcon({ className }: { className?: string }) {
   return <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d="M20.8 13.1A9 9 0 0 1 10.9 3.2a9 9 0 1 0 9.9 9.9Z" /></svg>;
 }
 
-function LoginScreen({ onSignIn }: { onSignIn: () => void }) {
+function LoginScreen({ onSignIn }: { onSignIn: () => Promise<void> }) {
+  const active = useRef(false);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState(false);
+
+  async function signIn() {
+    if (active.current) return;
+    active.current = true;
+    setPending(true);
+    setError(false);
+    try {
+      await onSignIn();
+    } catch {
+      setError(true);
+    } finally {
+      active.current = false;
+      setPending(false);
+    }
+  }
+
   return (
     <main className="flex min-h-screen items-center justify-center bg-black px-6 text-white">
       <section className="max-w-md text-center">
@@ -108,10 +127,12 @@ function LoginScreen({ onSignIn }: { onSignIn: () => void }) {
         <button
           className="mt-8 border border-neutral-700 px-4 py-2 text-sm font-medium text-neutral-200 hover:border-white hover:text-white"
           type="button"
-          onClick={() => void onSignIn()}
+          disabled={pending}
+          onClick={() => void signIn()}
         >
-          Sign in with Google
+          {pending ? "Signing in…" : "Sign in with Google"}
         </button>
+        {error && <p className="mt-3 text-sm text-red-400" role="alert">Sign-in failed. Please try again.</p>}
       </section>
     </main>
   );
@@ -149,7 +170,7 @@ function AppShell() {
     >
       <RelevanceProvider items={items}>
         <NudgeProvider>
-        <main className="min-h-screen bg-black px-4 pb-28 pt-3 text-neutral-100 md:px-8 lg:pb-12 md:pt-5" lang="de">
+        <main className="min-h-screen bg-black px-4 pb-28 pt-[calc(env(safe-area-inset-top)+0.75rem)] text-neutral-100 md:px-8 lg:pb-12 md:pt-[calc(env(safe-area-inset-top)+1.25rem)]" lang="de">
           <section className="mx-auto max-w-6xl">
             <header className="mb-3 flex items-center gap-3 md:mb-5">
               <Link className="flex items-center gap-2 text-lg font-semibold tracking-tight" to="/">

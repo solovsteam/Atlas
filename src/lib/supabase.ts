@@ -1,3 +1,4 @@
+import { Capacitor } from "@capacitor/core";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "../types/database";
 import { retryWhenJwtFromFuture } from "./clockSkewFetch";
@@ -10,5 +11,6 @@ if (!url || !anonKey) {
 }
 
 export const supabase = createClient<Database>(url ?? "", anonKey ?? "", {
+  auth: Capacitor.getPlatform() === "ios" ? { flowType: "pkce", detectSessionInUrl: false } : undefined,
   global: { fetch: retryWhenJwtFromFuture((input, init) => fetch(input, init)) }
 });

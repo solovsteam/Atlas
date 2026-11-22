@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Session, User } from "@supabase/supabase-js";
-import { getAppOrigin } from "../lib/appUrl";
 import { supabase } from "../lib/supabase";
+import { signInWithGoogle } from "../services/googleSignIn";
 
 export function useAuthSession() {
   const [session, setSession] = useState<Session | null>(null);
@@ -26,18 +26,6 @@ export function useAuthSession() {
       active = false;
       subscription.subscription.unsubscribe();
     };
-  }, []);
-
-  const signInWithGoogle = useCallback(async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: getAppOrigin()
-      }
-    });
-    if (error) {
-      throw error;
-    }
   }, []);
 
   const signOut = useCallback(async () => {

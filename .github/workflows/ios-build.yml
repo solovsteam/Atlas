@@ -41,10 +41,22 @@ jobs:
             -derivedDataPath "$RUNNER_TEMP/atlas-simulator" CODE_SIGNING_ALLOWED=NO build -quiet
           xcrun simctl bootstatus "$device" -b
           xcrun simctl install "$device" "$RUNNER_TEMP/atlas-simulator/Build/Products/Debug-iphonesimulator/App.app"
-          xcrun simctl launch "$device" com.solovsteam.atlas
-          sleep 3
-          xcrun simctl io "$device" screenshot "$RUNNER_TEMP/atlas-ios.png"
+          xcrun simctl launch --stdout="$RUNNER_TEMP/atlas-ios-stdout.log" \
+            --stderr="$RUNNER_TEMP/atlas-ios-stderr.log" "$device" com.solovsteam.atlas
+          swiftc .github/scripts/check-ios-sign-in.swift -o "$RUNNER_TEMP/check-ios-sign-in"
+          for attempt in 1 2 3 4 5 6; do
+            sleep 15
+            xcrun simctl io "$device" screenshot "$RUNNER_TEMP/atlas-ios.png"
+            if "$RUNNER_TEMP/check-ios-sign-in" "$RUNNER_TEMP/atlas-ios.png"; then
+              exit 0
+            fi
+          done
+          cat "$RUNNER_TEMP/atlas-ios-stdout.log" "$RUNNER_TEMP/atlas-ios-stderr.log"
+          exit 1
       - uses: actions/upload-artifact@v7
+        if: always()
         with:
           name: atlas-ios-simulator
-          path: ${{ runner.temp }}/atlas-ios.png
+          path: |
+            ${{ runner.temp }}/atlas-ios.png
+            ${{ runner.temp }}/atlas-ios-*.log

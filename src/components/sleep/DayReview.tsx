@@ -20,28 +20,16 @@ export function DayReview({ store, date, timeZone, forceMedicine = false }: { st
   const [ready, setReady] = useState<Record<string, boolean>>({});
   const loaded = useCallback((id: string, value: boolean) => setReady(previous => previous[id] === value ? previous : { ...previous, [id]: value }), []);
   const save = useSleepSave();
-  const [takenAt, setTakenAt] = useState(atLocalClock(date, '08:00:00', timeZone));
-  const [taking, setTaking] = useState(false);
   const [correctionDate, setCorrectionDate] = useState(date);
   const confirmed = confirmedDay(store.entries, date, timeZone);
   const confirmations = store.entries.filter(entry => { const day = dayEvidence(entry, 'dayConfirmation'); return day?.date === date && day.timeZone === timeZone; });
-  const answers = store.entries.filter(entry => { const day = medicineAnswer(entry); return day?.date === date && day.timeZone === timeZone; }).sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id));
-  const status = methylphenidateStatus(store.entries, date, timeZone);
   const weekday = dateInput(date).weekday;
   const dayIntakes = intakesOnDate(store.intakes, date, timeZone);
   const grouped = new Map<string, number>();
   for (const row of dayIntakes) grouped.set(row.intake.label, (grouped.get(row.intake.label) ?? 0) + 1);
-  const button = store.settings.intakeButtons.find(b => b.substance === 'methylphenidate') ?? DEFAULT_INTAKE_BUTTONS[0];
   return <section className="space-y-5 rounded-xl border border-neutral-800 p-4" aria-label="Review the day">
     <p className="text-sm text-neutral-400">Review {date}. Time zone: {timeZone}.</p>
-    {weekday >= 1 && weekday <= 5 || forceMedicine || status !== 'unknown' ? <Field title="Methylphenidate today?">
-      {status === 'taken' ? <><p className="text-sm">Taken. <Link className="text-indigo-300 underline" to={`/intake?date=${date}`}>Correct the intake</Link>.</p></> : <>
-        <p className="text-sm text-neutral-400">{status === 'not-taken' ? 'Not taken.' : 'No answer recorded.'}</p>
-        <button className={sleepButton} type="button" disabled={save.busy} onClick={() => setTaking(!taking)}>Taken at …</button>
-        {taking ? <div className="space-y-3"><InstantField label="Methylphenidate taken at" value={takenAt} timeZone={timeZone} onChange={setTakenAt} /><button className={sleepButton} type="button" disabled={save.busy} onClick={() => void save.run(async () => { await store.saveIntake(intakeNow(button, new Date(takenAt), timeZone)); setTaking(false); }, 'The intake was recorded.')}>Save the intake</button></div> : null}
-        {status !== 'not-taken' ? <button className={sleepButton} type="button" disabled={save.busy} onClick={() => void save.run(() => store.saveDayEvidence('medicineAnswer', { date, timeZone, answer: 'not-taken' }, answers[0]?.id), 'Not taken was recorded.')}>Not taken</button> : <button className={sleepButton} type="button" disabled={save.busy} onClick={() => void save.run(() => store.saveDayEvidence('medicineAnswer', { date, timeZone, answer: 'unknown' }, answers[0]?.id), 'The medicine answer was removed.')}>Remove the medicine answer</button>}
-      </>}
-    </Field> : null}
+    {weekday >= 1 && weekday <= 5 || forceMedicine || methylphenidateStatus(store.entries, date, timeZone) !== 'unknown' ? <MedicineQuestion store={store} date={date} timeZone={timeZone} /> : null}
     <Field title="Today’s list">
       <p className="text-sm text-neutral-400">{confirmed ? 'The day is confirmed. Later entries will also count.' : 'The day is not confirmed. These are the recorded events so far.'}</p>
       <h3 className="text-sm font-medium">Intakes</h3>
@@ -69,4 +57,24 @@ function TrackerDay({ tracker, date, timeZone, confirmed, onReady }: { tracker: 
   useEffect(() => { onReady(tracker.id, !loading && !error); return () => onReady(tracker.id, false); }, [tracker.id, loading, error, onReady]);
   const count = entries.filter(entry => civilDate(new Date(entry.occurredAt), timeZone) === date).length;
   return <p className="text-sm"><Link className="text-indigo-300 underline" to={`/track/${tracker.id}`}>{tracker.title || 'Untitled tracker'}</Link>: {loading ? 'Loading…' : error ? <span role="alert">{error}</span> : `${count} recorded${confirmed ? '' : '. Not confirmed'}`}</p>;
+}
+
+export function MedicineQuestion({ store, date, timeZone }: { store: Store; date: string; timeZone: string }) {
+  const save = useSleepSave();
+  const [takenAt, setTakenAt] = useState(atLocalClock(date, '08:00:00', timeZone));
+  const [taking, setTaking] = useState(false);
+  const answers = store.entries.filter(entry => { const day = medicineAnswer(entry); return day?.date === date && day.timeZone === timeZone; }).sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id));
+  const status = methylphenidateStatus(store.entries, date, timeZone);
+  const button = store.settings.intakeButtons.find(b => b.substance === 'methylphenidate') ?? DEFAULT_INTAKE_BUTTONS[0];
+  const times = intakesOnDate(store.intakes, date, timeZone)
+    .filter(row => row.intake.substance === 'methylphenidate' && row.timeKnown)
+    .map(row => localClock(row.intake.takenAt, timeZone));
+  return <><Field title={status === 'unknown' ? "Did you take methylphenidate?" : "Methylphenidate"}>
+      {status === 'taken' ? <><p className="text-sm">{times.length ? `You recorded methylphenidate at ${times.join(', ')}.` : 'You recorded taking methylphenidate.'} <Link className="text-indigo-300 underline" to={`/intake?date=${date}`}>Correct the intake</Link>.</p></> : <>
+        <p className="text-sm text-neutral-400">{status === 'not-taken' ? 'Not taken.' : 'No answer recorded.'}</p>
+        <button className={sleepButton} type="button" disabled={save.busy} onClick={() => setTaking(!taking)}>Taken at …</button>
+        {taking ? <div className="space-y-3"><InstantField label="Methylphenidate taken at" value={takenAt} timeZone={timeZone} onChange={setTakenAt} /><button className={sleepButton} type="button" disabled={save.busy} onClick={() => void save.run(async () => { await store.saveIntake(intakeNow(button, new Date(takenAt), timeZone)); setTaking(false); }, 'The intake was recorded.')}>Save the intake</button></div> : null}
+        {status !== 'not-taken' ? <button className={sleepButton} type="button" disabled={save.busy} onClick={() => void save.run(() => store.saveDayEvidence('medicineAnswer', { date, timeZone, answer: 'not-taken' }, answers[0]?.id), 'Not taken was recorded.')}>Not taken</button> : <button className={sleepButton} type="button" disabled={save.busy} onClick={() => void save.run(() => store.saveDayEvidence('medicineAnswer', { date, timeZone, answer: 'unknown' }, answers[0]?.id), 'The medicine answer was removed.')}>Remove the medicine answer</button>}
+      </>}
+    </Field>{save.feedback}</>;
 }

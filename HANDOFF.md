@@ -370,3 +370,7 @@ Task note: `.handoff/nav-five-20261117.md`. No open questions.
 New reaction tests last one minute. Older three-minute results retain their original
 duration and protocol. The full npm run check passed after one known recurrence
 timing failure. Note: .handoff/reaction-short-20261117.md.
+
+## Guided check-ins (24 November 2026)
+
+Now selects one due question. Medication can be answered inline and the evening review shows recorded times. Sleep groups outstanding questions by date. The product principle is in docs/ROADMAP.md. The full npm run check passed. The phone experience has not been verified. The next evaluation is whether the first question feels relevant during ordinary use.

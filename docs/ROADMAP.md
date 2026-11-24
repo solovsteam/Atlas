@@ -6,6 +6,14 @@ Atlas is a unified notes, tasks, and calendar app. The active codebase is **Vite
 
 ---
 
+## How Atlas should ask for information
+
+Atlas should take the initiative when a question becomes relevant. Start with what the person has already recorded. Ask one concrete question, accept the answer wherever the person gives it, and use that answer when choosing the next question. Keep direct entry available for things the person remembers on their own.
+
+A skipped question records no fact. An old measurement that can no longer be made belongs in history. Ask for confirmation before treating an incomplete day as complete.
+
+The first implementation covers sleep and methylphenidate on Now. Other topics can follow the same approach as their questions and timing become clear.
+
 ## Product vision
 
 - **One model:** everything is an **Item** (notes, tasks, intervals, documentation).

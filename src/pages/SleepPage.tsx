@@ -28,7 +28,9 @@ export function SleepPage() {
   const state = sleepScreenState(store.entries, now, zone, addDays(civilDate(now, zone), 1));
   const target = targetLightsOut(store.nights.map(row => row.night), state.wakeDate, zone, store.settings);
   const required = requiredWakeForDate(state.wakeDate, zone, store.settings, state.evening?.night.evening?.earlyObligationAt);
-  const missing = missingData(store.entries, now, zone, store.settings);
+  const missing = missingData(store.entries, now, zone, store.settings)
+    .filter(row => row.kind !== 'reactionTest' || row.date === state.today);
+  const reviewDates = [...new Set(missing.map(row => row.date))];
   const alarm = state.evening?.night.evening?.alarm ?? store.settings.anchorWake;
   const morningUrl = state.morningEntry ? `/sleep/morning?entry=${state.morningEntry.id}` : '/sleep/morning';
   const eveningUrl = state.evening ? `/sleep/evening?entry=${state.evening.entry.id}` : `/sleep/evening?for=${state.wakeDate}`;
@@ -41,7 +43,16 @@ export function SleepPage() {
       <Link className={`${sleepButton} flex items-center justify-between gap-3`} to={state.evening ? `/sleep/lights-out?entry=${state.evening.entry.id}` : `/sleep/lights-out?for=${state.wakeDate}`}><span>{sleepLogName('lights-out', addDays(state.wakeDate, -1), state.today)}<span className="block text-xs text-neutral-500">{shortDate(addDays(state.wakeDate, -1))}</span></span><span className="shrink-0 text-neutral-400">{state.evening?.night.evening?.lightsOut ? 'Saved' : 'Not recorded'}</span></Link>
       <Link className={`${sleepButton} flex items-center justify-between gap-3`} to="/sleep/test"><span>Reaction test</span><span className="shrink-0 text-neutral-400">{store.tests.some(row => civilDate(new Date(row.result.startedAt), zone) === state.today) ? 'Saved' : '1 minute'}</span></Link>
     </div>
-    <section id="missing" className="space-y-3 rounded-xl border border-neutral-800 p-4"><h2 className="text-lg font-semibold">Missing</h2><p className="text-xs text-neutral-400">The last 7 days. Today’s entries appear when they are due.</p>{missing.length ? <ul className="divide-y divide-neutral-800">{missing.map(row => <li key={`${row.date}:${row.kind}`}><Link className="flex min-h-11 items-center justify-between gap-3 py-3 text-sm text-indigo-200" to={row.to}><span>{row.kind === 'evening' || row.kind === 'lights-out' || row.kind === 'morning' ? sleepLogName(row.kind, row.date, state.today) : row.label}</span><span className="shrink-0 text-neutral-400">{dayText(row.date, state.today)}</span></Link></li>)}</ul> : <p className="text-sm text-neutral-400">Nothing is missing.</p>}</section>
+    <section id="missing" className="space-y-3 rounded-xl border border-neutral-800 p-4">
+      <h2 className="text-lg font-semibold">Review a day</h2>
+      {reviewDates.map(date => <details key={date}>
+        <summary className="cursor-pointer py-2">{dayText(date, state.today)}</summary>
+        <ul>{missing.filter(row => row.date === date).map(row => <li key={row.kind}>
+          <Link className="block min-h-11 py-2 text-sm text-indigo-200 underline" to={row.to}>{row.label}</Link>
+        </li>)}</ul>
+      </details>)}
+      {!reviewDates.length && <p>No questions for the past seven days.</p>}
+    </section>
     <SleepSettings settings={store.settings} saveSettings={store.saveSettings} today={state.today} reminderAt={new Date(Date.parse(target.lightsOutAt) - store.settings.eveningReminderLeadMinutes * 60000)} timeZone={zone} />
     <SleepHistory nights={store.nights.map(row => row.night)} tests={store.tests.map(row => row.result)} settings={store.settings} throughDate={state.today} context={sleepHistoryContext(store.entries, store.settings)} />
     {store.nights.length ? <details className="rounded-xl border border-neutral-800 p-4"><summary className="cursor-pointer font-medium">Correct a saved night</summary><ul className="mt-3 space-y-4">{store.nights.map(({ entry, night }) => <li key={entry.id} className="space-y-2 text-sm"><p className="text-neutral-400">{new Date(night.morning?.wakeAt ?? night.evening?.lightsOut ?? entry.occurredAt).toLocaleDateString(undefined, { timeZone: zone })}</p><div className="flex flex-wrap gap-2"><Link className={sleepButton} to={`/sleep/evening?entry=${entry.id}`}>Evening</Link><Link className={sleepButton} to={`/sleep/lights-out?entry=${entry.id}`}>Lights out</Link><Link className={sleepButton} to={`/sleep/morning?entry=${entry.id}`}>Morning</Link></div></li>)}</ul></details> : null}

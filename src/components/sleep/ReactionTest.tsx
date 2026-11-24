@@ -22,7 +22,7 @@ export interface ReactionTestProps {
   onCancel: () => void;
 }
 
-type Screen = "ready" | "running" | "sleepiness" | "result";
+type Screen = "ready" | "running" | "conclude" | "sleepiness" | "result";
 interface TestRun {
   startedAt: string;
   startedPerformanceMs: number;
@@ -83,7 +83,7 @@ export function ReactionTest({ previousTestCount, onComplete, onCancel }: Reacti
     hideStimulus();
     finishedRunRef.current = run;
     runRef.current = null;
-    setScreen("sleepiness");
+    setScreen("conclude");
   }
 
   function waitAgain(run: TestRun, elapsedMs: number, feedback: string) {
@@ -272,6 +272,13 @@ export function ReactionTest({ previousTestCount, onComplete, onCancel }: Reacti
           <span ref={stimulusRef} aria-hidden="true" style={{ visibility: "hidden" }} className="h-28 w-28 shrink-0 rounded-full bg-red-400" />
           <span className="text-sm text-neutral-500">Tap this area when the dot appears.</span>
         </button>
+      ) : null}
+
+      {screen === "conclude" ? (
+        <div className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-end gap-3 px-6 pb-[max(env(safe-area-inset-bottom),1.5rem)] pt-6">
+          <h2 className="text-xl font-semibold">Time is up.</h2>
+          <button type="button" onClick={() => setScreen("sleepiness")} className="min-h-14 rounded-xl bg-indigo-500 px-5 py-4 font-semibold text-white hover:bg-indigo-400">Conclude the test</button>
+        </div>
       ) : null}
 
       {screen === "sleepiness" ? (

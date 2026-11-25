@@ -1,10 +1,11 @@
+import { RecallChoices, RecallList, dinnerSubject } from './DayRecall';
 import { summarizeTrackerDay, trackerDay } from '@shared/trackerTotals';
 import { DailyTotalForm } from '../tracking/DailyTotalForm';
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { atLocalClock, civilDate, dateInput } from '@shared/recurringReferences';
-import { confirmedDay, dayEvidence, medicineAnswer } from '@shared/dayEvidence';
-import { DEFAULT_INTAKE_BUTTONS, intakeNow, intakesOnDate, methylphenidateStatus } from '@shared/intake';
+import { confirmedDay, dayEvidence, reviewedDay, medicineAnswer, recallsOnDate, recallText } from '@shared/dayEvidence';
+import { dailyIntakeSummary, DEFAULT_INTAKE_BUTTONS, intakeNow, intakesOnDate, methylphenidateStatus } from '@shared/intake';
 import { mealsOnDate } from '@shared/meals';
 import { localClock } from '@shared/sleepScreens';
 import { trackersOf } from '@shared/documentationEntries';
@@ -24,7 +25,10 @@ export function DayReview({ store, date, timeZone, forceMedicine = false, onOpen
   const save = useSleepSave();
   const [correctionDate, setCorrectionDate] = useState(date);
   const confirmed = confirmedDay(store.entries, date, timeZone);
-  const confirmations = store.entries.filter(entry => { const day = dayEvidence(entry, 'dayConfirmation'); return day?.date === date && day.timeZone === timeZone; });
+  const reviewed = reviewedDay(store.entries, date, timeZone);
+  const reviewKind = confirmed ? 'dayConfirmation' : 'dayReview';
+  const dinnerMemory = recallsOnDate(store.entries, date, timeZone).get(dinnerSubject.subject);
+  const confirmations = store.entries.filter(entry => { const day = dayEvidence(entry, reviewKind); return day?.date === date && day.timeZone === timeZone; });
   const weekday = dateInput(date).weekday;
   const dayIntakes = intakesOnDate(store.intakes, date, timeZone);
   const grouped = new Map<string, number>();
@@ -33,21 +37,26 @@ export function DayReview({ store, date, timeZone, forceMedicine = false, onOpen
     <p className="text-sm text-neutral-400">Review {date}. Time zone: {timeZone}.</p>
     {weekday >= 1 && weekday <= 5 || forceMedicine || methylphenidateStatus(store.entries, date, timeZone) !== 'unknown' ? <MedicineQuestion onOpenIntake={onOpenIntake} store={store} date={date} timeZone={timeZone} /> : null}
     <Field title={`Records for ${date}`}>
-      <p className="text-sm text-neutral-400">{confirmed ? 'The day is confirmed. Later entries will also count.' : 'The day is not confirmed. These are the recorded events so far.'}</p>
+      <p className="text-sm text-neutral-400">{confirmed ? 'List confirmed. Your uncertain answers stay unknown.' : reviewed ? 'Review finished. The list may be incomplete.' : 'Record what you remember. You can finish with gaps.'}</p>
       <h3 className="text-sm font-medium">Intakes</h3>
       <ul className="space-y-2 text-sm">{[...grouped].map(([name, count]) => <li key={name}>{name}: {count} recorded</li>)}</ul>
-      {!grouped.size ? <p className="text-sm text-neutral-400">{confirmed ? '0 intakes' : 'No intakes recorded. Not confirmed.'}</p> : null}
+      {!grouped.size ? <p className="text-sm text-neutral-400">{dailyIntakeSummary(store.entries, date, timeZone, store.intakes)}</p> : null}
       <button type="button" className={sleepButton} onClick={onOpenIntake}>Add or correct an intake</button>
       <h3 className="text-sm font-medium">Evening meal</h3>
       {mealsOnDate(store.meals, date, timeZone).map(row => <p key={row.id} className="text-sm">Finished eating at {localClock(row.meal.finishedAt, timeZone)}.</p>)}
-      {!mealsOnDate(store.meals, date, timeZone).length ? <p className="text-sm text-neutral-400">No evening meal recorded.</p> : null}
+      {!mealsOnDate(store.meals, date, timeZone).length && !dinnerMemory && <p className="text-sm text-neutral-400">No evening meal recorded.</p>}
       <button type="button" className={sleepButton} onClick={onOpenIntake}>Add or correct the meal time</button>
+      {!mealsOnDate(store.meals, date, timeZone).length && !dinnerMemory && <RecallChoices store={store} date={date} timeZone={timeZone} {...dinnerSubject} />}
+      <RecallList store={store} date={date} timeZone={timeZone} />
       <h3 className="text-sm font-medium">Trackers</h3>
       {trackers.map(tracker => <TrackerDay key={`${tracker.id}:${date}:${timeZone}`} tracker={tracker} date={date} timeZone={timeZone} confirmed={confirmed} onReady={loaded} />)}
       {!trackers.length ? <p className="text-sm text-neutral-400">There are no trackers.</p> : null}
-      {!confirmed ? <button className={`${sleepButton} w-full`} type="button" disabled={save.busy || trackers.some(tracker => !ready[tracker.id])} onClick={() => void save.run(() => store.saveDayEvidence('dayConfirmation', { date, timeZone }), 'The day was confirmed.')}>The list for {date} is complete</button> : <>
-        <button className={sleepButton} type="button" disabled={save.busy} onClick={() => void save.run(async () => { for (const entry of confirmations) await store.deleteEntry(entry.id); }, 'The day confirmation was removed.')}>Remove the day confirmation</button>
-        <details className="space-y-3 text-sm"><summary>Correct the confirmation date</summary><label className="block">Confirmation date <input aria-label="Confirmation date" type="date" className={sleepInput} value={correctionDate} onChange={e => setCorrectionDate(e.target.value)} /></label><button className={sleepButton} disabled={save.busy} type="button" onClick={() => void save.run(() => store.saveDayEvidence('dayConfirmation', { date: correctionDate, timeZone }, confirmations[0].id), 'The confirmation date was corrected.')}>Save the confirmation date</button></details>
+      {!confirmed && <p className="text-sm text-neutral-400">Finish with gaps if other events may be missing. Confirm the full list only if all events are accounted for. You can leave times unknown either way.</p>}
+      {!reviewed && <button className={sleepButton} type="button" disabled={save.busy} onClick={() => void save.run(() => store.saveDayEvidence('dayReview', { date, timeZone }), 'Review finished with gaps.')}>I’ve recorded everything I remember</button>}
+      {!confirmed && <button className={`${sleepButton} w-full`} type="button" disabled={save.busy || trackers.some(tracker => !ready[tracker.id])} onClick={() => void save.run(() => store.saveDayEvidence('dayConfirmation', { date, timeZone }, confirmations[0]?.id), 'The day was confirmed.')}>The list for {date} is complete</button>}
+      {reviewed && <>
+        <button className={sleepButton} type="button" disabled={save.busy} onClick={() => void save.run(async () => { for (const entry of confirmations) await store.deleteEntry(entry.id); }, 'The day confirmation was removed.')}>{confirmed ? 'Remove the day confirmation' : 'Reopen the review'}</button>
+        <details className="space-y-3 text-sm"><summary>Correct the confirmation date</summary><label className="block">Confirmation date <input aria-label="Confirmation date" type="date" className={sleepInput} value={correctionDate} onChange={e => setCorrectionDate(e.target.value)} /></label><button className={sleepButton} disabled={save.busy} type="button" onClick={() => void save.run(() => store.saveDayEvidence(reviewKind, { date: correctionDate, timeZone }, confirmations[0].id), 'The confirmation date was corrected.')}>Save the confirmation date</button></details>
       </>}
     </Field>
     {save.feedback}
@@ -65,18 +74,23 @@ export function MedicineQuestion({ store, date, timeZone, onOpenIntake }: { stor
   const save = useSleepSave();
   const [takenAt, setTakenAt] = useState(atLocalClock(date, '08:00:00', timeZone));
   const [taking, setTaking] = useState(false);
-  const answers = store.entries.filter(entry => { const day = medicineAnswer(entry); return day?.date === date && day.timeZone === timeZone; }).sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id));
+  const memory = recallsOnDate(store.entries, date, timeZone).get('intake:methylphenidate');
   const status = methylphenidateStatus(store.entries, date, timeZone);
+  const legacyAnswer = !memory && status === 'not-taken' ? store.entries.find(entry => {
+    const answer = medicineAnswer(entry);
+    return answer?.date === date && answer.timeZone === timeZone && answer.answer === 'not-taken';
+  }) : undefined;
   const button = store.settings.intakeButtons.find(b => b.substance === 'methylphenidate') ?? DEFAULT_INTAKE_BUTTONS[0];
   const times = intakesOnDate(store.intakes, date, timeZone)
     .filter(row => row.intake.substance === 'methylphenidate' && row.timeKnown)
     .map(row => localClock(row.intake.takenAt, timeZone));
   return <><Field title={status === 'unknown' ? "Did you take methylphenidate?" : "Methylphenidate"}>
       {status === 'taken' ? <><p className="text-sm">{times.length ? `You recorded methylphenidate at ${times.join(', ')}.` : 'You recorded taking methylphenidate.'} {onOpenIntake ? <button type="button" className={sleepButton} onClick={onOpenIntake}>Correct the intake</button> : <Link className="text-indigo-300 underline" to={`/intake?date=${date}`}>Correct the intake</Link>}</p></> : <>
-        <p className="text-sm text-neutral-400">{status === 'not-taken' ? 'Not taken.' : 'No answer recorded.'}</p>
+        <p className="text-sm text-neutral-400">{memory ? recallText(memory.recall) : status === 'not-taken' ? 'Not taken.' : 'No answer recorded.'}</p>
         <button className={sleepButton} type="button" disabled={save.busy} onClick={() => setTaking(!taking)}>Taken at …</button>
-        {taking ? <div className="space-y-3"><InstantField label="Methylphenidate taken at" value={takenAt} timeZone={timeZone} onChange={setTakenAt} /><button className={sleepButton} type="button" disabled={save.busy} onClick={() => void save.run(async () => { await store.saveIntake(intakeNow(button, new Date(takenAt), timeZone)); setTaking(false); }, 'The intake was recorded.')}>Save the intake</button></div> : null}
-        {status !== 'not-taken' ? <button className={sleepButton} type="button" disabled={save.busy} onClick={() => void save.run(() => store.saveDayEvidence('medicineAnswer', { date, timeZone, answer: 'not-taken' }, answers[0]?.id), 'Not taken was recorded.')}>Not taken</button> : <button className={sleepButton} type="button" disabled={save.busy} onClick={() => void save.run(() => store.saveDayEvidence('medicineAnswer', { date, timeZone, answer: 'unknown' }, answers[0]?.id), 'The medicine answer was removed.')}>Remove the medicine answer</button>}
+        {taking ? <div className="space-y-3"><InstantField label="Methylphenidate taken at" value={takenAt} timeZone={timeZone} onChange={setTakenAt} /><button className={sleepButton} type="button" disabled={save.busy} onClick={() => void save.run(async () => { await store.saveIntake(intakeNow(button, new Date(takenAt), timeZone), civilDate(new Date(takenAt), timeZone) === date ? memory?.entry.id : undefined); setTaking(false); }, 'The intake was recorded.')}>Save the intake</button></div> : null}
+        {!memory && status === 'not-taken' && <button className={sleepButton} type="button" disabled={save.busy} onClick={() => void save.run(() => store.saveDayEvidence('medicineAnswer', { date, timeZone, answer: 'unknown' }, legacyAnswer?.id), 'The medicine answer was removed.')}>Remove the medicine answer</button>}
+        <RecallChoices store={store} date={date} timeZone={timeZone} subject="intake:methylphenidate" label="Methylphenidate" />
       </>}
     </Field>{save.feedback}</>;
 }

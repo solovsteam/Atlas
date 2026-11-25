@@ -411,3 +411,11 @@ Added 17 November 2026. Tonio approved all three parts.
 - Default five: Now, Calendar, Track, Intake, Sleep. In "More": Tasks, Items, Archive.
 - Tonio can choose the five tabs and their order in a setting at the end of the "More" list. The choice is stored per account, not per device.
 - The wide screen layout keeps all tabs.
+
+### Finishing a review with gaps
+
+“I’ve recorded everything I remember” finishes the review for the date. Unlisted events and tracker counts remain unknown. The separate full-list confirmation can still establish zero for unlisted events. An explicit uncertain answer survives either choice.
+
+For an intake or dinner, the person can report that it happened, that it did not happen, or that they cannot remember whether it happened. A day-level answer supplies no clock time or dose. The timestamp used to store the answer is never treated as the event time. On Intake, entering the actual time through the picker can replace the saved answer. Undo restores the previous answer.
+
+An unanswered medication question can still appear on Now. A saved “unsure” answer ends that question and excludes the day from comparisons of medication use. Remembering an intake without its time establishes use for that day. Any trial factor whose timing remains uncertain stays unknown unless separate evidence proves a deviation. Morning and evening reviews leave a missing lights-out time empty until a person chooses to enter it.

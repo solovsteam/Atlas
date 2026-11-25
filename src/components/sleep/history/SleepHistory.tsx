@@ -1,5 +1,4 @@
-import { confirmedDay } from '@shared/dayEvidence';
-import { intakesOnDate } from '@shared/intake';
+import { dailyIntakeSummary } from '@shared/intake';
 import { civilDate } from '@shared/recurringReferences';
 import { useMemo, useState } from 'react';
 import type { SleepNight, SleepSettings } from '@shared/sleepLog';
@@ -49,10 +48,9 @@ export function SleepHistory({ nights, tests, settings, throughDate, theme = 'da
       </div>
     </div>
     {context?.entries ? <details className="rounded-xl border border-neutral-800 p-4 text-sm"><summary>Daily intake counts</summary><ul className="mt-3 space-y-2">{historyDates(end, days).toReversed().map(date => {
-      const confirmation = context.entries!.find(entry => entry.data.kind === 'dayConfirmation' && (entry.data.dayConfirmation as { date?: string })?.date === date);
-      const zone = (confirmation?.data.dayConfirmation as { timeZone?: string })?.timeZone;
-      const complete = !!zone && confirmedDay(context.entries!, date, zone);
-      return <li key={date}>{date}: {complete ? `${intakesOnDate(context.intakes ?? [], date, zone!).length} intakes` : 'Not confirmed'}</li>;
+      const review = context.entries!.find(entry => (entry.data.kind === 'dayConfirmation' || entry.data.kind === 'dayReview') && (entry.data[entry.data.kind] as { date?: string })?.date === date);
+      const zone = (review?.data[String(review.data.kind)] as { timeZone?: string })?.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+      return <li key={date}>{date}: {dailyIntakeSummary(context.entries!, date, zone, context.intakes ?? [])}</li>;
     })}</ul></details> : null}
     <NightsChart rows={rows} throughDate={end} days={days} anchorWake={settings.anchorWake} theme={theme} />
     {!context?.choiceWakeDates ? <p className={`px-1 text-xs ${theme === 'light' ? 'text-neutral-600' : 'text-neutral-400'}`}>Choice marks show the opportunity to extend the night. A wake obligation can limit that opportunity.</p> : null}

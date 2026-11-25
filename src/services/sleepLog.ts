@@ -1,10 +1,11 @@
+import { civilDate } from '@shared/recurringReferences';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils.js';
 import { itemFromDbRow, type Item } from '@shared/item';
 import type { DocumentationEntry } from '@shared/documentationEntries';
 import { DEFAULT_SLEEP_SETTINGS, fullnessLabel, isSleepLog, morningWithLightsOut, matchingSleepNight, sleepNight, type SleepEvening, type SleepMorning } from '@shared/sleepLog';
-import { dayEvidence, dayEvidenceData, dayEvidenceTime, type DayEvidence, type MedicineAnswer } from '@shared/dayEvidence';
+import { recallsOnDate, dayEvidence, dayEvidenceData, dayEvidenceTime, type EvidenceKind, type EvidenceValue } from '@shared/dayEvidence';
 import { intakeData, sleepIntake, type Intake } from '@shared/intake';
 import { eveningMeal, mealData, type EveningMeal } from '@shared/meals';
 import { sleepReactionTest } from '@shared/sleepReactionTest';
@@ -86,9 +87,9 @@ export function sleepLogStore(client: Client, userId: string, writer: SleepEntry
       : { entry: await writer.createEntry(itemId, at, data) };
   }
   return {
-    async saveDayEvidence(itemId: string, kind: 'dayConfirmation' | 'medicineAnswer', value: DayEvidence | MedicineAnswer, entryId?: string): Promise<SleepEntryChange> {
+    async saveDayEvidence(itemId: string, kind: EvidenceKind, value: EvidenceValue, entryId?: string): Promise<SleepEntryChange> {
       const before = entryId ? await current(itemId, entryId) : undefined;
-      if (before && !dayEvidence(before, kind)) throw new Error('This entry has a different kind.');
+      if (before && !dayEvidence(before, kind) && !(kind === 'dayConfirmation' && dayEvidence(before, 'dayReview'))) throw new Error('This entry has a different kind.');
       const data = dayEvidenceData(kind, value);
       const at = dayEvidenceTime(value);
       return before ? { entry: await writer.updateEntry(before, data, at), before }
@@ -100,14 +101,14 @@ export function sleepLogStore(client: Client, userId: string, writer: SleepEntry
     async saveMeal(itemId: string, meal: EveningMeal, entryId?: string): Promise<SleepEntryChange> {
       const data = mealData(meal);
       const before = entryId ? await current(itemId, entryId) : undefined;
-      if (before && !eveningMeal(before)) throw new Error('This entry is not an evening meal.');
-      return before ? { entry: await writer.updateEntry(before, { ...before.data, ...data }, new Date(meal.finishedAt)), before }
+      if (before && !eveningMeal(before) && !matchesRecall(before, 'meal:dinner', meal.finishedAt, meal.timeZone)) throw new Error('This entry is not an evening meal.');
+      return before ? { entry: await writer.updateEntry(before, before.data.kind === 'eveningMeal' ? { ...before.data, ...data } : data, new Date(meal.finishedAt)), before }
         : { entry: await writer.createEntry(itemId, new Date(meal.finishedAt), data) };
     },
     /** meta holds extra entry fields, such as the Log box sentence. An edit keeps the earlier ones. */
     async saveIntake(itemId: string, intake: Intake, entryId?: string, legacyKey?: string, meta: Record<string, unknown> = {}): Promise<SleepEntryChange> {
       const before = entryId ? await current(itemId, entryId) : undefined;
-      if (before && !sleepIntake(before)) throw new Error('This entry is not an intake.');
+      if (before && !sleepIntake(before) && !matchesRecall(before, 'intake:' + intake.substance, intake.takenAt, intake.timeZone)) throw new Error('This entry is not an intake.');
       const kept = before?.data.quickLog !== undefined ? { quickLog: before.data.quickLog } : {};
       const data = { ...kept, ...meta, ...intakeData(intake, legacyKey ?? (typeof before?.data.replacesLegacy === 'string' ? before.data.replacesLegacy : undefined)) };
       return before ? { entry: await writer.updateEntry(before, data, new Date(intake.takenAt)), before }
@@ -127,4 +128,9 @@ export function sleepLogStore(client: Client, userId: string, writer: SleepEntry
       return before;
     },
   };
+}
+
+function matchesRecall(entry: DocumentationEntry, subject: string, at: string, zone: string) {
+  const date = civilDate(new Date(at), zone);
+  return recallsOnDate([entry], date, zone).has(subject);
 }

@@ -1,3 +1,5 @@
+import { parseQuickRecall } from '@shared/quickRecall';
+import { recallText, recallsOnDate } from '@shared/dayEvidence';
 import { civilDate } from '@shared/recurringReferences';
 import { parseTrackerTotal } from '@shared/trackerTotals';
 import { useMemo, useRef, useState } from 'react';
@@ -47,6 +49,26 @@ export function QuickLog({ store }: { store: Store }) {
     setProblem(null); setSaved(null); setNoteSaved('');
     const ctx: QuickLogContext = { now: new Date(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       buttons: store.settings.intakeButtons, drinks: store.settings.drinks, trackers };
+    const recall = parseQuickRecall(sentence, ctx.buttons, civilDate(ctx.now, ctx.timeZone), ctx.timeZone);
+    if (recall) {
+      if ('question' in recall) {
+        setProblem({ text: sentence, reason: recall.question });
+        return;
+      }
+      setBusy('saving');
+      try {
+        const prior = recallsOnDate(store.entries, recall.date, recall.timeZone).get(recall.subject);
+        await store.saveDayEvidence('dayRecall', recall, prior?.entry.id);
+        setSaved({ text: sentence, method: { method: 'local' }, unmatched: null, lines: [{
+          summary: `${recall.date} · ${recall.label}: ${recallText(recall)}`, to: `/intake?date=${recall.date}` }] });
+        setText('');
+      } catch (cause) {
+        setProblem({ text: sentence, reason: cause instanceof Error ? cause.message : 'Could not save the answer.' });
+      } finally {
+        setBusy('');
+      }
+      return;
+    }
     const daily = parseTrackerTotal(sentence, trackers, civilDate(ctx.now, ctx.timeZone));
     if (daily) {
       if (!daily.data) {

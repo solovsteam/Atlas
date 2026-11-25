@@ -120,3 +120,45 @@ test('a trial window across midnight requires both dates to be confirmed', () =>
   assert.equal(nightIntakeAdherence(night, [], confirmations.slice(0, 1)), 'unknown');
   assert.equal(nightIntakeAdherence(night, [], confirmations), 'as assigned');
 });
+
+test('finishing a partial review does not establish zero or trial absence', async () => {
+  const { reviewedDay } = await import('../shared/dayEvidence');
+  const { dailyIntakeSummary } = await import('../shared/intake');
+  const date = '2026-11-16', timeZone = 'UTC';
+  const reviewed = entry(dayEvidenceData('dayReview', {date, timeZone}));
+  const complete = entry(dayEvidenceData('dayConfirmation', {date, timeZone}));
+  const recall = (substance: string, state: 'happened' | 'unsure' | 'absent') => entry(dayEvidenceData('dayRecall', { date, timeZone, subject: 'intake:' + substance, label: substance, state }));
+  assert.ok(reviewedDay([reviewed], date, timeZone));
+  assert.equal(dayCount(0, [reviewed], date, timeZone), null);
+  const yes = recall('methylphenidate', 'happened');
+  const unsure = recall('magnesium', 'unsure');
+  assert.equal(methylphenidateStatus([yes], date, timeZone), 'taken');
+  assert.equal(dailyIntakeSummary([complete, yes], date, timeZone, []), '1 recorded intake.');
+  assert.equal(dailyIntakeSummary([complete, yes, unsure], date, timeZone, []), 'At least 1 intake. Total unknown.');
+  const unknownMedicine = recall('methylphenidate', 'unsure');
+  assert.equal(methylphenidateStatus([complete, unknownMedicine], date, timeZone), 'unknown');
+  const questions = missingData([reviewed, unknownMedicine], new Date('2026-11-17T10:00:00Z'), timeZone, sleepScreenSettings(null));
+  assert.ok(!questions.some(q => q.date === date && ['medicine','confirmation'].includes(q.kind)));
+  const assignment = sleepTrialAssignment(createSleepTrialConfig('2026-10-01'), 'test', '2026-11-17')!;
+  const off = { ...assignment, factors: assignment.factors.map(f => ({ ...f, on: false, level: null })) };
+  const night = { evening: { timeZone, lightsOut: date+'T23:00:00Z', trial: { assignment: off, targetLightsOutAt: date+'T22:00:00Z', adherence: 'unknown' as const } } };
+  assert.equal(nightIntakeAdherence(night, [], [complete, unsure]), 'unknown');
+  assert.equal(nightIntakeAdherence(night, [], [complete, recall('magnesium', 'happened')]), 'unknown');
+  assert.equal(nightIntakeAdherence(night, [], [complete, recall('magnesium', 'absent')]), 'as assigned');
+});
+
+test('a statement about uncertain memory never supplies a dose or a clock time', async () => {
+  const { parseQuickRecall } = await import('../shared/quickRecall');
+  for (const [text, subject, state] of [
+    ["I can't remember when I ate dinner yesterday", 'meal:dinner', 'happened'],
+    ["I only remember that I took magnesium yesterday but not when", 'intake:magnesium', 'happened'],
+    ["Yesterday I can't remember whether I took magnesium", 'intake:magnesium', 'unsure'],
+    ["I took methylphenidate yesterday but I don't remember when", 'intake:methylphenidate', 'happened']
+  ]) {
+    const result = parseQuickRecall(text, DEFAULT_INTAKE_BUTTONS, '2026-11-17', 'UTC');
+    assert.ok(result && 'state' in result);
+    assert.deepEqual([result.subject, result.state, result.date], [subject, state, '2026-11-16']);
+    assert.equal('takenAt' in result, false);
+    assert.equal('dose' in result, false);
+  }
+});

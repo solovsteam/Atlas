@@ -209,6 +209,7 @@ export type TrialIntake = Readonly<{
   takenAt?: string;
 }>;
 export type TrialIntakeLog = Readonly<{
+  uncertainFactors?: ReadonlySet<string>;
   /** Evening trial intake only. Exclude the constant daytime glycine and minerals. */
   entries: readonly TrialIntake[];
   /** False means unlogged intake is possible, including when entries is empty. */
@@ -243,19 +244,20 @@ export function trialAdherence(assignment: SleepTrialAssignment, log: TrialIntak
   const details = assignment.factors.map(factor => {
     const detail = (status: AdherenceStatus, reason: string): AdherenceDetail => ({ factorId: factor.factorId, status, reason });
     if (!log) return detail('unknown', 'No evening intake log.');
+    const complete = log.complete && !log.uncertainFactors?.has(factor.factorId);
     const entries = log.entries.filter(entry => entry.factorId === factor.factorId);
     const doses = entries.map(entry => doseMg(entry.dose ?? NaN, entry.unit!));
     const knownDose = doses.reduce<number>((total, dose) => total + (dose ?? 0), 0);
     const missingDose = doses.some(dose => dose === null);
     if (!factor.on) {
       if (knownDose > 0) return detail('deviated', 'Taken on an off night.');
-      if (missingDose || !log.complete) return detail('unknown', 'Absence of intake is unconfirmed.');
+      if (missingDose || !complete) return detail('unknown', 'Absence of intake is unconfirmed.');
       return detail('as assigned', 'No trial dose taken.');
     }
     if (!factor.level) return detail('unknown', 'The assigned level is missing.');
     const expected = doseMg(factor.level.dose, factor.level.unit);
     if (expected === null) return detail('unknown', 'The assigned dose is invalid.');
-    if (knownDose > expected + 1e-6 || (!missingDose && log.complete && Math.abs(knownDose - expected) > 1e-6)) {
+    if (knownDose > expected + 1e-6 || (!missingDose && complete && Math.abs(knownDose - expected) > 1e-6)) {
       return detail('deviated', 'The total evening dose differs from the assignment.');
     }
     const window = factor.level.timeWindow;
@@ -272,7 +274,7 @@ export function trialAdherence(assignment: SleepTrialAssignment, log: TrialIntak
         }
       }
     }
-    if (missingDose || missingTime || !log.complete) return detail('unknown', 'Dose, time, tolerance, or completeness is unconfirmed.');
+    if (missingDose || missingTime || !complete) return detail('unknown', 'Dose, time, tolerance, or completeness is unconfirmed.');
     return detail('as assigned', 'The dose and time match the assignment.');
   });
   return { status: combinedStatus(details.map(detail => detail.status)), details };

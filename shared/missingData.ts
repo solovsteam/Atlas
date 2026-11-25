@@ -1,5 +1,5 @@
 import type { DocumentationEntry } from './documentationEntries';
-import { confirmedDay } from './dayEvidence';
+import { reviewedDay, recallsOnDate } from './dayEvidence';
 import { methylphenidateStatus } from './intake';
 import { addDays, atLocalClock, civilDate } from './recurringReferences';
 import { recordedSleepWakeDate } from './sleepIntegration';
@@ -31,8 +31,8 @@ export function missingData(entries: readonly DocumentationEntry[], now: Date, t
     if (morningDue && !morning?.night.morning?.wakeAt) add('morning', 'Morning log', nightUrl('morning', previousEvening, date));
     if ((offset > 0 || now.getTime() >= Date.parse(atLocalClock(date, `${settings.testTime}:00`, timeZone)))
       && !tests.some(test => civilDate(new Date(test.startedAt), test.timeZone) === date)) add('reactionTest', 'Reaction test', `/sleep/test?date=${date}`);
-    if (eveningDue && methylphenidateStatus(entries, date, timeZone) === 'unknown') add('medicine', 'Methylphenidate answer', `/sleep/evening?for=${wakeDate}&day=${date}&answer=medicine`);
-    if (eveningDue && !confirmedDay(entries, date, timeZone)) add('confirmation', 'Day confirmation', `/sleep/evening?for=${wakeDate}&day=${date}&answer=confirmation`);
+    if (eveningDue && methylphenidateStatus(entries, date, timeZone) === 'unknown' && !recallsOnDate(entries, date, timeZone).has('intake:methylphenidate')) add('medicine', 'Methylphenidate answer', `/sleep/evening?for=${wakeDate}&day=${date}&answer=medicine`);
+    if (eveningDue && !reviewedDay(entries, date, timeZone)) add('confirmation', 'Day confirmation', `/sleep/evening?for=${wakeDate}&day=${date}&answer=confirmation`);
   }
   return result;
 }

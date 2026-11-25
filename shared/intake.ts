@@ -1,6 +1,6 @@
 import type { DocumentationEntry } from './documentationEntries';
-import { medicineAnswer, confirmedDay } from './dayEvidence';
-import { civilDate } from './recurringReferences';
+import { medicineAnswer, confirmedDay, recallsOnDate } from './dayEvidence';
+import { addDays, civilDate } from './recurringReferences';
 import { sleepNight, type SleepNight } from './sleepLog';
 import { trialAdherence, type AdherenceStatus, type SleepTrialAssignment, type TrialIntake } from './sleepTrial';
 import { caffeineMg, validConversion, type DrinkConversion } from './drinks';
@@ -120,6 +120,8 @@ export type MethylphenidateStatus = 'taken' | 'not-taken' | 'unknown';
 /** An intake wins over an old negative answer. Confirmation alone never answers the medicine question. */
 export function methylphenidateStatus(entries: readonly DocumentationEntry[], date: string, timeZone?: string, intakes: readonly IntakeRecord[] = readIntakes(entries)): MethylphenidateStatus {
   if (methylphenidateOnDate(intakes, date, timeZone)) return 'taken';
+  const memory = recallsOnDate(entries, date, timeZone).get('intake:methylphenidate')?.recall;
+  if (memory) return memory.state === 'happened' ? 'taken' : memory.state === 'absent' ? 'not-taken' : 'unknown';
   const explicit = [...entries].sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id))
     .map(medicineAnswer).find(answer => answer?.date === date && (!timeZone || answer.timeZone === timeZone));
   if (explicit) return explicit.answer;
@@ -155,8 +157,19 @@ export function nightIntakeAdherence(night: SleepNight, intakes: readonly Intake
   const zone = night.evening.timeZone;
   const startDate = zone ? civilDate(new Date(Date.parse(trial.targetLightsOutAt) - 4 * 3600000), zone) : '';
   const endDate = zone ? civilDate(new Date(night.evening.lightsOut), zone) : '';
-  const complete = !!zone && confirmedDay(confirmations, startDate, zone) && confirmedDay(confirmations, endDate, zone);
-  const result = trialAdherence(trial.assignment, { entries, complete }, trial.targetLightsOutAt);
+  let complete = !!zone && startDate <= endDate;
+  const uncertainFactors = new Set<string>();
+  for (let date = startDate; zone && date && date <= endDate; date = addDays(date, 1)) {
+    if (!confirmedDay(confirmations, date, zone)) complete = false;
+    for (const { recall } of recallsOnDate(confirmations, date, zone).values()) {
+      if (recall.subject.startsWith('intake:') && recall.state !== 'absent')
+        uncertainFactors.add(recall.subject.slice(7));
+    }
+    for (const row of intakesOnDate(intakes, date, zone)) {
+      if (!row.timeKnown) uncertainFactors.add(row.intake.substance);
+    }
+  }
+  const result = trialAdherence(trial.assignment, { entries, complete, uncertainFactors }, trial.targetLightsOutAt);
   return result.status;
 }
 
@@ -167,4 +180,15 @@ export function assignedIntakes(assignment: SleepTrialAssignment, now: Date, tim
     if (!button) throw new Error('The assignment contains an unsupported substance.');
     return [intakeNow({ ...button, dose: factor.level.dose, unit: factor.level.unit }, now, timeZone)];
   });
+}
+
+/** A day-level statement establishes presence. A timed record of that substance already counts. */
+export function dailyIntakeSummary(entries: readonly DocumentationEntry[], date: string, zone: string, intakes: readonly IntakeRecord[]) {
+  const timed = intakesOnDate(intakes, date, zone);
+  const known = new Set(timed.map(row => 'intake:' + row.intake.substance));
+  const answers = [...recallsOnDate(entries, date, zone).values()].filter(({ recall }) => recall.subject.startsWith('intake:'));
+  const observed = timed.length + answers.filter(({ recall }) => recall.state === 'happened' && !known.has(recall.subject)).length;
+  const exact = confirmedDay(entries, date, zone) && !answers.some(({ recall }) => recall.state === 'unsure');
+  if (exact) return `${observed} recorded intake${observed === 1 ? '' : 's'}.`;
+  return observed ? `At least ${observed} intake${observed === 1 ? '' : 's'}. Total unknown.` : 'Intake count unknown.';
 }

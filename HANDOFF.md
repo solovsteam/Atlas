@@ -382,3 +382,7 @@ Quick Log, Track and past evening reviews accept a total for a completed day. At
 ## Past intake navigation (25 November 2026)
 
 The evening log keeps its form open while editing intakes. A historical tile opens its time picker on the selected day. The shared wheel shows the day on each hour and allows a direct date jump. The full npm run check passed. A local Chrome fixture tested a dated save, a day jump and a return with an unsaved evening answer. No live records were used. See .handoff/past-intake-navigation-25.md.
+
+## Day reviews with uncertain answers (25 November 2026)
+
+Atlas can finish a day review with gaps. Day-level answers for intakes and dinner survive full confirmation. Quick Log, the evening review, Intake, reminders and sleep analysis use these answers. A recollection can be replaced by a precise record with Undo. Morning and evening logs no longer save an untouched lights-out target as an actual time. The full npm run check passed on retry after the known recurrence timeout. A phone-width Chrome fixture verified uncertain medication and dinner through both review states. See docs/SLEEP.md and .handoff/uncertain-day-review-25.md.

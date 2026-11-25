@@ -1,10 +1,11 @@
+import { recallsOnDate } from '@shared/dayEvidence';
+import { RecallChoices, RecallList, dinnerSubject, type RecallSubject } from '../components/sleep/DayRecall';
 import { useSearchParams } from 'react-router-dom';
-import { confirmedDay } from '@shared/dayEvidence';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { addDays, civilDate } from '@shared/recurringReferences';
 import { dayText, instantAt, instantText, splitInstant } from '@shared/dayLabels';
 import { DateTimeWheel } from '../components/tracking/DateTimeWheel';
-import { DEFAULT_INTAKE_BUTTONS, intakeAmountText, intakeNow, intakesOnDate, type Intake, type IntakeButton, type IntakeRecord } from '@shared/intake';
+import { dailyIntakeSummary, DEFAULT_INTAKE_BUTTONS, intakeAmountText, intakeNow, intakesOnDate, type Intake, type IntakeButton, type IntakeRecord } from '@shared/intake';
 import { caffeineMg, withAmountMl } from '@shared/drinks';
 import { mealsOnDate, type EveningMeal, type MealRecord } from '@shared/meals';
 import { DrinkSettings } from '../components/DrinkSettings';
@@ -17,7 +18,7 @@ import { InstantField, sleepButton, sleepInput } from '../components/sleep/Sleep
 
 type Store = ReturnType<typeof useSleepLog>;
 type Editor = { intake: Intake; row?: IntakeRecord } | { meal: EveningMeal; row?: MealRecord };
-type Picker = { title: string; save: (at: string) => Promise<unknown>; success: string };
+type Picker = RecallSubject & { title: string; save: (at: string) => Promise<unknown>; success: string };
 
 export function EveningIntakes({ date, timeZone, onReturn }: { date: string; timeZone: string; onReturn: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -66,6 +67,7 @@ export function IntakePage({ reviewDate, reviewZone }: { reviewDate?: string; re
   const dayIntakes = intakesOnDate(store.intakes, date, zone);
   const dayMeals = mealsOnDate(store.meals, date, zone);
   const lastMeal = dayMeals.find(row => Date.parse(row.meal.finishedAt) <= now.getTime());
+  const recallId = (subject: string, at: string) => recallsOnDate(store.entries, civilDate(new Date(at), zone), zone).get(subject)?.entry.id;
   const history = [
     ...dayIntakes.map(row => ({ at: row.intake.takenAt, row, kind: 'intake' as const })),
     ...dayMeals.map(row => ({ at: row.meal.finishedAt, row, kind: 'meal' as const })),
@@ -83,15 +85,15 @@ export function IntakePage({ reviewDate, reviewZone }: { reviewDate?: string; re
         const badge = !factor ? undefined : matches ? { text: 'Tonight', on: true } : button.substance === 'glycine' && button.dose === 5 && button.unit === 'g' ? { text: 'Daytime', on: false } : { text: 'Not tonight', on: false };
         return <IntakeTile past={past} key={button.id} name={button.label} amount={`${button.dose} ${button.unit}`} icon={<Monogram text={button.label} seed={button.substance} />} status={last ? last.timeKnown ? localClock(last.intake.takenAt, zone) : 'Recorded' : undefined} badge={badge} busy={save.busy}
           onNow={() => void save.run(() => store.saveIntake(intakeNow(button, new Date(), zone)), `${button.label} was recorded.`)}
-          onEarlier={() => setPicker({ title: `${button.label} · ${button.dose} ${button.unit}`, success: `${button.label} was recorded.`, save: async at => { await store.saveIntake(intakeNow(button, new Date(at), zone)); showDate(at); } })} />;
+          onEarlier={() => setPicker({ subject: `intake:${button.substance}`, label: button.label, title: `${button.label} · ${button.dose} ${button.unit}`, success: `${button.label} was recorded.`, save: async at => { await store.saveIntake(intakeNow(button, new Date(at), zone), recallId('intake:' + button.substance, at)); showDate(at); } })} />;
       })}
       <IntakeTile past={past} name="Finished eating" amount="Evening meal" icon={<MealIcon />} status={lastMeal ? localClock(lastMeal.meal.finishedAt, zone) : undefined} busy={save.busy}
         onNow={() => void save.run(async () => { await store.saveMeal({ finishedAt: new Date().toISOString(), timeZone: zone }); setSelectedDate(null); }, 'The evening meal was recorded.')}
-        onEarlier={() => setPicker({ title: 'Finished eating', success: 'The evening meal was recorded.', save: async at => { await store.saveMeal({ finishedAt: at, timeZone: zone }); showDate(at); } })} />
+        onEarlier={() => setPicker({ ...dinnerSubject, title: 'Finished eating', success: 'The evening meal was recorded.', save: async at => { await store.saveMeal({ finishedAt: at, timeZone: zone }, recallId(dinnerSubject.subject, at)); showDate(at); } })} />
     </div>
     <p className="text-xs text-neutral-500">{past ? 'Choose an intake or meal to set its time on this day.' : 'The top of a tile records the intake now. “Earlier” lets you choose the time.'}</p>
     {save.message || save.error ? <div className="fixed inset-x-4 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-40 mx-auto max-w-xl rounded-xl border border-neutral-700 bg-neutral-950 px-4 shadow-xl lg:bottom-4">{save.feedback}</div> : null}
-    {picker ? <MomentSheet date={date} title={picker.title} timeZone={zone} busy={save.busy} onClose={() => setPicker(null)} onSave={at => void save.run(async () => { await picker.save(at); setPicker(null); }, picker.success)} /> : null}
+    {picker ? <MomentSheet resolving={at => !!recallId(picker.subject, at)} recall={(selectedDay) => <RecallChoices store={store} date={selectedDay} timeZone={zone} subject={picker.subject} label={picker.label} onSaved={() => { setSelectedDate(selectedDay); setPicker(null); }} />} date={date} title={picker.title} timeZone={zone} busy={save.busy} onClose={() => setPicker(null)} onSave={at => void save.run(async () => { await picker.save(at); setPicker(null); }, picker.success)} /> : null}
     {editor ? <Sheet label={'meal' in editor ? 'Evening meal' : 'Intake'} onClose={() => setEditor(null)}>{'meal' in editor
       ? <MealEditor key={editor.row?.id ?? 'new-meal'} value={editor.meal} busy={save.busy} onCancel={() => setEditor(null)} onSave={meal => void save.run(async () => {
         await store.saveMeal(meal, editor.row?.id);
@@ -119,8 +121,9 @@ export function IntakePage({ reviewDate, reviewZone }: { reviewDate?: string; re
         <span className="w-12 shrink-0 text-sm tabular-nums text-neutral-400">{record.kind === 'meal' || record.row.timeKnown ? localClock(record.at, zone) : '—'}</span>
         <span className="min-w-0 flex-1 break-words text-sm">{record.kind === 'meal' ? 'Finished eating' : record.row.intake.label}</span>
         <span className="shrink-0 text-xs text-neutral-400">{record.kind === 'meal' ? 'Evening meal' : record.row.doseKnown ? intakeAmountText(record.row.intake) : 'Dose not recorded'}</span>
-      </button></li>)}</ul> : <p className="px-4 py-4 text-sm text-neutral-400">Nothing recorded on this day.</p>}
-      <p className="border-t border-neutral-800 px-4 py-2 text-xs text-neutral-500">{confirmedDay(store.entries, date, zone) ? `The day is confirmed: ${dayIntakes.length} intakes and ${dayMeals.length} evening meals.` : 'The day is not confirmed, so the daily count is unknown.'}</p>
+      </button></li>)}</ul> : <p className="px-4 py-4 text-sm text-neutral-400">No timed entries for this day.</p>}
+      <div className="px-4"><RecallList store={store} date={date} timeZone={zone} /></div>
+      <p className="border-t border-neutral-800 px-4 py-2 text-xs text-neutral-500">{dailyIntakeSummary(store.entries, date, zone, store.intakes)}</p>
     </section>
     {!reviewDate && <><IntakeSettings store={store} /><DrinkSettings store={store} /></>}
   </section>;
@@ -167,7 +170,7 @@ function Sheet({ label, onClose, children }: { label: string; onClose: () => voi
   </div>;
 }
 /** The small sheet behind "Earlier": one wheel for the day and hour, one for the minute. */
-function MomentSheet({ date, title, timeZone, busy, onClose, onSave }: { date: string; title: string; timeZone: string; busy: boolean; onClose: () => void; onSave: (at: string) => void }) {
+function MomentSheet({ resolving, recall, date, title, timeZone, busy, onClose, onSave }: { resolving: (at: string) => boolean; recall: (date: string) => ReactNode; date: string; title: string; timeZone: string; busy: boolean; onClose: () => void; onSave: (at: string) => void }) {
   const [openedAt] = useState(() => new Date());
   const [value, setValue] = useState(() => {
     const parts = splitInstant(openedAt.toISOString(), timeZone);
@@ -183,8 +186,11 @@ function MomentSheet({ date, title, timeZone, busy, onClose, onSave }: { date: s
     <DateTimeWheel label="Taken at" value={value} timeZone={timeZone} onChange={setValue} daysAfter={0} max={openedAt.toISOString()} />
     <div className="mt-4 grid grid-cols-[1fr_2fr] gap-2">
       <button className="rounded-xl border border-neutral-700 px-4 py-3 text-sm text-neutral-300 hover:border-neutral-500" type="button" onClick={onClose}>Cancel</button>
-      <button className="rounded-xl bg-indigo-500 px-4 py-3 text-sm font-semibold text-white hover:bg-indigo-400 disabled:opacity-40" disabled={busy || future} type="button" onClick={() => onSave(value)}>{busy ? 'Saving…' : 'Save'}</button>
+      <button className="rounded-xl bg-indigo-500 px-4 py-3 text-sm font-semibold text-white hover:bg-indigo-400 disabled:opacity-40" disabled={busy || future} type="button" onClick={() => onSave(value)}>{busy ? 'Saving…' : resolving(value) ? 'Replace my answer with this time' : 'Save'}</button>
     </div>
+    <details className="mt-4 rounded-xl border border-neutral-700 p-3"><summary className="cursor-pointer">Record what I remember without a time</summary>
+      <div className="mt-3">{recall(civilDate(new Date(value), timeZone))}</div>
+    </details>
   </Sheet>;
 }
 function MealEditor({ value, busy, onCancel, onSave, onDelete }: { value: EveningMeal; busy: boolean; onCancel: () => void; onSave: (meal: EveningMeal) => void; onDelete?: () => void }) {

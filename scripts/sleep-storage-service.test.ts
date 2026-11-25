@@ -262,3 +262,30 @@ test('meal finish times and optional bedtime fullness survive corrections and un
     await assert.rejects(sleepLogStore(client, bob).saveMeal(item.id, meal), /row-level security/);
   } finally { await db.close(); }
 });
+
+test('a remembered occurrence gains an exact time on the same row and undo restores the uncertainty', async () => {
+  const { db, client, as } = await database();
+  try {
+    await as(alice);
+    const item = await findOrCreateSleepLog(client, alice);
+    const store = sleepLogStore(client, alice);
+    const day = { date: '2026-11-17', timeZone: 'UTC' };
+    const review = await store.saveDayEvidence(item.id, 'dayReview', day);
+    await store.saveDayEvidence(item.id, 'dayConfirmation', day, review.entry.id);
+    const dinner = await store.saveDayEvidence(item.id, 'dayRecall', { ...day, subject: 'meal:dinner', label: 'Dinner', state: 'happened' });
+    assert.equal(readMeals([dinner.entry]).length, 0);
+    const meal = { finishedAt: day.date + 'T19:00:00Z', timeZone: day.timeZone };
+    const corrected = await store.saveMeal(item.id, meal, dinner.entry.id);
+    assert.equal(corrected.entry.id, dinner.entry.id);
+    assert.ok(corrected.before);
+    await updateEntryData(client, alice, corrected.before.id, corrected.before.data, new Date(corrected.before.occurredAt));
+    const med = await store.saveDayEvidence(item.id, 'dayRecall', { ...day, subject: 'intake:methylphenidate', label: 'Medicine', state: 'unsure' });
+    const dose = intakeNow(DEFAULT_INTAKE_BUTTONS[0], new Date(day.date+'T09:00:00Z'), day.timeZone);
+    await assert.rejects(store.saveIntake(item.id, dose, dinner.entry.id), /not an intake/);
+    assert.equal((await store.saveIntake(item.id, dose, med.entry.id)).entry.id, med.entry.id);
+    const rows = await store.readEntries(item.id);
+    assert.equal(rows.length, 3);
+    assert.equal(readIntakes(rows).length, 1);
+    assert.deepEqual(rows.find(row => row.id === dinner.entry.id)?.data, dinner.entry.data);
+  } finally { await db.close(); }
+});

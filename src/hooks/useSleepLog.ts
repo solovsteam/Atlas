@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { type DayEvidence, type MedicineAnswer } from '@shared/dayEvidence';
+import { type EvidenceKind, type EvidenceValue } from '@shared/dayEvidence';
 import { readIntakes, assignedIntakes, nightIntakeAdherence, type Intake, type IntakeRecord } from '@shared/intake';
 import { readMeals, type EveningMeal } from '@shared/meals';
 import type { Item } from '@shared/item';
@@ -62,7 +62,7 @@ export function useSleepLog() {
     trackDeleteEntryUndo(push, before);
   }), [mutate, push]);
 
-  const saveDayEvidence = useCallback((kind: 'dayConfirmation' | 'medicineAnswer', value: DayEvidence | MedicineAnswer, entryId?: string) => mutate(async (id, service) =>
+  const saveDayEvidence = useCallback((kind: EvidenceKind, value: EvidenceValue, entryId?: string) => mutate(async (id, service) =>
     record(await service.saveDayEvidence(id, kind, value, entryId))), [mutate, record]);
   const saveIntake = useCallback((intake: Intake, entryId?: string, legacyKey?: string) => mutate(async (id, service) =>
     record(await service.saveIntake(id, intake, entryId, legacyKey))), [mutate, record]);

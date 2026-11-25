@@ -80,7 +80,7 @@ function LogForm({ kind, store, requestedId, requestedWakeDate }: { kind: LogKin
   const wakeDate = original && initial ? recordedSleepWakeDate(initial, original) : state.wakeDate;
   const dayDate = addDays(wakeDate, -1);
   const target = targetLightsOut(store.nights.map(row => row.night), wakeDate, timeZone, store.settings);
-  const recalledLightsOut = lightsAt ?? atLocalClock(addDays(wakeDate, -1), `${target.lightsOut}:00`, timeZone);
+
   const late = Date.parse(lightsAt ?? openedAt.toISOString()) > Date.parse(target.lightsOutAt);
   const required = requiredWakeForDate(wakeDate, timeZone, store.settings, obligation ? evening.earlyObligationAt : undefined);
   const opportunity = sleepChoiceCard(lightsAt ?? initial?.occurredAt ?? openedAt.toISOString(), wakeDate, timeZone, store.nights.map(row => row.night), store.settings, obligation ? evening.earlyObligationAt : undefined);
@@ -138,6 +138,10 @@ function LogForm({ kind, store, requestedId, requestedWakeDate }: { kind: LogKin
   const subtitle = kind === 'evening' ? `The evening of ${shortDate(dayDate)}, before the night to ${shortDate(wakeDate)}.`
     : kind === 'morning' ? `The morning of ${shortDate(wakeDate)}, after the night from ${shortDate(dayDate)}.`
     : `The night from ${shortDate(dayDate)} to ${shortDate(wakeDate)}.`;
+  const rememberedTimeField = lightsAt
+    ? <InstantField label="Lights out" value={lightsAt} timeZone={timeZone} onChange={setLightsAt} />
+    : <div className="space-y-2"><p className="text-sm text-neutral-400">Lights-out time is unknown.</p>
+      <button className={sleepButton} type="button" onClick={() => setLightsAt(target.lightsOutAt)}>Enter the time I remember</button></div>;
   return <SleepFrame title={title} subtitle={subtitle}>
     {kind === 'evening' ? <div className="space-y-6 [&_summary]:cursor-pointer [&_summary]:rounded-lg [&_summary]:border [&_summary]:border-indigo-400/50 [&_summary]:bg-indigo-500/10 [&_summary]:px-3 [&_summary]:py-2 [&_summary]:text-indigo-200 [&_button]:cursor-pointer [&_button:disabled]:cursor-default">
       {intakesOpen && <EveningIntakes date={dayDate} timeZone={timeZone} onReturn={() => setIntakesOpen(false)} />}
@@ -156,8 +160,8 @@ function LogForm({ kind, store, requestedId, requestedWakeDate }: { kind: LogKin
       <Field title="Early obligation tomorrow"><p className="text-xs text-neutral-400">Enter when the appointment starts. Atlas subtracts {store.settings.preparationMinutes} minutes for preparation.</p><button aria-pressed={obligation} className={sleepButton} type="button" onClick={() => { setObligation(!obligation); patchEvening({ choice: undefined }); if (!evening.earlyObligationAt) patchEvening({ earlyObligationAt: atLocalClock(wakeDate, '08:00:00', timeZone) }); }}>{obligation ? 'Remove the early obligation' : 'Add an early obligation'}</button>{obligation ? <ClockField label="Appointment starts" value={localClock(evening.earlyObligationAt!, timeZone)} onChange={clock => patchEvening({ earlyObligationAt: atLocalClock(wakeDate, `${clock}:00`, timeZone), choice: undefined })} /> : null}</Field>
       <Field title="Unusual today"><SituationChips options={['alcohol', 'nap', 'late caffeine', 'sick', 'travel']} selected={evening.tags ?? []} onToggle={tag => patchEvening({ tags: toggleTag(evening.tags ?? [], tag) })} /></Field>
       {late ? <Field title="Reason for a late night"><SituationChips options={['party', 'work', 'stress', 'screen time']} selected={evening.lateReasons ?? []} onToggle={tag => patchEvening({ lateReasons: toggleTag(evening.lateReasons ?? [], tag) })} /></Field> : null}
-      {memory ? <Field title="Evening from memory"><p className="text-sm text-neutral-400">This evening will be marked as recorded from memory.</p><LightsOutHint /><InstantField label="Lights out" value={lightsAt ?? atLocalClock(addDays(wakeDate, -1), `${target.lightsOut}:00`, timeZone)} timeZone={timeZone} onChange={setLightsAt} /></Field> : <button className={sleepButton} type="button" onClick={() => setMemory(true)}>Fill the evening from memory</button>}
-      <button className={`${sleepButton} w-full bg-indigo-500 font-semibold text-white`} disabled={save.busy} type="button" onClick={() => void save.run(() => persistEvening({ ...evening, earlyObligationAt: obligation ? evening.earlyObligationAt : undefined, fromMemory: memory || dayDate < civilDate(openedAt, timeZone), lightsOut: memory ? lightsAt ?? atLocalClock(addDays(wakeDate, -1), `${target.lightsOut}:00`, timeZone) : evening.lightsOut }), 'The evening log was saved.')}>{save.busy ? 'Saving…' : 'Save the evening log'}</button>
+      {memory ? <Field title="Evening from memory"><p className="text-sm text-neutral-400">This evening will be marked as recorded from memory.</p><LightsOutHint />{rememberedTimeField}</Field> : <button className={sleepButton} type="button" onClick={() => setMemory(true)}>Fill the evening from memory</button>}
+      <button className={`${sleepButton} w-full bg-indigo-500 font-semibold text-white`} disabled={save.busy} type="button" onClick={() => void save.run(() => persistEvening({ ...evening, earlyObligationAt: obligation ? evening.earlyObligationAt : undefined, fromMemory: memory || dayDate < civilDate(openedAt, timeZone), lightsOut: memory ? lightsAt : evening.lightsOut }), 'The evening log was saved.')}>{save.busy ? 'Saving…' : 'Save the evening log'}</button>
     </div> : null}
     {kind === 'lights-out' ? <>
       <LightsOutHint />
@@ -176,13 +180,13 @@ function LogForm({ kind, store, requestedId, requestedWakeDate }: { kind: LogKin
       </>}
     </> : null}
     {kind === 'morning' ? <>
-      {!(currentNight ?? original)?.evening?.lightsOut ? <Field title="Lights out"><LightsOutHint /><InstantField label="Lights out" value={recalledLightsOut} timeZone={timeZone} onChange={setLightsAt} /></Field> : null}
+      {!(currentNight ?? original)?.evening?.lightsOut ? <Field title="Lights out"><LightsOutHint />{rememberedTimeField}</Field> : null}
       <Field title="Wake time"><InstantField label="Wake time" value={wakeAt ?? openedAt.toISOString()} timeZone={timeZone} onChange={setWakeAt} /></Field>
       <Field title="What woke me"><Choices label="What woke me" value={morning.wokeBy!} options={[{ value: 'alarm', label: 'The alarm' }, { value: 'self', label: 'I woke by myself' }, { value: 'other', label: 'Something else' }]} onChange={wokeBy => patchMorning({ wokeBy })} /></Field>
       <Field title="Time to fall asleep"><p className="text-sm text-neutral-400">From lights out until you fell asleep.</p><div className="relative max-w-48"><div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-20 h-10 rounded-lg bg-neutral-800" /><WheelColumn label="Minutes to fall asleep" options={Array.from({ length: 289 }, (_, i) => ({ value: i * 5, label: `${i * 5} min` }))} value={morning.fallAsleepMinutes!} onChange={fallAsleepMinutes => patchMorning({ fallAsleepMinutes })} /></div></Field>
       <Field title="Awake during the night"><Choices label="Awake during the night" value={morning.awakeDuringNight!} options={[{ value: 'none', label: 'None' }, { value: 'short', label: 'Short' }, { value: 'over30', label: 'Over 30 minutes' }]} onChange={awakeDuringNight => patchMorning({ awakeDuringNight })} /></Field>
       <Field title="Sleep quality"><Choices label="Sleep quality" value={morning.sleepQuality!} options={QUALITY} onChange={sleepQuality => patchMorning({ sleepQuality })} /></Field>
-      <button className={`${sleepButton} w-full bg-indigo-500 font-semibold text-white`} disabled={save.busy} type="button" onClick={() => void save.run(async () => { const entry = await store.saveMorning({ ...morning, wakeAt: wakeAt ?? new Date().toISOString() }, entryId, openedAt, recalledLightsOut); setSavedId(entry.id); setWakeAt(sleepNight(entry)?.morning?.wakeAt); }, 'The morning log was saved.')}>{save.busy ? 'Saving…' : 'Save the morning log'}</button>
+      <button className={`${sleepButton} w-full bg-indigo-500 font-semibold text-white`} disabled={save.busy} type="button" onClick={() => void save.run(async () => { const entry = await store.saveMorning({ ...morning, wakeAt: wakeAt ?? new Date().toISOString() }, entryId, openedAt, lightsAt); setSavedId(entry.id); setWakeAt(sleepNight(entry)?.morning?.wakeAt); }, 'The morning log was saved.')}>{save.busy ? 'Saving…' : 'Save the morning log'}</button>
       {!(entryId ? store.nights.find(row => row.entry.id === entryId)?.night.evening?.dayRating : original?.evening?.dayRating) ? <p className="text-sm text-neutral-400">The evening log is missing. {entryId ? <Link className="text-indigo-300 underline" to={`/sleep/evening?entry=${entryId}`}>Fill the evening from memory</Link> : 'Save the morning first to fill the evening from memory.'}</p> : null}
     </> : null}
     {save.feedback}

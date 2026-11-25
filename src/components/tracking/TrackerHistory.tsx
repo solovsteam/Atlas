@@ -1,3 +1,4 @@
+import { isDailyTotal, summarizeTrackerDay, trackerDay } from '@shared/trackerTotals';
 import { addDays, civilDate } from '@shared/recurringReferences';
 import { dayEvidence } from '@shared/dayEvidence';
 import { useSleepLog } from '../../hooks/useSleepLog';
@@ -89,7 +90,7 @@ export function TrackerHistory({
   const [editing, setEditing] = useState<{ entry: DocumentationEntry; at: string } | null>(null);
   const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const confirmedDates = sleep.entries.flatMap(entry => { const day = dayEvidence(entry, 'dayConfirmation'); return day?.timeZone === zone ? [day.date] : []; });
-  const confirmed = new Set(confirmedDates);
+  const confirmed = new Set([...confirmedDates, ...entries.filter(isDailyTotal).map(entry => String(entry.data.date))]);
   const todayDate = civilDate(now, zone);
   const todayConfirmed = confirmed.has(todayDate);
   const weekConfirmed = Array.from({ length: 7 }, (_, i) => addDays(todayDate, -i)).some(date => confirmed.has(date));
@@ -99,9 +100,12 @@ export function TrackerHistory({
   const [daysShown, setDaysShown] = useState(DAYS_SHOWN_STEP);
   const history = buildHistory(entries, { range, now, trackerCreatedAt, confirmedDates });
   const days = useMemo(() => groupEntriesByDay(entries, now), [entries, now]);
-  const knownEntries = entries.filter(entry => confirmed.has(civilDate(new Date(entry.occurredAt), zone)));
+  const knownEntries = entries.filter(entry => confirmed.has(trackerDay(entry, zone)));
   const lastWeek = entriesInDays(knownEntries, 7, now);
   const weekBefore = entriesInDays(knownEntries, 7, now, 7);
+  const weeklyCount = (rows: DocumentationEntry[]) => groupEntriesByDay(rows, now)
+    .reduce((sum, day) => sum + summarizeTrackerDay(day.entries).count, 0);
+  const untimed = history.buckets.map(bucket => (bucket.count ?? 0) - bucket.stages.after - bucket.stages.during - bucket.stages.urge);
   const unit = UNIT_LABEL[history.granularity];
   const trailingLabel = TRAILING_LABEL[history.granularity];
   const latestAverage = [...history.buckets].reverse().find((bucket) => bucket.average !== null)?.average ?? null;
@@ -117,11 +121,11 @@ export function TrackerHistory({
     <div className="space-y-6">
       {editing ? <section className="space-y-3 rounded-xl border border-neutral-800 p-4"><h2 className="font-medium">Correct an event</h2><InstantField label="Event time" value={editing.at} timeZone={zone} onChange={at => setEditing({ ...editing, at })} /><div className="flex gap-2"><button className={sleepButton} type="button" disabled={correction.busy} onClick={() => void correction.run(async () => { await onCorrect(editing.entry, new Date(editing.at)); setEditing(null); }, 'The event time was corrected.')}>Save the event time</button><button className={sleepButton} type="button" onClick={() => setEditing(null)}>Cancel</button></div></section> : null}
       {correction.feedback}
-      <p className="text-sm text-neutral-400">Charts and averages include confirmed days only. Unconfirmed days have an unknown count.</p>
+      <p className="text-sm text-neutral-400">Charts include days with a saved total or a confirmed list. The time chart uses only events with known times.</p>
       {build ? (
         <div className="grid grid-cols-3 gap-2">
           <StatTile label="Today" value={todayConfirmed ? goal !== null ? `${today} of ${goal}` : String(today) : "Not confirmed"} />
-          <StatTile label="Last 7 days" value={weekConfirmed ? String(lastWeek.length) : "Not confirmed"} detail={priorWeekConfirmed ? `${weekBefore.length} the week before` : "The week before is not confirmed"} />
+          <StatTile label="Last 7 days" value={weekConfirmed ? String(weeklyCount(lastWeek)) : "Not confirmed"} detail={priorWeekConfirmed ? `${weeklyCount(weekBefore)} the week before` : "The week before is not confirmed"} />
           <StatTile
             label="Per day"
             value={history.perDay === null ? "–" : oneDecimal(history.perDay)}
@@ -135,7 +139,7 @@ export function TrackerHistory({
             value={percent(urgeShare(lastWeek))}
             detail={`${percent(urgeShare(weekBefore))} the week before`}
           />
-          <StatTile label="Last 7 days" value={weekConfirmed ? String(lastWeek.length) : "Not confirmed"} detail={priorWeekConfirmed ? `${weekBefore.length} the week before` : "The week before is not confirmed"} />
+          <StatTile label="Last 7 days" value={weekConfirmed ? String(weeklyCount(lastWeek)) : "Not confirmed"} detail={priorWeekConfirmed ? `${weeklyCount(weekBefore)} the week before` : "The week before is not confirmed"} />
           <StatTile label="Today" value={todayConfirmed ? String(today) : "Not confirmed"} />
         </div>
       )}
@@ -212,6 +216,7 @@ export function TrackerHistory({
         <h2 className="text-sm font-semibold text-neutral-200">Per {unit}, by when you noticed</h2>
         <p className="mt-1 text-xs text-neutral-500">Noticing more often can raise the total. The share caught at the urge shows whether you notice earlier.</p>
         <div className="mb-4 mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-neutral-400">
+          {untimed.some(value => value > 0) && <span className="inline-flex items-center gap-1.5"><Swatch color="#94a3b8" />Time unknown</span>}
           {stagesInRange.map((stage) => (
             <span className="inline-flex items-center gap-1.5" key={stage}>
               <Swatch color={STAGE_COLORS[stage]} />
@@ -227,7 +232,7 @@ export function TrackerHistory({
           count={history.buckets.length}
           label={`Episodes per ${unit} by when they were noticed, with the ${trailingLabel} average`}
           line={history.buckets.map((bucket) => bucket.average)}
-          stacks={ENTRY_STAGES.map((stage) => ({ color: STAGE_COLORS[stage], values: history.buckets.map((bucket) => bucket.stages[stage]) }))}
+          stacks={[...ENTRY_STAGES.map(stage => ({ color: STAGE_COLORS[stage], values: history.buckets.map(bucket => bucket.stages[stage]) })), { color: "#94a3b8", values: untimed }]}
           tick={tick}
           tooltip={(index) => {
             const bucket = history.buckets[index];
@@ -309,10 +314,17 @@ export function TrackerHistory({
           {days.slice(0, daysShown).map((day) => (
             <li className="px-4 py-3" key={day.day.getTime()}>
               <p className="text-sm text-neutral-300">
-                {day.label} <span className="text-neutral-500">· {confirmed.has(civilDate(day.day, zone)) ? times(day.entries.length) : `${day.entries.length} recorded. Not confirmed`}</span>
+                {day.label} <span className="text-neutral-500">· {confirmed.has(civilDate(day.day, zone)) ? times(summarizeTrackerDay(day.entries).count) : `${day.entries.length} recorded. Not confirmed`}</span>
               </p>
               <ul className="mt-2 flex flex-wrap gap-2">
                 {day.entries.map((entry) => {
+                  if (isDailyTotal(entry)) {
+                    const latest = summarizeTrackerDay(day.entries).report?.id === entry.id;
+                    return <li className="rounded-lg border border-neutral-800 px-3 py-1 text-sm" key={entry.id}>
+                      {latest ? 'Reported total' : 'Earlier total'}: {Number(entry.data.count)} · Times unknown
+                      <button className="ml-2 underline" type="button" onClick={() => onDelete(entry)}>Remove</button>
+                    </li>;
+                  }
                   const stage = build ? null : entryStage(entry);
                   const details = [stage ? STAGE_TEXT[stage].short : null, ...entryTags(entry)].filter(Boolean).join(" · ");
                   const clock = formatClock(new Date(entry.occurredAt));

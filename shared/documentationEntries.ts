@@ -1,3 +1,4 @@
+import { isDailyTotal, summarizeTrackerDay } from './trackerTotals';
 import type { Item } from "./item";
 import { formatEuropeanDate, pad2 } from "./locale";
 import { civilDate } from './recurringReferences';
@@ -206,7 +207,8 @@ export function tagVocabulary(entries: DocumentationEntry[], limit = 12): string
 
 /** Share of entries noticed at the urge; null without entries. */
 export function urgeShare(entries: DocumentationEntry[]): number | null {
-  return entries.length ? entries.filter((entry) => entryStage(entry) === "urge").length / entries.length : null;
+  const timed = entries.filter(entry => !isDailyTotal(entry));
+  return timed.length ? timed.filter(entry => entryStage(entry) === 'urge').length / timed.length : null;
 }
 
 export function sortEntriesNewestFirst(entries: DocumentationEntry[]): DocumentationEntry[] {
@@ -362,10 +364,14 @@ function daysBetween(start: Date, end: Date): number {
  * Tracking starts at the earlier of the tracker's creation and its first
  * entry, because entries may be recorded after the fact.
  */
+function trackerHistoryTime(entry: DocumentationEntry) {
+  return isDailyTotal(entry) ? new Date(String(entry.data.date) + 'T00:00:00') : new Date(entry.occurredAt);
+}
+
 export function trackingStart(entries: DocumentationEntry[], trackerCreatedAt: string | null): Date | null {
   let earliest = trackerCreatedAt ? new Date(trackerCreatedAt).getTime() : Number.POSITIVE_INFINITY;
   for (const entry of entries) {
-    earliest = Math.min(earliest, new Date(entry.occurredAt).getTime());
+    earliest = Math.min(earliest, trackerHistoryTime(entry).getTime());
   }
   return Number.isFinite(earliest) ? new Date(earliest) : null;
 }
@@ -394,6 +400,9 @@ export function buildHistory(
   const { now } = options;
   const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const confirmed = new Set(options.confirmedDates ?? []);
+  for (const entry of entries) {
+    if (isDailyTotal(entry)) confirmed.add(String(entry.data.date));
+  }
   const start = trackingStart(entries, options.trackerCreatedAt);
   const { from, granularity } = historyWindow(options.range, now, start);
   const trailing = TRAILING_BUCKETS[granularity];
@@ -414,6 +423,7 @@ export function buildHistory(
   const tagCounts = new Map<string, { tag: string; count: number }>();
   let total = 0;
   for (const entry of entries) {
+    if (isDailyTotal(entry)) continue;
     const at = new Date(entry.occurredAt);
     if (at.getTime() < from.getTime() || at.getTime() > now.getTime() || !confirmed.has(civilDate(at, zone))) {
       continue;
@@ -433,11 +443,21 @@ export function buildHistory(
     total += 1;
   }
 
+  for (const day of groupEntriesByDay(entries, now)) {
+    const { untimed } = summarizeTrackerDay(day.entries);
+    if (!untimed) continue;
+    const bucket = buckets[findBucket(buckets, day.day)];
+    if (bucket && bucket.count !== null) {
+      bucket.count += untimed;
+      total += untimed;
+    }
+  }
+
   for (let index = 0; index < buckets.length; index += 1) {
     const window = buckets.slice(Math.max(0, index - trailing + 1), index + 1).filter((bucket) => bucket.count !== null);
     buckets[index].average = window.length ? window.reduce((sum, bucket) => sum + (bucket.count ?? 0), 0) / window.length : null;
     const urge = window.reduce((sum, bucket) => sum + bucket.stages.urge, 0);
-    const all = window.reduce((sum, bucket) => sum + (bucket.count ?? 0), 0);
+    const all = window.reduce((sum, bucket) => sum + bucket.stages.urge + bucket.stages.during + bucket.stages.after, 0);
     buckets[index].urgeShare = all ? urge / all : null;
   }
   const byTag = [...tagCounts.values()].sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
@@ -499,14 +519,14 @@ export function entriesInDays(entries: DocumentationEntry[], days: number, now: 
   const from = new Date(today.getFullYear(), today.getMonth(), today.getDate() - skipDays - days + 1).getTime();
   const until = skipDays === 0 ? now.getTime() : new Date(today.getFullYear(), today.getMonth(), today.getDate() - skipDays + 1).getTime() - 1;
   return entries.filter((entry) => {
-    const time = new Date(entry.occurredAt).getTime();
+    const time = trackerHistoryTime(entry).getTime();
     return time >= from && time <= until;
   });
 }
 
 /** Entries in the last `days` calendar days, today included. */
 export function countInLastDays(entries: DocumentationEntry[], days: number, now: Date): number {
-  return entriesInDays(entries, days, now).length;
+  return groupEntriesByDay(entriesInDays(entries, days, now), now).reduce((sum, day) => sum + summarizeTrackerDay(day.entries).count, 0);
 }
 
 export type EntryDay = { day: Date; label: string; entries: DocumentationEntry[] };
@@ -515,7 +535,7 @@ export type EntryDay = { day: Date; label: string; entries: DocumentationEntry[]
 export function groupEntriesByDay(entries: DocumentationEntry[], now: Date): EntryDay[] {
   const groups = new Map<number, EntryDay>();
   for (const entry of sortEntriesNewestFirst(entries)) {
-    const day = startOfLocalDay(new Date(entry.occurredAt));
+    const day = startOfLocalDay(trackerHistoryTime(entry));
     let group = groups.get(day.getTime());
     if (!group) {
       const offset = daysBetween(day, now);
@@ -528,5 +548,5 @@ export function groupEntriesByDay(entries: DocumentationEntry[], now: Date): Ent
     }
     group.entries.push(entry);
   }
-  return [...groups.values()];
+  return [...groups.values()].sort((a, b) => b.day.getTime() - a.day.getTime());
 }

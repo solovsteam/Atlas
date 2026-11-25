@@ -1,3 +1,4 @@
+import { DailyTotalForm } from './DailyTotalForm';
 import { civilDate } from '@shared/recurringReferences';
 import { confirmedDay } from '@shared/dayEvidence';
 import { useSleepLog } from '../../hooks/useSleepLog';
@@ -126,6 +127,7 @@ export function TrackerButtons({ tracker, size = "normal" }: { tracker: Item; si
           </span>
         )}
       </div>
+      <DailyTotalForm trackerId={tracker.id} />
       {error ? <p className="mt-2 text-sm text-red-400">{error}</p> : null}
       {saved ? (
         <SavedCard

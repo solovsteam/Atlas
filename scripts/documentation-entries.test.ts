@@ -277,3 +277,28 @@ test("history splits each period by stage and tracks the urge share over the tra
     { tag: "in bed", count: 2 }
   ]);
 });
+
+test("a recalled total covers timed occurrences and preserves urges, dates and hours", async () => {
+  const { dailyTotalData, parseTrackerTotal, summarizeTrackerDay } = await import("../shared/trackerTotals");
+  const now = new Date(2026, 10, 25, 9);
+  const tracker = [{ id: "s", title: "Scrolled" }, { id: "r", title: "Reality check" }];
+  const parsed = parseTrackerTotal("I scrolled 4 times in total yesterday", tracker, "2026-11-25");
+  assert.deepEqual(parsed?.data, dailyTotalData("2026-11-24", 4, "2026-11-25"));
+  assert.equal(parseTrackerTotal("I did three reality checks yesterday", tracker, "2026-11-25")?.tracker?.id, "r");
+  const row = (id: string, time: Date, data: Record<string, unknown>): DocumentationEntry => ({
+    id, itemId: "s", ownerId: "owner", data, createdAt: time.toISOString(), occurredAt: time.toISOString()
+  });
+  const rows = [row("total", now, parsed!.data!), row("timed", new Date(2026, 10, 24, 11), { stage: "during" }),
+    row("urge", new Date(2026, 10, 24, 8), { stage: "urge" })];
+  const history = rawBuildHistory(rows, { now, range: "30d", trackerCreatedAt: null });
+  assert.equal(history.total, 5);
+  assert.equal(history.perDay, 5);
+  assert.equal(history.buckets.at(-2)?.count, 5);
+  assert.equal(history.buckets.at(-1)?.count, null);
+  assert.equal(history.byHour.reduce((a, b) => a + b), 2);
+  assert.equal(history.buckets.at(-2)?.urgeShare, 0.5);
+  assert.equal(groupEntriesByDay(rows, now).length, 1);
+  const correction = row("correction", new Date(+now + 1000), dailyTotalData("2026-11-24", 0, "2026-11-25"));
+  assert.equal(summarizeTrackerDay([...rows, correction]).count, 2);
+  assert.equal(rawBuildHistory([correction], { now, range: "30d", trackerCreatedAt: null }).buckets.at(-2)?.count, 0);
+});

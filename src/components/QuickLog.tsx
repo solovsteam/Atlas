@@ -1,3 +1,5 @@
+import { civilDate } from '@shared/recurringReferences';
+import { parseTrackerTotal } from '@shared/trackerTotals';
 import { useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { entryData, trackerConfig, trackersOf } from '@shared/documentationEntries';
@@ -45,6 +47,27 @@ export function QuickLog({ store }: { store: Store }) {
     setProblem(null); setSaved(null); setNoteSaved('');
     const ctx: QuickLogContext = { now: new Date(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       buttons: store.settings.intakeButtons, drinks: store.settings.drinks, trackers };
+    const daily = parseTrackerTotal(sentence, trackers, civilDate(ctx.now, ctx.timeZone));
+    if (daily) {
+      if (!daily.data) {
+        setProblem({ text: sentence, reason: daily.error });
+        return;
+      }
+      setBusy('saving');
+      try {
+        const quickLog = { text: sentence, method: 'local', savedAt: ctx.now.toISOString() };
+        const entry = await createEntry(daily.tracker.id, ctx.now, { ...daily.data, quickLog });
+        push({ kind: 'batchEntries', changes: [{ entry }] });
+        setSaved({ text: sentence, method: { method: 'local' }, unmatched: null,
+          lines: [{ summary: `${daily.tracker.title}: ${daily.data.count} in total on ${daily.data.date}`, to: `/track/${daily.tracker.id}` }] });
+        setText('');
+      } catch (cause) {
+        setProblem({ text: sentence, reason: cause instanceof Error ? cause.message : 'Could not save the total.' });
+      } finally {
+        setBusy('');
+      }
+      return;
+    }
     let output: QuickLogOutput | null = parseQuickLogLocally(sentence, ctx);
     let method: QuickLogMethod = { method: 'local' };
     if (!output) {
@@ -66,6 +89,11 @@ export function QuickLog({ store }: { store: Store }) {
     if (!result.ok) {
       setBusy('');
       setProblem({ text: sentence, reason: result.reason });
+      return;
+    }
+    if (result.records.some(record => record.type === 'tracker') && /\bin total\b/i.test(sentence)) {
+      setBusy('');
+      setProblem({ text: sentence, reason: 'Please give the tracker, total and day together. For example, “I did 3 reality checks yesterday”. You can also choose Record a daily total on the tracker.' });
       return;
     }
     setBusy('saving');

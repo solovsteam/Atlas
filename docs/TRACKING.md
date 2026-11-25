@@ -36,3 +36,9 @@ A tracker records each time Tonio notices a habit he wants to break, such as scr
 - Timed routines (next step): a routine is a bundle of written or unwritten tasks; each task's time is recorded with a stopwatch; tasks run one after another and their times do not depend on earlier tasks.
 - A documentation task completed by typing a value, such as a daily weighing.
 - Opening the time wheel automatically when a chosen app opens (an iPhone Shortcuts automation).
+
+## When only the day is known
+
+Use **Record a daily total** on the tracker or in a past evening review. Quick Log also accepts “I scrolled 4 times in total yesterday” and “I did 3 reality checks yesterday”. A total of zero is a known count for that tracker. Other trackers on the same day still need their own evidence.
+
+The latest report for that tracker and date supplies the total. Timed occurrences count toward it. If there are more timed occurrences than reported, the timed occurrences still count. Urges are separate observations. Events with unknown times contribute to daily counts and averages. Only individually timed events contribute to hourly charts or the share noticed at the urge. Each report can be undone or removed in the tracker history.

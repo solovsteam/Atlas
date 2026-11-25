@@ -1,3 +1,5 @@
+import { summarizeTrackerDay, trackerDay } from '@shared/trackerTotals';
+import { DailyTotalForm } from '../tracking/DailyTotalForm';
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { atLocalClock, civilDate, dateInput } from '@shared/recurringReferences';
@@ -55,8 +57,8 @@ function TrackerDay({ tracker, date, timeZone, confirmed, onReady }: { tracker: 
   const { userId } = useAtlasData();
   const { entries, loading, error } = useDocumentationEntries(userId, tracker.id);
   useEffect(() => { onReady(tracker.id, !loading && !error); return () => onReady(tracker.id, false); }, [tracker.id, loading, error, onReady]);
-  const count = entries.filter(entry => civilDate(new Date(entry.occurredAt), timeZone) === date).length;
-  return <p className="text-sm"><Link className="text-indigo-300 underline" to={`/track/${tracker.id}`}>{tracker.title || 'Untitled tracker'}</Link>: {loading ? 'Loading…' : error ? <span role="alert">{error}</span> : `${count} recorded${confirmed ? '' : '. Not confirmed'}`}</p>;
+  const { count, report } = summarizeTrackerDay(entries.filter(entry => trackerDay(entry, timeZone) === date));
+  return <div className="text-sm"><Link className="text-indigo-300 underline" to={`/track/${tracker.id}`}>{tracker.title || 'Untitled tracker'}</Link>: {loading ? 'Loading…' : error ? <span role="alert">{error}</span> : `${count} recorded${confirmed || report ? '' : '. Not confirmed'}`}{date < civilDate(new Date(), timeZone) && <DailyTotalForm trackerId={tracker.id} date={date} />}</div>;
 }
 
 export function MedicineQuestion({ store, date, timeZone }: { store: Store; date: string; timeZone: string }) {

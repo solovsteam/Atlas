@@ -378,3 +378,7 @@ Now selects one due question. Medication can be answered inline and the evening 
 ## Daily totals for trackers (25 November 2026)
 
 Quick Log, Track and past evening reviews accept a total for a completed day. Atlas keeps saved times and counts each occurrence once. The full npm run check passed, including tests for zero, corrections, urges and unknown times. No live records were changed during verification. See docs/TRACKING.md and .handoff/tracker-daily-totals-25.md.
+
+## Past intake navigation (25 November 2026)
+
+The evening log keeps its form open while editing intakes. A historical tile opens its time picker on the selected day. The shared wheel shows the day on each hour and allows a direct date jump. The full npm run check passed. A local Chrome fixture tested a dated save, a day jump and a return with an unsaved evening answer. No live records were used. See .handoff/past-intake-navigation-25.md.

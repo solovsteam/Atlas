@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { addDays, civilDate } from '@shared/recurringReferences';
-import { dayHourRows, instantAt, relativeDay, shortDate, splitInstant } from '@shared/dayLabels';
+import { dayHourRows, instantAt, dayText, splitInstant } from '@shared/dayLabels';
 import { WHEEL_ROW_HEIGHT, WheelColumn, type WheelOption } from './TimeWheel';
 
 const minuteOptions = (disabled: (minute: number) => boolean): WheelOption[] =>
@@ -36,16 +36,28 @@ export function DateTimeWheel({ label, value, timeZone, onChange, daysBefore = 7
   const hourOptions = useMemo<WheelOption[]>(() => rows.map((row, i) => ({
     value: i,
     label: String(row.hour).padStart(2, '0'),
-    detail: relativeDay(row.date, today) ?? shortDate(row.date).slice(0, -4),
+    detail: dayText(row.date, today),
     disabled: Date.parse(instantAt(row, 0, timeZone)) > maxTime
   })), [rows, today, timeZone, maxTime]);
   const row = rows[index];
   const minutes = useMemo(() => minuteOptions(minute => !!row && Date.parse(instantAt(row, minute, timeZone)) > maxTime), [row, timeZone, maxTime]);
-  return <div className="relative">
+  return <div className="space-y-2">
+    <label className="flex items-center justify-between gap-2 text-sm font-medium">
+      Day
+      <input aria-label={`${label}: choose day`} className="min-h-11 rounded-lg border border-indigo-400/50 bg-neutral-950 px-3" type="date" value={parts.date} max={maxDate ?? undefined} onChange={event => {
+        const date = event.target.value;
+        if (!date || (maxDate && date > maxDate)) return;
+        const next = instantAt({ date, hour: parts.hour }, parts.minute, timeZone);
+        setAnchor(date);
+        onChange(Date.parse(next) > maxTime ? max! : next);
+      }} />
+    </label>
+    <div className="relative">
     <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 rounded-lg bg-neutral-800" style={{ top: 2 * WHEEL_ROW_HEIGHT, height: WHEEL_ROW_HEIGHT }} />
     <div className="relative grid grid-cols-[2fr_1fr] gap-1">
       <WheelColumn label={`${label}: day and hour`} options={hourOptions} value={index} onChange={next => { const target = rows[next]; if (target) onChange(instantAt(target, parts.minute, timeZone)); }} />
       <WheelColumn label={`${label}: minute`} options={minutes} value={parts.minute} onChange={minute => { if (row) onChange(instantAt(row, minute, timeZone)); }} />
+    </div>
     </div>
   </div>;
 }

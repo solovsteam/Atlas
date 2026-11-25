@@ -1,3 +1,4 @@
+import { EveningIntakes } from './IntakePage';
 import { DayReview } from '../components/sleep/DayReview';
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -50,6 +51,7 @@ export function SleepLogPage({ kind }: { kind: LogKind }) {
 }
 function LogForm({ kind, store, requestedId, requestedWakeDate }: { kind: LogKind; store: Store; requestedId?: string; requestedWakeDate?: string }) {
   const [params] = useSearchParams();
+  const [intakesOpen, setIntakesOpen] = useState(false);
   const [deviceZone] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone);
   const [openedAt] = useState(() => new Date());
   const state = sleepScreenState(store.entries, openedAt, deviceZone, requestedWakeDate);
@@ -113,7 +115,12 @@ function LogForm({ kind, store, requestedId, requestedWakeDate }: { kind: LogKin
   }
   const currentEntry = entryId ? store.entries.find(row => row.id === entryId) : undefined;
   const currentNight = useMemo(() => currentEntry ? sleepNight(currentEntry) : undefined, [currentEntry]);
+  const appliedNight = useRef('');
   useEffect(() => {
+    // Refreshing intakes can also fetch an identical night. Keep the unsaved answers.
+    const version = JSON.stringify([entryId, currentNight, store.settings.anchorWake, timeZone]);
+    if (appliedNight.current === version) return;
+    appliedNight.current = version;
     if (!currentNight) return;
     setEvening({ alarm: store.settings.anchorWake, dayRating: 4, tags: [], lateReasons: [], ...currentNight.evening, timeZone });
     setLightsAt(currentNight.evening?.lightsOut);
@@ -124,7 +131,7 @@ function LogForm({ kind, store, requestedId, requestedWakeDate }: { kind: LogKin
         ...currentNight.morning, timeZone });
       setWakeAt(currentNight.morning.wakeAt);
     }
-  }, [currentNight, store.settings.anchorWake, timeZone]);
+  }, [entryId, currentNight, store.settings.anchorWake, timeZone]);
   const lightsRecorded = currentNight ? !!currentNight.evening?.lightsOut : !!entryId && !!lightsAt && save.message !== 'Undone.';
   const openedDate = civilDate(openedAt, timeZone);
   const title = sleepLogName(kind, kind === 'morning' ? wakeDate : dayDate, openedDate);
@@ -132,10 +139,11 @@ function LogForm({ kind, store, requestedId, requestedWakeDate }: { kind: LogKin
     : kind === 'morning' ? `The morning of ${shortDate(wakeDate)}, after the night from ${shortDate(dayDate)}.`
     : `The night from ${shortDate(dayDate)} to ${shortDate(wakeDate)}.`;
   return <SleepFrame title={title} subtitle={subtitle}>
-    {kind === 'evening' ? <>
+    {kind === 'evening' ? <div className="space-y-6 [&_summary]:cursor-pointer [&_summary]:rounded-lg [&_summary]:border [&_summary]:border-indigo-400/50 [&_summary]:bg-indigo-500/10 [&_summary]:px-3 [&_summary]:py-2 [&_summary]:text-indigo-200 [&_button]:cursor-pointer [&_button:disabled]:cursor-default">
+      {intakesOpen && <EveningIntakes date={dayDate} timeZone={timeZone} onReturn={() => setIntakesOpen(false)} />}
       <p className="text-sm text-neutral-400">Tonight’s target lights out: <span className="text-white">{target.lightsOut}</span>. {required ? `Required wake time: ${localClock(required, timeZone)}.` : 'Tomorrow has no required wake time.'}</p>
-      <DayReview key={`${dayDate}:${timeZone}`} store={store} date={dayDate} timeZone={timeZone} forceMedicine={params.get('answer') === 'medicine'} />
-      <Field title="Supplements tonight"><TrialSupplements evening={evening} settings={store.settings} wakeDate={wakeDate} busy={save.busy} historical={dayDate < civilDate(openedAt, timeZone)} onTaken={() => void save.run(async () => {
+      <DayReview onOpenIntake={() => setIntakesOpen(true)} key={`${dayDate}:${timeZone}`} store={store} date={dayDate} timeZone={timeZone} forceMedicine={params.get('answer') === 'medicine'} />
+      <Field title="Supplements tonight"><TrialSupplements onOpenIntake={() => setIntakesOpen(true)} evening={evening} settings={store.settings} wakeDate={wakeDate} busy={save.busy} historical={dayDate < civilDate(openedAt, timeZone)} onTaken={() => void save.run(async () => {
         const assignment = evening.trial?.assignment ?? trial.assignment;
         if (!assignment) return;
         const saved = await store.saveAssignedIntakes(evening, assignment, target.lightsOutAt, entryId);
@@ -148,9 +156,9 @@ function LogForm({ kind, store, requestedId, requestedWakeDate }: { kind: LogKin
       <Field title="Early obligation tomorrow"><p className="text-xs text-neutral-400">Enter when the appointment starts. Atlas subtracts {store.settings.preparationMinutes} minutes for preparation.</p><button aria-pressed={obligation} className={sleepButton} type="button" onClick={() => { setObligation(!obligation); patchEvening({ choice: undefined }); if (!evening.earlyObligationAt) patchEvening({ earlyObligationAt: atLocalClock(wakeDate, '08:00:00', timeZone) }); }}>{obligation ? 'Remove the early obligation' : 'Add an early obligation'}</button>{obligation ? <ClockField label="Appointment starts" value={localClock(evening.earlyObligationAt!, timeZone)} onChange={clock => patchEvening({ earlyObligationAt: atLocalClock(wakeDate, `${clock}:00`, timeZone), choice: undefined })} /> : null}</Field>
       <Field title="Unusual today"><SituationChips options={['alcohol', 'nap', 'late caffeine', 'sick', 'travel']} selected={evening.tags ?? []} onToggle={tag => patchEvening({ tags: toggleTag(evening.tags ?? [], tag) })} /></Field>
       {late ? <Field title="Reason for a late night"><SituationChips options={['party', 'work', 'stress', 'screen time']} selected={evening.lateReasons ?? []} onToggle={tag => patchEvening({ lateReasons: toggleTag(evening.lateReasons ?? [], tag) })} /></Field> : null}
-      {memory ? <Field title="Evening from memory"><p className="text-sm text-neutral-400">This evening will be marked as recorded from memory.</p><LightsOutHint /><InstantField label="Lights out" value={lightsAt ?? atLocalClock(addDays(wakeDate, -1), `${target.lightsOut}:00`, timeZone)} timeZone={timeZone} onChange={setLightsAt} /></Field> : <button className="text-sm text-neutral-400 underline" type="button" onClick={() => setMemory(true)}>Fill the evening from memory</button>}
+      {memory ? <Field title="Evening from memory"><p className="text-sm text-neutral-400">This evening will be marked as recorded from memory.</p><LightsOutHint /><InstantField label="Lights out" value={lightsAt ?? atLocalClock(addDays(wakeDate, -1), `${target.lightsOut}:00`, timeZone)} timeZone={timeZone} onChange={setLightsAt} /></Field> : <button className={sleepButton} type="button" onClick={() => setMemory(true)}>Fill the evening from memory</button>}
       <button className={`${sleepButton} w-full bg-indigo-500 font-semibold text-white`} disabled={save.busy} type="button" onClick={() => void save.run(() => persistEvening({ ...evening, earlyObligationAt: obligation ? evening.earlyObligationAt : undefined, fromMemory: memory || dayDate < civilDate(openedAt, timeZone), lightsOut: memory ? lightsAt ?? atLocalClock(addDays(wakeDate, -1), `${target.lightsOut}:00`, timeZone) : evening.lightsOut }), 'The evening log was saved.')}>{save.busy ? 'Saving…' : 'Save the evening log'}</button>
-    </> : null}
+    </div> : null}
     {kind === 'lights-out' ? <>
       <LightsOutHint />
       {requestedWakeDate && !lightsRecorded ? <InstantField label="Lights out" value={lightsAt ?? target.lightsOutAt} timeZone={timeZone} onChange={setLightsAt} /> : null}

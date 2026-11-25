@@ -1,10 +1,10 @@
 import { useSearchParams } from 'react-router-dom';
 import { confirmedDay } from '@shared/dayEvidence';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { addDays, civilDate } from '@shared/recurringReferences';
-import { dayText, instantText, shortDate } from '@shared/dayLabels';
+import { dayText, instantAt, instantText, splitInstant } from '@shared/dayLabels';
 import { DateTimeWheel } from '../components/tracking/DateTimeWheel';
-import { DEFAULT_INTAKE_BUTTONS, intakeAmountText, intakeNow, intakesOnDate, lastTakenToday, type Intake, type IntakeButton, type IntakeRecord } from '@shared/intake';
+import { DEFAULT_INTAKE_BUTTONS, intakeAmountText, intakeNow, intakesOnDate, type Intake, type IntakeButton, type IntakeRecord } from '@shared/intake';
 import { caffeineMg, withAmountMl } from '@shared/drinks';
 import { mealsOnDate, type EveningMeal, type MealRecord } from '@shared/meals';
 import { DrinkSettings } from '../components/DrinkSettings';
@@ -19,17 +19,33 @@ type Store = ReturnType<typeof useSleepLog>;
 type Editor = { intake: Intake; row?: IntakeRecord } | { meal: EveningMeal; row?: MealRecord };
 type Picker = { title: string; save: (at: string) => Promise<unknown>; success: string };
 
-export function IntakePage() {
+export function EveningIntakes({ date, timeZone, onReturn }: { date: string; timeZone: string; onReturn: () => void }) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const element = dialog.current!;
+    element.showModal();
+    return () => element.close();
+  }, []);
+  return <dialog ref={dialog} aria-label="Intakes for the evening log" onCancel={event => {
+    event.preventDefault();
+    if (!dialog.current?.querySelector('[role="dialog"]')) onReturn();
+  }} className="fixed inset-0 m-auto max-h-dvh w-full max-w-xl overflow-y-auto overscroll-contain rounded-xl bg-neutral-950 px-4 pb-6 text-white backdrop:bg-black/75">
+    <div className="sticky top-0 z-10 bg-neutral-950 py-3"><button type="button" className={sleepButton} onClick={onReturn}>Back to evening log</button></div>
+    <IntakePage reviewDate={date} reviewZone={timeZone} />
+  </dialog>;
+}
+
+export function IntakePage({ reviewDate, reviewZone }: { reviewDate?: string; reviewZone?: string } = {}) {
   const store = useSleepLog();
   const [params, setParams] = useSearchParams();
   const clock = useSleepClock();
   const now = new Date(Math.max(Date.now(), clock.getTime()));
-  const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const [selectedDate, setSelectedDate] = useState<string | null>(() => { const date = params.get('date'); return date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : null; });
+  const zone = reviewZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const [selectedDate, setSelectedDate] = useState<string | null>(() => { const date = reviewDate ?? params.get('date'); return date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : null; });
   const [editor, setEditor] = useState<Editor | null>(null);
   const [picker, setPicker] = useState<Picker | null>(null);
   const save = useSleepSave();
-  const editId = params.get('edit');
+  const editId = reviewDate ? null : params.get('edit');
   // A link from the Log box opens that intake in the editor once it has loaded.
   useEffect(() => {
     if (!editId || store.loading) return;
@@ -44,36 +60,38 @@ export function IntakePage() {
   if (store.error) return <p role="alert">{store.error}</p>;
   const today = civilDate(now, zone);
   const date = selectedDate ?? today;
-  const assignment = sleepTrialDisplay(store.settings.trial, addDays(today, 1)).assignment;
+  const past = date !== today;
+  const assignment = past ? undefined : sleepTrialDisplay(store.settings.trial, addDays(today, 1)).assignment;
   const buttons = store.settings.intakeButtons;
   const dayIntakes = intakesOnDate(store.intakes, date, zone);
   const dayMeals = mealsOnDate(store.meals, date, zone);
-  const lastMeal = mealsOnDate(store.meals, today, zone).find(row => Date.parse(row.meal.finishedAt) <= now.getTime());
+  const lastMeal = dayMeals.find(row => Date.parse(row.meal.finishedAt) <= now.getTime());
   const history = [
     ...dayIntakes.map(row => ({ at: row.intake.takenAt, row, kind: 'intake' as const })),
     ...dayMeals.map(row => ({ at: row.meal.finishedAt, row, kind: 'meal' as const })),
   ].sort((a, b) => Date.parse(b.at) - Date.parse(a.at) || a.row.id.localeCompare(b.row.id));
   const showDate = (at: string) => setSelectedDate(civilDate(new Date(at), zone) === today ? null : civilDate(new Date(at), zone));
   return <section className="mx-auto max-w-xl space-y-5 pb-4">
-    <div className="flex items-baseline justify-between gap-3"><h1 className="text-3xl font-semibold tracking-tight">Intake</h1><p className="text-sm text-neutral-400">{shortDate(today)}</p></div>
+    <div className="flex items-baseline justify-between gap-3"><h1 className="text-3xl font-semibold tracking-tight">Intake</h1><p className="text-sm text-neutral-400">{dayText(date, today)}</p></div>
     <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
       {buttons.filter(b => !b.hidden).map(button => {
         const shared = buttons.some(other => !other.hidden && other.id !== button.id && other.substance === button.substance);
-        const last = lastTakenToday(store.intakes, button.substance, now, zone, shared ? button : undefined);
+        const last = dayIntakes.find(row => row.intake.substance === button.substance && Date.parse(row.intake.takenAt) <= now.getTime()
+          && (!shared || row.doseKnown && row.intake.dose === button.dose && row.intake.unit === button.unit));
         const factor = assignment?.factors.find(f => f.factorId === button.substance);
         const matches = !!factor?.on && factor.level?.dose === button.dose && factor.level.unit === button.unit;
         const badge = !factor ? undefined : matches ? { text: 'Tonight', on: true } : button.substance === 'glycine' && button.dose === 5 && button.unit === 'g' ? { text: 'Daytime', on: false } : { text: 'Not tonight', on: false };
-        return <IntakeTile key={button.id} name={button.label} amount={`${button.dose} ${button.unit}`} icon={<Monogram text={button.label} seed={button.substance} />} status={last ? last.timeKnown ? localClock(last.intake.takenAt, zone) : 'Today' : undefined} badge={badge} busy={save.busy}
+        return <IntakeTile past={past} key={button.id} name={button.label} amount={`${button.dose} ${button.unit}`} icon={<Monogram text={button.label} seed={button.substance} />} status={last ? last.timeKnown ? localClock(last.intake.takenAt, zone) : 'Recorded' : undefined} badge={badge} busy={save.busy}
           onNow={() => void save.run(() => store.saveIntake(intakeNow(button, new Date(), zone)), `${button.label} was recorded.`)}
           onEarlier={() => setPicker({ title: `${button.label} · ${button.dose} ${button.unit}`, success: `${button.label} was recorded.`, save: async at => { await store.saveIntake(intakeNow(button, new Date(at), zone)); showDate(at); } })} />;
       })}
-      <IntakeTile name="Finished eating" amount="Evening meal" icon={<MealIcon />} status={lastMeal ? localClock(lastMeal.meal.finishedAt, zone) : undefined} busy={save.busy}
+      <IntakeTile past={past} name="Finished eating" amount="Evening meal" icon={<MealIcon />} status={lastMeal ? localClock(lastMeal.meal.finishedAt, zone) : undefined} busy={save.busy}
         onNow={() => void save.run(async () => { await store.saveMeal({ finishedAt: new Date().toISOString(), timeZone: zone }); setSelectedDate(null); }, 'The evening meal was recorded.')}
         onEarlier={() => setPicker({ title: 'Finished eating', success: 'The evening meal was recorded.', save: async at => { await store.saveMeal({ finishedAt: at, timeZone: zone }); showDate(at); } })} />
     </div>
-    <p className="text-xs text-neutral-500">The top of a tile records the intake now. “Earlier” lets you choose the time. To type a sentence, use the Log box on Now.</p>
+    <p className="text-xs text-neutral-500">{past ? 'Choose an intake or meal to set its time on this day.' : 'The top of a tile records the intake now. “Earlier” lets you choose the time.'}</p>
     {save.message || save.error ? <div className="fixed inset-x-4 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-40 mx-auto max-w-xl rounded-xl border border-neutral-700 bg-neutral-950 px-4 shadow-xl lg:bottom-4">{save.feedback}</div> : null}
-    {picker ? <MomentSheet title={picker.title} timeZone={zone} busy={save.busy} onClose={() => setPicker(null)} onSave={at => void save.run(async () => { await picker.save(at); setPicker(null); }, picker.success)} /> : null}
+    {picker ? <MomentSheet date={date} title={picker.title} timeZone={zone} busy={save.busy} onClose={() => setPicker(null)} onSave={at => void save.run(async () => { await picker.save(at); setPicker(null); }, picker.success)} /> : null}
     {editor ? <Sheet label={'meal' in editor ? 'Evening meal' : 'Intake'} onClose={() => setEditor(null)}>{'meal' in editor
       ? <MealEditor key={editor.row?.id ?? 'new-meal'} value={editor.meal} busy={save.busy} onCancel={() => setEditor(null)} onSave={meal => void save.run(async () => {
         await store.saveMeal(meal, editor.row?.id);
@@ -104,8 +122,7 @@ export function IntakePage() {
       </button></li>)}</ul> : <p className="px-4 py-4 text-sm text-neutral-400">Nothing recorded on this day.</p>}
       <p className="border-t border-neutral-800 px-4 py-2 text-xs text-neutral-500">{confirmedDay(store.entries, date, zone) ? `The day is confirmed: ${dayIntakes.length} intakes and ${dayMeals.length} evening meals.` : 'The day is not confirmed, so the daily count is unknown.'}</p>
     </section>
-    <IntakeSettings store={store} />
-    <DrinkSettings store={store} />
+    {!reviewDate && <><IntakeSettings store={store} /><DrinkSettings store={store} /></>}
   </section>;
 }
 
@@ -125,16 +142,17 @@ function ClockIcon() {
   return <svg aria-hidden="true" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>;
 }
 /** An app-icon tile with two halves: the top records now, the bottom opens a time picker. */
-function IntakeTile({ name, amount, icon, status, badge, busy, onNow, onEarlier }: { name: string; amount: string; icon: ReactNode; status?: string; badge?: { text: string; on: boolean }; busy: boolean; onNow: () => void; onEarlier: () => void }) {
+function IntakeTile({ past, name, amount, icon, status, badge, busy, onNow, onEarlier }: { past: boolean; name: string; amount: string; icon: ReactNode; status?: string; badge?: { text: string; on: boolean }; busy: boolean; onNow: () => void; onEarlier: () => void }) {
   return <div className={`flex min-w-0 flex-col overflow-hidden rounded-2xl border bg-neutral-900 ${badge?.on ? 'border-indigo-500/60' : 'border-neutral-800'}`}>
-    <button aria-label={`${name}, ${amount}: record now`} className="relative flex flex-1 flex-col items-center gap-1 px-2 pb-2 pt-3 text-center transition hover:bg-neutral-800 active:scale-95 disabled:opacity-40" disabled={busy} type="button" onClick={onNow}>
+    <button aria-label={`${name}, ${amount}: ${past ? "choose time" : "record now"}`} className="relative flex flex-1 flex-col items-center gap-1 px-2 pb-2 pt-3 text-center transition hover:bg-neutral-800 active:scale-95 disabled:opacity-40" disabled={busy} type="button" onClick={past ? onEarlier : onNow}>
       {status ? <span className="absolute right-1.5 top-1.5 rounded-full bg-emerald-500/15 px-1.5 text-[10px] tabular-nums text-emerald-300">✓ {status}</span> : null}
       {icon}
       <span className="line-clamp-2 text-xs font-medium leading-tight">{name}</span>
       <span className="text-[11px] text-neutral-400">{amount}</span>
+      {past && <span className="text-xs text-indigo-200 underline">Choose time</span>}
       {badge ? <span className={`text-[10px] ${badge.on ? 'text-indigo-300' : 'text-neutral-500'}`}>{badge.text}</span> : null}
     </button>
-    <button aria-label={`${name}, ${amount}: choose an earlier time`} className="flex min-h-9 items-center justify-center gap-1 border-t border-neutral-800 bg-neutral-950/60 text-[11px] text-neutral-400 hover:bg-neutral-800 hover:text-white disabled:opacity-40" disabled={busy} type="button" onClick={onEarlier}><ClockIcon />Earlier</button>
+    {!past && <button aria-label={`${name}, ${amount}: choose an earlier time`} className="flex min-h-9 items-center justify-center gap-1 border-t border-neutral-800 bg-neutral-950/60 text-[11px] text-neutral-400 hover:bg-neutral-800 hover:text-white disabled:opacity-40" disabled={busy} type="button" onClick={onEarlier}><ClockIcon />Earlier</button>}
   </div>;
 }
 function Sheet({ label, onClose, children }: { label: string; onClose: () => void; children: ReactNode }) {
@@ -149,9 +167,13 @@ function Sheet({ label, onClose, children }: { label: string; onClose: () => voi
   </div>;
 }
 /** The small sheet behind "Earlier": one wheel for the day and hour, one for the minute. */
-function MomentSheet({ title, timeZone, busy, onClose, onSave }: { title: string; timeZone: string; busy: boolean; onClose: () => void; onSave: (at: string) => void }) {
+function MomentSheet({ date, title, timeZone, busy, onClose, onSave }: { date: string; title: string; timeZone: string; busy: boolean; onClose: () => void; onSave: (at: string) => void }) {
   const [openedAt] = useState(() => new Date());
-  const [value, setValue] = useState(() => openedAt.toISOString().replace(/:\d{2}\.\d{3}Z$/, ':00.000Z'));
+  const [value, setValue] = useState(() => {
+    const parts = splitInstant(openedAt.toISOString(), timeZone);
+    if (date === parts.date) return new Date(Math.floor(openedAt.getTime() / 60000) * 60000).toISOString();
+    return instantAt({ date, hour: parts.hour }, parts.minute, timeZone);
+  });
   const future = Date.parse(value) > openedAt.getTime();
   const minutesAgo = Math.round((openedAt.getTime() - Date.parse(value)) / 60000);
   const ago = minutesAgo < 1 ? 'now' : minutesAgo < 60 ? `${minutesAgo} min ago` : `${Math.floor(minutesAgo / 60)} h ${minutesAgo % 60} min ago`;

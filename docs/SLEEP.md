@@ -399,11 +399,11 @@ Added 17 November 2026. Tonio approved all three parts.
 - A later entry on a confirmed day does not remove the confirmation. The new entry simply counts.
 - Old days before this feature are unconfirmed, except that an old morning log with methylphenidate "taken: false" counts as an explicit "Not taken".
 
-### The Missing list
+### Questions about past days
 
-- A section "Missing" on the Sleep tab lists the last 7 days, newest first, one line per missing thing. Things that can be missing: the evening log, lights out, the morning log, the reaction test, the methylphenidate answer, and the day confirmation.
-- One tap on a line opens the right form with the date already set.
-- The Now page shows a card "Missing data: N" only when the list is not empty. The card does not count today's things that are not due yet. Examples: the reaction test before the test time, or the day confirmation before the evening log time.
+- “Review a day” on Sleep groups outstanding questions by date for the last seven days. Each question opens the form for its date. A reaction test is available on the day it is due.
+- Now shows one due question and links to “Review a day” when the question is about a past day.
+- “Dismiss all past questions” removes the outstanding questions about earlier dates from both screens. Today's questions can still appear. Atlas keeps saved answers and leaves unknown values as unknown. One Undo brings back the dismissed questions.
 
 ### The navigation
 

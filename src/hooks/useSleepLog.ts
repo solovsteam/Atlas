@@ -64,6 +64,10 @@ export function useSleepLog() {
 
   const saveDayEvidence = useCallback((kind: EvidenceKind, value: EvidenceValue, entryId?: string) => mutate(async (id, service) =>
     record(await service.saveDayEvidence(id, kind, value, entryId))), [mutate, record]);
+  const dismissPastMissingData = useCallback((now: Date, timeZone: string) => mutate(async (id, service, container) => {
+    const change = await service.dismissPastMissingData(id, now, timeZone, sleepScreenSettings(container.documentationSchema));
+    if (change) record(change);
+  }), [mutate, record]);
   const saveIntake = useCallback((intake: Intake, entryId?: string, legacyKey?: string) => mutate(async (id, service) =>
     record(await service.saveIntake(id, intake, entryId, legacyKey))), [mutate, record]);
   const saveMeal = useCallback((meal: EveningMeal, entryId?: string) => mutate(async (id, service) =>
@@ -116,6 +120,7 @@ export function useSleepLog() {
   return {
     item, settings, entries, nights, tests, intakes, meals,
     loading: itemsLoading || (item !== null && loading), error: itemsError ?? error, refresh,
-    saveEvening, saveMorning, saveReactionTest, saveSettings, deleteEntry, saveDayEvidence, saveIntake, saveMeal, deleteIntake, saveAssignedIntakes, recordIntakes,
+    saveEvening, saveMorning, saveReactionTest, saveSettings, deleteEntry, saveDayEvidence, dismissPastMissingData,
+    saveIntake, saveMeal, deleteIntake, saveAssignedIntakes, recordIntakes,
   };
 }

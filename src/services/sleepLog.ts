@@ -8,6 +8,8 @@ import { DEFAULT_SLEEP_SETTINGS, fullnessLabel, isSleepLog, morningWithLightsOut
 import { recallsOnDate, dayEvidence, dayEvidenceData, dayEvidenceTime, type EvidenceKind, type EvidenceValue } from '@shared/dayEvidence';
 import { intakeData, sleepIntake, type Intake } from '@shared/intake';
 import { eveningMeal, mealData, type EveningMeal } from '@shared/meals';
+import { missingData } from '@shared/missingData';
+import type { SleepScreenSettings } from '@shared/sleepScreens';
 import { sleepReactionTest } from '@shared/sleepReactionTest';
 import type { ReactionTestResult } from '@shared/reactionTest';
 import type { Database, DbItemRow } from '../types/database';
@@ -87,6 +89,15 @@ export function sleepLogStore(client: Client, userId: string, writer: SleepEntry
       : { entry: await writer.createEntry(itemId, at, data) };
   }
   return {
+    async dismissPastMissingData(itemId: string, now: Date, timeZone: string, settings: SleepScreenSettings): Promise<SleepEntryChange | null> {
+      const entries = await fetchEntries(client, userId, itemId);
+      const today = civilDate(now, timeZone);
+      const questions = missingData(entries, now, timeZone, settings)
+        .filter(row => row.date < today)
+        .map(({ date, kind }) => ({ date, kind }));
+      if (!questions.length) return null;
+      return { entry: await writer.createEntry(itemId, now, { kind: 'missingDataDismissal', questions }) };
+    },
     async saveDayEvidence(itemId: string, kind: EvidenceKind, value: EvidenceValue, entryId?: string): Promise<SleepEntryChange> {
       const before = entryId ? await current(itemId, entryId) : undefined;
       if (before && !dayEvidence(before, kind) && !(kind === 'dayConfirmation' && dayEvidence(before, 'dayReview'))) throw new Error('This entry has a different kind.');

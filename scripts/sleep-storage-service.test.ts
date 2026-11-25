@@ -9,8 +9,11 @@ import { restoreEntry, updateEntryData, deleteEntry } from '../src/services/docu
 import { fullnessLabel, sleepNight, sleepSettings, DEFAULT_SLEEP_SETTINGS, type SleepRating } from '../shared/sleepLog';
 import { eveningMeal, readMeals } from '../shared/meals';
 import { sleepReactionTest } from '../shared/sleepReactionTest';
-import { sleepIntake, intakeNow, DEFAULT_INTAKE_BUTTONS, readIntakes } from '../shared/intake';
+import { sleepIntake, intakeNow, DEFAULT_INTAKE_BUTTONS, readIntakes, methylphenidateStatus } from '../shared/intake';
 import { createReactionTestResult } from '../shared/reactionTest';
+import { dayCount } from '../shared/dayEvidence';
+import { missingData } from '../shared/missingData';
+import { sleepScreenSettings } from '../shared/sleepScreens';
 
 const alice = '11111111-1111-4111-8111-111111111111';
 const bob = '22222222-2222-4222-8222-222222222222';
@@ -210,6 +213,45 @@ test('day evidence uses separate entries with correction, deletion and undo unde
     await assert.rejects(store.saveDayEvidence(item.id, 'medicineAnswer', { date: '2026-11-17', timeZone: 'UTC', answer: 'not-taken' }, created.entry.id), /different kind/);
     await as(bob);
     await assert.rejects(sleepLogStore(client, bob).saveDayEvidence(item.id, 'dayConfirmation', { date: '2026-11-17', timeZone: 'UTC' }), /row-level security/);
+  } finally { await db.close(); }
+});
+
+test('one dismissal hides only unfinished past questions and can be undone', async () => {
+  const { db, client, as } = await database();
+  try {
+    await as(alice);
+    const item = await findOrCreateSleepLog(client, alice);
+    const store = sleepLogStore(client, alice);
+    const timeZone = 'America/Los_Angeles';
+    const today = '2026-11-17';
+    const yesterday = '2026-11-16';
+    const now = new Date('2026-11-18T07:59:00Z');
+    const settings = sleepScreenSettings(item.documentationSchema);
+    const saved = await store.saveDayEvidence(item.id, 'medicineAnswer', { date: yesterday, timeZone, answer: 'not-taken' });
+    const before = missingData([saved.entry], now, timeZone, settings);
+    assert.ok(before.some(row => row.date === yesterday && row.kind === 'confirmation'));
+
+    const dismissal = await store.dismissPastMissingData(item.id, now, timeZone, settings);
+    assert.ok(dismissal);
+    const entries = await store.readEntries(item.id);
+    assert.equal(entries.length, 2);
+    assert.deepEqual(entries.find(row => row.id === saved.entry.id), saved.entry);
+    const currentQuestions = before.filter(row => row.date === today);
+    assert.ok(currentQuestions.length > 0);
+    assert.deepEqual(missingData(entries, now, timeZone, settings), currentQuestions);
+    assert.equal(dayCount(0, entries, yesterday, timeZone), null);
+    assert.equal(methylphenidateStatus(entries, '2026-11-15', timeZone), 'unknown');
+    assert.equal(await store.dismissPastMissingData(item.id, now, timeZone, settings), null);
+
+    const tomorrow = new Date('2026-11-18T08:01:00Z');
+    assert.ok(missingData(entries, tomorrow, timeZone, settings).some(row => row.date === today));
+    assert.ok(missingData([dismissal.entry], now, timeZone, settings)
+      .some(row => row.date === yesterday && row.kind === 'medicine'), 'a question answered at dismissal can reopen later');
+
+    await deleteEntry(client, alice, dismissal.entry.id);
+    const restored = await store.readEntries(item.id);
+    assert.deepEqual(restored, [saved.entry]);
+    assert.deepEqual(missingData(restored, now, timeZone, settings), before);
   } finally { await db.close(); }
 });
 

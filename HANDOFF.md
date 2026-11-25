@@ -386,3 +386,7 @@ The evening log keeps its form open while editing intakes. A historical tile ope
 ## Day reviews with uncertain answers (25 November 2026)
 
 Atlas can finish a day review with gaps. Day-level answers for intakes and dinner survive full confirmation. Quick Log, the evening review, Intake, reminders and sleep analysis use these answers. A recollection can be replaced by a precise record with Undo. Morning and evening logs no longer save an untouched lights-out target as an actual time. The full npm run check passed on retry after the known recurrence timeout. A phone-width Chrome fixture verified uncertain medication and dinner through both review states. See docs/SLEEP.md and .handoff/uncertain-day-review-25.md.
+
+## Dismiss past questions (25 November 2026)
+
+The Sleep page can dismiss outstanding questions about dates before today. Now links to the same section when it asks about a past day. One Undo restores the dismissed questions. Saved answers and unknown values are preserved. `npm run check` passed with a test of the stored dismissal and undo. No migration is required. See `.handoff/dismiss-past-missing-inputs-20261125.md`.

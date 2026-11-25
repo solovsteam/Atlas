@@ -36,6 +36,9 @@ export function SleepNowCards() {
     {question.kind === 'medicine'
       ? <MedicineQuestion key={question.date} store={store} date={question.date} timeZone={timeZone} />
       : <Link className="block py-2 font-medium text-indigo-200 underline" to={question.to}>{prompts[question.kind]}</Link>}
-    <button type="button" className="min-h-11 text-sm text-neutral-400 underline" onClick={() => setSkipped(previous => [...previous, question.to])}>Skip for now</button>
+    <div className="flex flex-wrap items-center gap-x-4">
+      <button type="button" className="min-h-11 text-sm text-neutral-400 underline" onClick={() => setSkipped(previous => [...previous, question.to])}>Skip for now</button>
+      {question.date < today && <Link className="inline-flex min-h-11 items-center text-sm text-indigo-200 underline" to="/sleep#missing">Review past days</Link>}
+    </div>
   </section>;
 }

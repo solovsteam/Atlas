@@ -15,6 +15,7 @@ import { dayText, shortDate, sleepLogName } from '@shared/dayLabels';
 
 export function SleepPage() {
   const store = useSleepLog();
+  const dismissal = useSleepSave();
   const location = useLocation();
   useEffect(() => {
     if (!store.loading && location.hash === '#missing') document.getElementById('missing')?.scrollIntoView();
@@ -44,7 +45,14 @@ export function SleepPage() {
       <Link className={`${sleepButton} flex items-center justify-between gap-3`} to="/sleep/test"><span>Reaction test</span><span className="shrink-0 text-neutral-400">{store.tests.some(row => civilDate(new Date(row.result.startedAt), zone) === state.today) ? 'Saved' : '1 minute'}</span></Link>
     </div>
     <section id="missing" className="space-y-3 rounded-xl border border-neutral-800 p-4">
-      <h2 className="text-lg font-semibold">Review a day</h2>
+      <div className="flex flex-wrap items-center justify-between gap-x-3">
+        <h2 className="text-lg font-semibold">Review a day</h2>
+        {reviewDates.some(date => date < state.today) && <button className={`${sleepButton} min-h-11`} type="button"
+          disabled={dismissal.busy || store.loading}
+          onClick={() => void dismissal.run(() => store.dismissPastMissingData(new Date(), zone), 'Past questions dismissed.')}>
+          {dismissal.busy ? 'Dismissing…' : 'Dismiss all past questions'}
+        </button>}
+      </div>
       {reviewDates.map(date => <details key={date}>
         <summary className="cursor-pointer py-2">{dayText(date, state.today)}</summary>
         <ul>{missing.filter(row => row.date === date).map(row => <li key={row.kind}>
@@ -52,6 +60,7 @@ export function SleepPage() {
         </li>)}</ul>
       </details>)}
       {!reviewDates.length && <p>No questions for the past seven days.</p>}
+      {(dismissal.message || dismissal.error) && dismissal.feedback}
     </section>
     <SleepSettings settings={store.settings} saveSettings={store.saveSettings} today={state.today} reminderAt={new Date(Date.parse(target.lightsOutAt) - store.settings.eveningReminderLeadMinutes * 60000)} timeZone={zone} />
     <SleepHistory nights={store.nights.map(row => row.night)} tests={store.tests.map(row => row.result)} settings={store.settings} throughDate={state.today} context={sleepHistoryContext(store.entries, store.settings)} />
